@@ -1,0 +1,49 @@
+{
+  "name": "proofestate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ethereum testnet application for property verification, compliance proof, and lending.",
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:gas": "REPORT_GAS=true hardhat test",
+    "zk:compile": "node scripts/zk-build.mjs compile",
+    "zk:setup": "node scripts/zk-build.mjs setup",
+    "zk:prove": "node scripts/zk-build.mjs prove",
+    "zk:build": "node scripts/zk-build.mjs build",
+    "chain:local": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "demo:deploy": "hardhat run scripts/deploy.js --network localhost && node scripts/sync-local-env.js",
+    "demo:sync": "node scripts/sync-local-env.js",
+    "demo:check": "node scripts/local-demo-check.js",
+    "demo:ready": "node scripts/local-demo-check.js --strict",
+    "demo:flow": "node scripts/local-wallet-flow.js",
+    "layout:check": "node scripts/verify-layout.mjs",
+    "oracle:list": "node backend/oracle/cli.js list",
+    "oracle:verify": "node backend/oracle/cli.js verify",
+    "oracle:compliance": "node backend/oracle/cli.js compliance",
+    "oracle:e2e": "node backend/oracle/cli.js e2e",
+    "oracle:api": "node backend/oracle/server.js",
+    "frontend:dev": "pnpm --dir frontend dev",
+    "frontend:build": "pnpm --dir frontend build"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.2",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
+    "hardhat": "^2.22.19",
+    "playwright-core": "^1.60.0",
+    "snarkjs": "^0.7.5"
+  }
+}

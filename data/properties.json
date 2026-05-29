@@ -1,0 +1,222 @@
+[
+  {
+    "propertyId": "PROP-001",
+    "address": "Tanjong Pagar mixed-use tower, unit A-1201",
+    "region": "SG-CCR",
+    "valuation": 980000,
+    "ownerHash": "0x8df38f4741d3fd0f7f28168d7a4641df4c61e6597b02950b6f2c66f3d4f2b7a1",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 82,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-002",
+    "address": "Queenstown residential block, unit B-0804",
+    "region": "SG-RCR",
+    "valuation": 720000,
+    "ownerHash": "0x7360ed96b0f1a663037e2f6006d2f7a2fcfefc15d2a276a2f06fcae68f7e93fd",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 76,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-003",
+    "address": "Jurong East commercial suite, unit C-0502",
+    "region": "SG-OCR",
+    "valuation": 640000,
+    "ownerHash": "0x2d53f245a35be0db3db8cd245fcbb555949bf4fe6a2cd4153cbb16e3ee56f7ac",
+    "ownerAddress": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+    "esgScore": 69,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-004",
+    "address": "Orchard Road retail micro-unit, lot D-0110",
+    "region": "SG-CCR",
+    "valuation": 450000,
+    "ownerHash": "0xfad452f5009fbf6f14ee4e766fdd09de1bba448263d1c2a97e39e5fd0e4463d9",
+    "ownerAddress": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+    "esgScore": 64,
+    "noEncumbrance": false,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-005",
+    "address": "Punggol residential unit, unit E-1608",
+    "region": "SG-OCR",
+    "valuation": 390000,
+    "ownerHash": "0x34b377e07ac3099dfac741bcf0b9b940a414c974509d4c54ab956905f904b665",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 73,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-006",
+    "address": "Bugis conservation shophouse, lot F-0201",
+    "region": "SG-RCR",
+    "valuation": 1250000,
+    "ownerHash": "0x6dcf69dc716d8e96fce1b4aa192ea66f7d097468f12e9d361b1a2381e27a0425",
+    "ownerAddress": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+    "esgScore": 88,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-007",
+    "address": "Woodlands industrial flex unit, unit G-0319",
+    "region": "SG-OCR",
+    "valuation": 280000,
+    "ownerHash": "0x20bd8d008c1804a827fac7d2c504f6d543f057a9376673b0ca5fcd7daf4a107e",
+    "ownerAddress": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+    "esgScore": 58,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-008",
+    "address": "Sentosa cove leasehold villa share, tranche H",
+    "region": "SG-CCR",
+    "valuation": 2100000,
+    "ownerHash": "0xacb91f1882f400b494934f03db63b06f91ab9182df14ace0f706aa3f2ef17436",
+    "ownerAddress": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+    "esgScore": 79,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-009",
+    "address": "Clementi residential unit, unit I-1103",
+    "region": "SG-RCR",
+    "valuation": 195000,
+    "ownerHash": "0x088ad0ad67b884dbe598e451b9de666753ea95323e741e2f392875b6bc2dc07e",
+    "ownerAddress": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+    "esgScore": 67,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-010",
+    "address": "Changi business park unit, unit J-0707",
+    "region": "SG-OCR",
+    "valuation": 560000,
+    "ownerHash": "0x35327a9d4c9b0fbd82f140bd2d329f1f011e22936bfa3f1414bc1f03db52a541",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 71,
+    "noEncumbrance": true,
+    "status": "INACTIVE"
+  },
+  {
+    "propertyId": "PROP-011",
+    "address": "Novena medical office, unit K-0902",
+    "region": "SG-RCR",
+    "valuation": 850000,
+    "ownerHash": "0x5f8b2d42ad4b47d29c949699f54fb35c1895ef1af5bc67c0dbcb5a8a99d77c58",
+    "ownerAddress": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+    "esgScore": 81,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-012",
+    "address": "Katong residential unit, unit L-0405",
+    "region": "SG-RCR",
+    "valuation": 610000,
+    "ownerHash": "0x50bc8f7e0f54ca4506533f500202a6d7b90b55a7eb8e0a5d760cccb96a7cf505",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 74,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-013",
+    "address": "Bishan residential unit, unit M-1306",
+    "region": "SG-RCR",
+    "valuation": 730000,
+    "ownerHash": "0x3722c40d45b0aaedcaf8fdd626c110bf4a5ce533a8d228f94f0df9d58f9e336f",
+    "ownerAddress": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+    "esgScore": 77,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-014",
+    "address": "Tampines retail podium, lot N-0108",
+    "region": "SG-OCR",
+    "valuation": 305000,
+    "ownerHash": "0xb51eaf9097c908e870b1e45475f85b7fd2bdb2391d2dbdd95e7c1566bdb49766",
+    "ownerAddress": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+    "esgScore": 62,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-015",
+    "address": "Marina Bay office share, tranche O",
+    "region": "SG-CCR",
+    "valuation": 1750000,
+    "ownerHash": "0x48e13b1f25682cdfda03628a27c86c59946cd9c21dbfd17700c27028ed3c44b6",
+    "ownerAddress": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+    "esgScore": 90,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-016",
+    "address": "Sengkang residential unit, unit P-0609",
+    "region": "SG-OCR",
+    "valuation": 420000,
+    "ownerHash": "0x75354e56578deffb764775298b7a77c332a9fc347f26f06631103533b3772a8c",
+    "ownerAddress": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+    "esgScore": 70,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-017",
+    "address": "Bukit Timah residential unit, unit Q-1011",
+    "region": "SG-CCR",
+    "valuation": 1120000,
+    "ownerHash": "0xa5a7102c8538d15f25586f90692aee9b9101a923d4c92399b758cbf5a0ab7d84",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 83,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-018",
+    "address": "Kallang warehouse loft, unit R-0303",
+    "region": "SG-RCR",
+    "valuation": 365000,
+    "ownerHash": "0xd7b46817dcf6560b65221a4bf0e741cb69e0d675060dd10fb13656ffb26b6b73",
+    "ownerAddress": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+    "esgScore": 59,
+    "noEncumbrance": false,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-019",
+    "address": "Yishun residential unit, unit S-1210",
+    "region": "SG-OCR",
+    "valuation": 250000,
+    "ownerHash": "0xdcb5e65d82e33dd81cf725a710e1ceceaf9e446993d1fb38d709c853b8d6ef4b",
+    "ownerAddress": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+    "esgScore": 66,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  },
+  {
+    "propertyId": "PROP-020",
+    "address": "Raffles Place office suite, unit T-2201",
+    "region": "SG-CCR",
+    "valuation": 1450000,
+    "ownerHash": "0xd62a2f370d4977ee93cb9db62b5aeb9be542a3bb2c741d9fb4a6f421b099bc92",
+    "ownerAddress": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+    "esgScore": 87,
+    "noEncumbrance": true,
+    "status": "ACTIVE"
+  }
+]
