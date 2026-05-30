@@ -332,14 +332,14 @@ http://localhost:8787
 
 Endpoints:
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/health` | Oracle health check |
-| `GET` | `/properties` | List mock registry records |
-| `GET` | `/properties/:propertyId/verification` | Evaluate verification rules without writing |
-| `POST` | `/verify` | Evaluate and optionally write verification |
-| `POST` | `/compliance` | Generate proof and optionally write compliance |
-| `POST` | `/e2e` | Run verification and compliance together |
+| Method   | Path                                     | Purpose                                        |
+| -------- | ---------------------------------------- | ---------------------------------------------- |
+| `GET`  | `/health`                              | Oracle health check                            |
+| `GET`  | `/properties`                          | List mock registry records                     |
+| `GET`  | `/properties/:propertyId/verification` | Evaluate verification rules without writing    |
+| `POST` | `/verify`                              | Evaluate and optionally write verification     |
+| `POST` | `/compliance`                          | Generate proof and optionally write compliance |
+| `POST` | `/e2e`                                 | Run verification and compliance together       |
 
 `/compliance` and `/e2e` require a positive integer `loanPrincipal` that fits the 64-bit circuit range.
 
@@ -477,15 +477,15 @@ http://localhost:5173/
 
 The local demo uses separated Hardhat accounts so each screen matches a real business role:
 
-| Account | Address | Role | Demo use |
-| --- | --- | --- | --- |
-| #0 | `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` | Deployer + Admin | Deploy contracts and manage roles |
-| #1 | `0x70997970C51812dc3A010C7d01b50e0d17dc79C8` | Oracle | Backend signer for registry verification writes |
-| #2 | `0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC` | Loan Officer | Approve or reject requested loans |
-| #3 | `0x90F79bf6EB2c4f870365E785982E1f101E93b906` | Borrower | Owns `PROP-001`, `PROP-002`, `PROP-005`, `PROP-010`, `PROP-012`, `PROP-017` |
-| #4 | `0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65` | Borrower | Owns `PROP-003`, `PROP-004`, `PROP-011`, `PROP-013`, `PROP-016`, `PROP-018` |
-| #5 | `0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc` | Borrower | Owns `PROP-006`, `PROP-007`, `PROP-014`, `PROP-019` |
-| #6 | `0x976EA74026E726554dB657fA54763abd0C3a0aa9` | Borrower | Owns `PROP-008`, `PROP-009`, `PROP-015`, `PROP-020` |
+| Account | Address                                        | Role             | Demo use                                                                                |
+| ------- | ---------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------- |
+| #0      | `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` | Deployer + Admin | Deploy contracts and manage roles                                                       |
+| #1      | `0x70997970C51812dc3A010C7d01b50e0d17dc79C8` | Oracle           | Backend signer for registry verification writes                                         |
+| #2      | `0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC` | Loan Officer     | Approve or reject requested loans                                                       |
+| #3      | `0x90F79bf6EB2c4f870365E785982E1f101E93b906` | Borrower         | Owns `PROP-001`, `PROP-002`, `PROP-005`, `PROP-010`, `PROP-012`, `PROP-017` |
+| #4      | `0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65` | Borrower         | Owns `PROP-003`, `PROP-004`, `PROP-011`, `PROP-013`, `PROP-016`, `PROP-018` |
+| #5      | `0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc` | Borrower         | Owns `PROP-006`, `PROP-007`, `PROP-014`, `PROP-019`                             |
+| #6      | `0x976EA74026E726554dB657fA54763abd0C3a0aa9` | Borrower         | Owns `PROP-008`, `PROP-009`, `PROP-015`, `PROP-020`                             |
 
 The Oracle exists because the blockchain cannot independently know real-world registry facts such as property existence, address, valuation, encumbrance, or active title status. In this demo, the Oracle API is the trusted registry writer; it evaluates `data/properties.json` and writes verification/proof results on-chain. It is not a borrower or an approver.
 

@@ -10,6 +10,7 @@ contract PropertyVerification is AccessControl {
     struct VerificationRecord {
         bool verified;
         bool compliant;
+        address owner;
         bytes32 evidenceHash;
         bytes32 complianceHash;
         uint256 valuationCommitment;
@@ -22,6 +23,7 @@ contract PropertyVerification is AccessControl {
     event PropertyVerificationUpdated(
         bytes32 indexed propertyId,
         bool verified,
+        address indexed owner,
         bytes32 evidenceHash,
         uint256 valuationCommitment,
         uint64 lastUpdated
@@ -36,6 +38,7 @@ contract PropertyVerification is AccessControl {
 
     error EmptyPropertyId();
     error PropertyNotVerified(bytes32 propertyId);
+    error InvalidOwnerAddress();
     error InvalidPrincipalCommitment();
 
     constructor(address admin) {
@@ -48,16 +51,21 @@ contract PropertyVerification is AccessControl {
         bytes32 propertyId,
         bool verified,
         bytes32 evidenceHash,
-        uint256 valuationCommitment
+        uint256 valuationCommitment,
+        address owner
     )
         external
         onlyRole(ORACLE_ROLE)
     {
         if (propertyId == bytes32(0)) revert EmptyPropertyId();
+        if (owner == address(0) && (verified || evidenceHash != bytes32(0))) {
+            revert InvalidOwnerAddress();
+        }
 
         VerificationRecord storage record = records[propertyId];
         record.verified = verified;
         record.compliant = false;
+        record.owner = owner;
         record.evidenceHash = evidenceHash;
         record.complianceHash = bytes32(0);
         record.valuationCommitment = verified ? valuationCommitment : 0;
@@ -67,6 +75,7 @@ contract PropertyVerification is AccessControl {
         emit PropertyVerificationUpdated(
             propertyId,
             verified,
+            record.owner,
             evidenceHash,
             record.valuationCommitment,
             record.lastUpdated
@@ -121,6 +130,10 @@ contract PropertyVerification is AccessControl {
 
     function valuationCommitmentOf(bytes32 propertyId) external view returns (uint256) {
         return records[propertyId].valuationCommitment;
+    }
+
+    function ownerOf(bytes32 propertyId) external view returns (address) {
+        return records[propertyId].owner;
     }
 
     function getRecord(bytes32 propertyId)

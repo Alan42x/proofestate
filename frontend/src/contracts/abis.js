@@ -1,5 +1,46 @@
 export const propertyVerificationAbi = [
   {
+    type: "event",
+    name: "RoleGranted",
+    inputs: [
+      { name: "role", type: "bytes32", indexed: true },
+      { name: "account", type: "address", indexed: true },
+      { name: "sender", type: "address", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "RoleRevoked",
+    inputs: [
+      { name: "role", type: "bytes32", indexed: true },
+      { name: "account", type: "address", indexed: true },
+      { name: "sender", type: "address", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "PropertyVerificationUpdated",
+    inputs: [
+      { name: "propertyId", type: "bytes32", indexed: true },
+      { name: "verified", type: "bool", indexed: false },
+      { name: "owner", type: "address", indexed: true },
+      { name: "evidenceHash", type: "bytes32", indexed: false },
+      { name: "valuationCommitment", type: "uint256", indexed: false },
+      { name: "lastUpdated", type: "uint64", indexed: false }
+    ]
+  },
+  {
+    type: "event",
+    name: "PropertyComplianceUpdated",
+    inputs: [
+      { name: "propertyId", type: "bytes32", indexed: true },
+      { name: "compliant", type: "bool", indexed: false },
+      { name: "proofHash", type: "bytes32", indexed: false },
+      { name: "principalCommitment", type: "uint256", indexed: false },
+      { name: "lastUpdated", type: "uint64", indexed: false }
+    ]
+  },
+  {
     type: "function",
     name: "DEFAULT_ADMIN_ROLE",
     stateMutability: "view",
@@ -61,6 +102,7 @@ export const propertyVerificationAbi = [
         components: [
           { name: "verified", type: "bool" },
           { name: "compliant", type: "bool" },
+          { name: "owner", type: "address" },
           { name: "evidenceHash", type: "bytes32" },
           { name: "complianceHash", type: "bytes32" },
           { name: "valuationCommitment", type: "uint256" },
@@ -93,10 +135,103 @@ export const propertyVerificationAbi = [
       { name: "principalCommitment", type: "uint256" }
     ],
     outputs: [{ type: "bool" }]
+  },
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "propertyId", type: "bytes32" }],
+    outputs: [{ type: "address" }]
   }
 ];
 
 export const lendingAbi = [
+  {
+    type: "event",
+    name: "RoleGranted",
+    inputs: [
+      { name: "role", type: "bytes32", indexed: true },
+      { name: "account", type: "address", indexed: true },
+      { name: "sender", type: "address", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "RoleRevoked",
+    inputs: [
+      { name: "role", type: "bytes32", indexed: true },
+      { name: "account", type: "address", indexed: true },
+      { name: "sender", type: "address", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "LoanRequested",
+    inputs: [
+      { name: "loanId", type: "uint256", indexed: true },
+      { name: "borrower", type: "address", indexed: true },
+      { name: "propertyId", type: "bytes32", indexed: true },
+      { name: "principalCommitment", type: "uint256", indexed: false }
+    ]
+  },
+  {
+    type: "event",
+    name: "LoanApproved",
+    inputs: [
+      { name: "loanId", type: "uint256", indexed: true },
+      { name: "propertyId", type: "bytes32", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "LoanRejected",
+    inputs: [
+      { name: "loanId", type: "uint256", indexed: true },
+      { name: "propertyId", type: "bytes32", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "LoanRejectedDueToVerification",
+    inputs: [
+      { name: "loanId", type: "uint256", indexed: true },
+      { name: "propertyId", type: "bytes32", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "LoanRejectedDueToCompliance",
+    inputs: [
+      { name: "loanId", type: "uint256", indexed: true },
+      { name: "propertyId", type: "bytes32", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "LoanRejectedDueToProofMismatch",
+    inputs: [
+      { name: "loanId", type: "uint256", indexed: true },
+      { name: "propertyId", type: "bytes32", indexed: true },
+      { name: "principalCommitment", type: "uint256", indexed: false }
+    ]
+  },
+  {
+    type: "event",
+    name: "LoanRepaid",
+    inputs: [
+      { name: "loanId", type: "uint256", indexed: true },
+      { name: "borrower", type: "address", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "LoanCancelled",
+    inputs: [
+      { name: "loanId", type: "uint256", indexed: true },
+      { name: "propertyId", type: "bytes32", indexed: true },
+      { name: "borrower", type: "address", indexed: false }
+    ]
+  },
   {
     type: "function",
     name: "DEFAULT_ADMIN_ROLE",

@@ -13,7 +13,7 @@ const { generateComplianceProof } = require("../zk/prover");
 
 const PROPERTY = Object.freeze({
   verified: "PROP-001",
-  duplicateLoanGuard: "PROP-003",
+  duplicateLoanGuard: "PROP-002",
   encumbered: "PROP-004",
   missing: "PROP-404"
 });
@@ -50,7 +50,7 @@ async function complianceProofFor(propertyId, principal) {
 }
 
 async function deployProtocolFixture() {
-  const [deployer, oracle, borrower, loanOfficer, other] = await ethers.getSigners();
+  const [deployer, oracle, loanOfficer, borrower, other] = await ethers.getSigners();
 
   const PropertyVerification = await ethers.getContractFactory("PropertyVerification");
   const verification = await PropertyVerification.deploy(deployer.address);
@@ -89,7 +89,8 @@ async function setVerification(fixture, propertyId = PROPERTY.verified) {
       result.propertyKey,
       result.verified,
       result.evidenceHash,
-      BigInt(result.valuationCommitment)
+      BigInt(result.valuationCommitment),
+      result.ownerAddress
     );
   return result;
 }
@@ -253,6 +254,7 @@ describe("ProofEstate contracts", function () {
 
       expect(record.verified).to.equal(true);
       expect(record.compliant).to.equal(false);
+      expect(record.owner).to.equal(verificationResult.ownerAddress);
       expect(record.evidenceHash).to.equal(verificationResult.evidenceHash);
       expect(record.valuationCommitment).to.equal(BigInt(verificationResult.valuationCommitment));
       expect(await fixture.verification.isVerified(verificationResult.propertyKey)).to.equal(true);
@@ -268,7 +270,8 @@ describe("ProofEstate contracts", function () {
           ethers.ZeroHash,
           true,
           verificationResult.evidenceHash,
-          BigInt(verificationResult.valuationCommitment)
+          BigInt(verificationResult.valuationCommitment),
+          verificationResult.ownerAddress
         )
       ).to.be.revertedWithCustomError(verification, "EmptyPropertyId");
 
@@ -277,7 +280,8 @@ describe("ProofEstate contracts", function () {
           verificationResult.propertyKey,
           true,
           verificationResult.evidenceHash,
-          BigInt(verificationResult.valuationCommitment)
+          BigInt(verificationResult.valuationCommitment),
+          verificationResult.ownerAddress
         )
       ).to.be.revertedWithCustomError(verification, "AccessControlUnauthorizedAccount");
     });
@@ -311,7 +315,8 @@ describe("ProofEstate contracts", function () {
           propertyId,
           true,
           ethers.id("new evidence"),
-          BigInt(verificationResult.valuationCommitment)
+          BigInt(verificationResult.valuationCommitment),
+          verificationResult.ownerAddress
         );
 
       record = await verification.getRecord(propertyId);
@@ -510,11 +515,11 @@ describe("ProofEstate contracts", function () {
 
     it("rejects unverified or non-compliant loans and releases the active collateral lock", async function () {
       const fixture = await loadFixture(deployProtocolFixture);
-      const { borrower, lending } = fixture;
+      const { borrower, lending, other } = fixture;
       const failedVerification = await setVerification(fixture, PROPERTY.encumbered);
 
       expect(failedVerification.verified).to.equal(false);
-      await lending.connect(borrower).requestLoan(failedVerification.propertyKey, 123n);
+      await lending.connect(other).requestLoan(failedVerification.propertyKey, 123n);
       await expect(approveLoan(fixture))
         .to.emit(lending, "LoanRejectedDueToVerification")
         .withArgs(0, failedVerification.propertyKey);
@@ -573,8 +578,12 @@ describe("ProofEstate contracts", function () {
 
     it("locks a property while requested and releases it on borrower cancellation", async function () {
       const fixture = await loadFixture(deployProtocolFixture);
-      const { borrower, lending } = fixture;
+      const { borrower, lending, other } = fixture;
       const { propertyId, principalCommitment } = await setVerifiedAndCompliant(fixture);
+
+      await expect(
+        lending.connect(other).requestLoan(propertyId, principalCommitment)
+      ).to.be.revertedWithCustomError(lending, "NotPropertyOwner");
 
       await requestLoan(fixture, propertyId, principalCommitment);
       await expectActiveLoan(lending, propertyId, 0);
@@ -629,7 +638,7 @@ describe("ProofEstate contracts", function () {
         .withArgs(1, borrower.address, propertyId, principalCommitment);
     });
 
-    it("keeps approved collateral locked until repayment, preventing PROP-003 over-borrowing", async function () {
+    it("keeps approved collateral locked until repayment, preventing repeat collateral borrowing", async function () {
       const fixture = await loadFixture(deployProtocolFixture);
       const { borrower, lending } = fixture;
       const { propertyId, principalCommitment } = await requestAndApproveLoan(

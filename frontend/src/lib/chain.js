@@ -27,6 +27,7 @@ export function formatRecord(record) {
     return {
       verified: false,
       compliant: false,
+      owner: "-",
       evidenceHash: "-",
       complianceHash: "-",
       valuationCommitment: "-",
@@ -40,6 +41,7 @@ export function formatRecord(record) {
   return {
     verified: record.verified,
     compliant: record.compliant,
+    owner: shortHash(record.owner),
     evidenceHash: shortHash(record.evidenceHash),
     complianceHash: shortHash(record.complianceHash),
     valuationCommitment: shortField(record.valuationCommitment),

@@ -20,7 +20,8 @@ async function verifyProperty(propertyId, { write = false, network = "localhost"
     result.propertyKey,
     result.verified,
     result.evidenceHash,
-    BigInt(result.valuationCommitment)
+    BigInt(result.valuationCommitment),
+    result.ownerAddress
   );
   const receipt = await tx.wait();
 

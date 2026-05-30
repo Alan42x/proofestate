@@ -1,17 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   BadgeCheck,
   Building2,
   Check,
-  ChevronDown,
   CircleDollarSign,
   Cpu,
   Database,
   FileCheck2,
   Home,
   Info,
-  Languages,
   ListChecks,
   Loader2,
   LockKeyhole,
@@ -21,7 +19,7 @@ import {
   Settings,
   ShieldCheck,
   UserRoundCog,
-  Wallet,
+  WalletCards,
   XCircle,
   Zap
 } from "lucide-react";
@@ -32,6 +30,7 @@ import {
   useDisconnect,
   usePublicClient,
   useReadContract,
+  useWatchContractEvent,
   useWriteContract
 } from "wagmi";
 import { hardhat, sepolia } from "wagmi/chains";
@@ -39,6 +38,10 @@ import { lendingAbi, propertyVerificationAbi } from "./contracts/abis";
 import { getOracleHealth, getProperties, getPropertiesByOwner, postOracle } from "./lib/api";
 import { formatRecord, propertyKey, roleKey, shortField, shortHash } from "./lib/chain";
 import { detectInitialLanguage, LANG_STORAGE_KEY, translations } from "./lib/i18n";
+import { LanguageToggle, NetworkSelector, WalletButton } from "./components/common/Controls";
+import { DetailList } from "./components/common/DataTable";
+import { LoanLedger } from "./components/domain/LoanLedger";
+import { WalletGate } from "./components/layout/WalletGate";
 
 const propertyVerificationAddress = import.meta.env.VITE_PROPERTY_VERIFICATION_ADDRESS;
 const complianceVerifierAddress = import.meta.env.VITE_COMPLIANCE_VERIFIER_ADDRESS;
@@ -58,6 +61,7 @@ const allowedRegions = new Set(["SG-CCR", "SG-RCR", "SG-OCR"]);
 const minimumValuation = 200000;
 const defaultAdminRole = "0x0000000000000000000000000000000000000000000000000000000000000000";
 const oracleRole = roleKey("ORACLE_ROLE");
+const complianceRole = roleKey("COMPLIANCE_ROLE");
 const loanOfficerRole = roleKey("LOAN_OFFICER_ROLE");
 
 function chainIdFor(network) {
@@ -130,6 +134,10 @@ function App() {
   const [propertyLoanHistory, setPropertyLoanHistory] = useState({ loading: false, loans: [] });
   const [proofLatencySamples, setProofLatencySamples] = useState([]);
   const [gasSamples, setGasSamples] = useState([]);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [txPhase, setTxPhase] = useState("");
+  const [chainRecords, setChainRecords] = useState({ loading: false, rows: [] });
+  const [roleAudit, setRoleAudit] = useState({ loading: false, rows: [] });
 
   const { address, isConnected } = useAccount();
   const walletChainId = useChainId();
@@ -175,7 +183,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [address, isConnected]);
+  }, [address, isConnected, refreshNonce]);
 
   useEffect(() => {
     let mounted = true;
@@ -382,6 +390,20 @@ function App() {
     }
   });
 
+  const targetRole = roleTarget === "oracle" ? oracleRole : loanOfficerRole;
+  const targetRoleContract = roleTarget === "oracle" ? safePropertyVerificationAddress : safeLendingAddress;
+  const targetRoleAbi = roleTarget === "oracle" ? propertyVerificationAbi : lendingAbi;
+  const { data: targetHasRole = false, refetch: refetchTargetRole } = useReadContract({
+    address: targetRoleContract,
+    abi: targetRoleAbi,
+    functionName: "hasRole",
+    args: isValidAddress(roleAddress) ? [targetRole, roleAddress] : undefined,
+    chainId: chainIdFor(network),
+    query: {
+      enabled: Boolean(targetRoleContract && isValidAddress(roleAddress))
+    }
+  });
+
   const formattedRecord = formatRecord(record);
   const activeLoanId = activeLoanData
     ? activeLoanData.loanId ?? activeLoanData[0]
@@ -432,7 +454,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [propertyLoanIds, publicClient, network, activeLoanExists, activeLoanId]);
+  }, [propertyLoanIds, publicClient, network, activeLoanExists, activeLoanId, refreshNonce]);
 
   const selectedLoan = useMemo(() => {
     const targetId = selectedLoanId ?? (activeLoanExists ? activeLoanId.toString() : null);
@@ -482,7 +504,125 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [nextLoanId, publicClient, network]);
+  }, [nextLoanId, publicClient, network, refreshNonce]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadChainRecords() {
+      if (!safePropertyVerificationAddress || !publicClient || properties.length === 0) {
+        if (mounted) setChainRecords({ loading: false, rows: [] });
+        return;
+      }
+
+      setChainRecords((current) => ({ ...current, loading: true }));
+      try {
+        const rows = await Promise.all(
+          properties.map(async (property) => {
+            const key = propertyKey(property.propertyId);
+            const data = await publicClient.readContract({
+              address: safePropertyVerificationAddress,
+              abi: propertyVerificationAbi,
+              functionName: "getRecord",
+              args: [key]
+            });
+            const formatted = formatRecord(data);
+            return {
+              property,
+              propertyKey: key,
+              record: formatted,
+              updatedRaw: Number(data?.lastUpdated || 0n)
+            };
+          })
+        );
+        if (mounted) {
+          setChainRecords({
+            loading: false,
+            rows: rows.sort((a, b) => b.updatedRaw - a.updatedRaw)
+          });
+        }
+      } catch (_error) {
+        if (mounted) setChainRecords({ loading: false, rows: [] });
+      }
+    }
+
+    loadChainRecords();
+    return () => {
+      mounted = false;
+    };
+  }, [properties, publicClient, network, refreshNonce]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    function roleName(role) {
+      const normalized = String(role || "").toLowerCase();
+      if (normalized === defaultAdminRole.toLowerCase()) return t("roleAdmin");
+      if (normalized === oracleRole.toLowerCase()) return t("roleOracle");
+      if (normalized === loanOfficerRole.toLowerCase()) return t("roleLoanOfficer");
+      if (normalized === complianceRole.toLowerCase()) return "Compliance";
+      return shortHash(role);
+    }
+
+    async function loadRoleAudit() {
+      if (!publicClient) {
+        if (mounted) setRoleAudit({ loading: false, rows: [] });
+        return;
+      }
+
+      const sources = [
+        safePropertyVerificationAddress
+          ? { contract: t("propertyVerificationContract"), address: safePropertyVerificationAddress, abi: propertyVerificationAbi }
+          : null,
+        safeLendingAddress
+          ? { contract: t("lendingContract"), address: safeLendingAddress, abi: lendingAbi }
+          : null
+      ].filter(Boolean);
+
+      if (sources.length === 0) {
+        if (mounted) setRoleAudit({ loading: false, rows: [] });
+        return;
+      }
+
+      setRoleAudit((current) => ({ ...current, loading: true }));
+      try {
+        const eventGroups = await Promise.all(
+          sources.flatMap((source) =>
+            ["RoleGranted", "RoleRevoked"].map(async (eventName) => {
+              const logs = await publicClient.getContractEvents({
+                address: source.address,
+                abi: source.abi,
+                eventName,
+                fromBlock: 0n
+              });
+              return logs.map((log) => ({
+                id: `${source.address}-${eventName}-${log.transactionHash}-${log.logIndex}`,
+                contract: source.contract,
+                action: eventName === "RoleGranted" ? t("grantRole") : t("revokeRole"),
+                role: roleName(log.args.role),
+                account: log.args.account,
+                sender: log.args.sender,
+                blockNumber: log.blockNumber,
+                tx: log.transactionHash
+              }));
+            })
+          )
+        );
+        const rows = eventGroups
+          .flat()
+          .sort((a, b) => Number(b.blockNumber || 0n) - Number(a.blockNumber || 0n))
+          .slice(0, 20);
+        if (mounted) setRoleAudit({ loading: false, rows });
+      } catch (_error) {
+        if (mounted) setRoleAudit({ loading: false, rows: [] });
+      }
+    }
+
+    loadRoleAudit();
+    return () => {
+      mounted = false;
+    };
+  }, [publicClient, network, refreshNonce, language]);
 
   const isVerified = Boolean(formattedRecord.verified);
   const isCompliant = Boolean(formattedRecord.compliant);
@@ -512,6 +652,13 @@ function App() {
     proofPrincipalAmount > 0n &&
     proofPropertyKey === selectedKey &&
     BigInt(formattedRecord.principalCommitmentRaw || 0n) === principalCommitmentAmount;
+  const selectedLoanProofBound = Boolean(
+    currentLoan &&
+      currentLoan.propertyId === selectedKey &&
+      isCompliant &&
+      BigInt(formattedRecord.principalCommitmentRaw || 0n) === BigInt(currentLoan.principalCommitment || 0n)
+  );
+  const displayedProofBound = currentLoan ? selectedLoanProofBound : proofMatchesPrincipal;
   const principalNumber = Number(principal || 0);
   const propertyValue = Number(selectedProperty?.valuation || 0);
   const ltvPercent = propertyValue ? (principalNumber / propertyValue) * 100 : 0;
@@ -615,7 +762,7 @@ function App() {
   ];
   const readinessScore = readinessItems.filter((item) => item.ready).length;
   const isAdmin = Boolean(isOracleAdmin || isLendingAdmin);
-  const isBorrower = Boolean(isConnected && ownedProperties.length > 0 && !isLoanOfficer && !isAdmin);
+  const isBorrower = Boolean(isConnected && ownedProperties.length > 0);
   const roleSummary = [
     isBorrower ? t("roleBorrower") : null,
     isOracleOperator ? t("roleOracle") : null,
@@ -632,21 +779,31 @@ function App() {
           { id: "properties", icon: Building2, label: "navMyProperties", title: "myPropertiesViewTitle" },
           { id: "verification", icon: Building2, label: "navVerification", title: "verificationViewTitle" },
           { id: "compliance", icon: ShieldCheck, label: "navCompliance", title: "complianceViewTitle" },
-          { id: "loan", icon: CircleDollarSign, label: "navLoan", title: "loanViewTitle" }
+          { id: "loan", icon: CircleDollarSign, label: "navLoan", title: "loanViewTitle" },
+          { id: "loanHistory", icon: WalletCards, label: "navLoanHistory", title: "loanHistoryViewTitle" }
         ]
       : []),
-    ...(isLoanOfficer && !isAdmin
+    ...(isLoanOfficer
       ? [{ id: "approvals", icon: BadgeCheck, label: "navApprovals", title: "approvalViewTitle" }]
       : []),
     ...(isAdmin
       ? [{ id: "admin", icon: UserRoundCog, label: "navAdmin", title: "adminViewTitle" }]
       : []),
-    ...(isAdmin ? [{ id: "contracts", icon: Cpu, label: "navContracts", title: "contractsViewTitle" }] : []),
-    ...(isAdmin ? [{ id: "records", icon: ListChecks, label: "navRecords", title: "recordsViewTitle" }] : []),
+    ...(isAdmin ? [{ id: "operations", icon: Cpu, label: "navOperations", title: "operationsViewTitle" }] : []),
     { id: "settings", icon: Settings, label: "navSettings", title: "settingsViewTitle" }
   ];
   const navItems = baseNavItems;
   const activeNav = navItems.find((item) => item.id === activeView) || navItems[0];
+
+  useEffect(() => {
+    if (!isConnected) {
+      setActiveView("overview");
+      setSelectedLoanId(null);
+      setPrincipalCommitment("");
+      setProofPrincipal("");
+      setProofPropertyKey("");
+    }
+  }, [isConnected, address]);
 
   useEffect(() => {
     if (!navItems.some((item) => item.id === activeView)) {
@@ -680,7 +837,14 @@ function App() {
       icon: BadgeCheck,
       title: t("stepApproval"),
       subtitle: t("stepApprovalSub"),
-      state: currentLoan?.state === 2 ? t("done") : currentLoan?.state === 1 ? t("approved") : t("waiting"),
+      state: currentLoan?.state === 1 || currentLoan?.state === 2 ? t("done") : currentLoan?.state === 3 ? t("rejected") : t("waiting"),
+      active: Boolean(currentLoan?.state === 1 || currentLoan?.state === 2)
+    },
+    {
+      icon: CircleDollarSign,
+      title: t("stepRepayment"),
+      subtitle: t("stepRepaymentSub"),
+      state: currentLoan?.state === 2 ? t("done") : currentLoan?.state === 1 ? t("ready") : t("waiting"),
       active: Boolean(currentLoan?.state === 1 || currentLoan?.state === 2)
     }
   ];
@@ -806,7 +970,7 @@ function App() {
     },
     {
       label: t("proofBinding"),
-      value: proofMatchesPrincipal ? t("matched") : t("notMatched")
+      value: displayedProofBound ? t("matched") : t("notMatched")
     },
     { label: t("requestedAt"), value: currentLoan ? formatTimestamp(currentLoan.requestedAt) : "-" },
     { label: t("approvedAt"), value: currentLoan?.approvedAt ? formatTimestamp(currentLoan.approvedAt) : "-" },
@@ -854,7 +1018,14 @@ function App() {
     if (matchedProperty) setSelectedId(matchedProperty.propertyId);
   }
 
-  async function refreshChainState() {
+  function actionText(defaultKey) {
+    if (txPhase === "submitting") return t("submittingTx");
+    if (txPhase === "confirming") return t("confirmingTx");
+    if (txPhase === "confirmed") return t("confirmedTx");
+    return t(defaultKey);
+  }
+
+  const refreshChainState = useCallback(async () => {
     await Promise.allSettled([
       refetchRecord(),
       refetchNextLoanId(),
@@ -863,21 +1034,123 @@ function App() {
       refetchOracleAdminRole(),
       refetchLendingAdminRole(),
       refetchLoanOfficerRole(),
-      refetchOracleOperatorRole()
+      refetchOracleOperatorRole(),
+      refetchTargetRole()
     ]);
-  }
+  }, [
+    refetchRecord,
+    refetchNextLoanId,
+    refetchActiveLoan,
+    refetchPropertyLoanIds,
+    refetchOracleAdminRole,
+    refetchLendingAdminRole,
+    refetchLoanOfficerRole,
+    refetchOracleOperatorRole,
+    refetchTargetRole
+  ]);
+
+  const refreshAppState = useCallback(async () => {
+    setRefreshNonce((current) => current + 1);
+    await refreshChainState();
+  }, [refreshChainState]);
 
   useEffect(() => {
     if (activeView === "overview") {
-      refreshChainState();
+      refreshAppState();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView]);
+  }, [activeView, refreshAppState]);
+
+  const handleContractEvent = useCallback(() => {
+    refreshAppState();
+  }, [refreshAppState]);
+
+  useWatchContractEvent({
+    address: safeLendingAddress,
+    abi: lendingAbi,
+    chainId: chainIdFor(network),
+    eventName: "LoanRequested",
+    enabled: Boolean(safeLendingAddress),
+    onLogs: handleContractEvent
+  });
+  useWatchContractEvent({
+    address: safeLendingAddress,
+    abi: lendingAbi,
+    chainId: chainIdFor(network),
+    eventName: "LoanApproved",
+    enabled: Boolean(safeLendingAddress),
+    onLogs: handleContractEvent
+  });
+  useWatchContractEvent({
+    address: safeLendingAddress,
+    abi: lendingAbi,
+    chainId: chainIdFor(network),
+    eventName: "LoanRejected",
+    enabled: Boolean(safeLendingAddress),
+    onLogs: handleContractEvent
+  });
+  useWatchContractEvent({
+    address: safeLendingAddress,
+    abi: lendingAbi,
+    chainId: chainIdFor(network),
+    eventName: "LoanRejectedDueToVerification",
+    enabled: Boolean(safeLendingAddress),
+    onLogs: handleContractEvent
+  });
+  useWatchContractEvent({
+    address: safeLendingAddress,
+    abi: lendingAbi,
+    chainId: chainIdFor(network),
+    eventName: "LoanRejectedDueToCompliance",
+    enabled: Boolean(safeLendingAddress),
+    onLogs: handleContractEvent
+  });
+  useWatchContractEvent({
+    address: safeLendingAddress,
+    abi: lendingAbi,
+    chainId: chainIdFor(network),
+    eventName: "LoanRejectedDueToProofMismatch",
+    enabled: Boolean(safeLendingAddress),
+    onLogs: handleContractEvent
+  });
+  useWatchContractEvent({
+    address: safeLendingAddress,
+    abi: lendingAbi,
+    chainId: chainIdFor(network),
+    eventName: "LoanRepaid",
+    enabled: Boolean(safeLendingAddress),
+    onLogs: handleContractEvent
+  });
+  useWatchContractEvent({
+    address: safeLendingAddress,
+    abi: lendingAbi,
+    chainId: chainIdFor(network),
+    eventName: "LoanCancelled",
+    enabled: Boolean(safeLendingAddress),
+    onLogs: handleContractEvent
+  });
+  useWatchContractEvent({
+    address: safePropertyVerificationAddress,
+    abi: propertyVerificationAbi,
+    chainId: chainIdFor(network),
+    eventName: "PropertyVerificationUpdated",
+    enabled: Boolean(safePropertyVerificationAddress),
+    onLogs: handleContractEvent
+  });
+  useWatchContractEvent({
+    address: safePropertyVerificationAddress,
+    abi: propertyVerificationAbi,
+    chainId: chainIdFor(network),
+    eventName: "PropertyComplianceUpdated",
+    enabled: Boolean(safePropertyVerificationAddress),
+    onLogs: handleContractEvent
+  });
 
   async function waitForReceipt(hash) {
     if (!publicClient || !hash) return;
+    setTxPhase("confirming");
     pushActivity("chain", t("waitingReceipt"), hash);
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    setTxPhase("confirmed");
     pushActivity("chain", t("transactionConfirmed"), hash);
     return receipt;
   }
@@ -903,7 +1176,7 @@ function App() {
           // The oracle already waited for the transaction server-side; missing receipts are non-blocking here.
         }
       }
-      await refreshChainState();
+      await refreshAppState();
       return result;
     } catch (error) {
       pushActivity("error", error.message);
@@ -967,6 +1240,7 @@ function App() {
       return null;
     }
     setBusyAction(functionName);
+    setTxPhase("submitting");
     try {
       const hash = await writeContractAsync({
         address: safeLendingAddress,
@@ -979,13 +1253,14 @@ function App() {
       pushActivity("chain", `${functionName} ${t("txSubmitted")}`, hash);
       const receipt = await waitForReceipt(hash);
       recordGas(functionName, receipt);
-      await refreshChainState();
+      await refreshAppState();
       return hash;
     } catch (error) {
       pushActivity("error", error.shortMessage || error.message);
       return null;
     } finally {
       setBusyAction("");
+      window.setTimeout(() => setTxPhase(""), 1200);
     }
   }
 
@@ -1064,6 +1339,7 @@ function App() {
     }
 
     setBusyAction("Role");
+    setTxPhase("submitting");
     try {
       const functionName = roleOperation === "grant" ? "grantRole" : "revokeRole";
       const hash = await writeContractAsync({
@@ -1076,11 +1352,12 @@ function App() {
       pushActivity("chain", `${functionName} ${t("txSubmitted")}`, hash);
       const receipt = await waitForReceipt(hash);
       recordGas(functionName, receipt);
-      await refreshChainState();
+      await refreshAppState();
     } catch (error) {
       pushActivity("error", error.shortMessage || error.message);
     } finally {
       setBusyAction("");
+      window.setTimeout(() => setTxPhase(""), 1200);
     }
   }
 
@@ -1197,18 +1474,18 @@ function App() {
 
   function renderLoanActionButtons(className = "") {
     return (
-      <div className={`button-grid ${className}`}>
-        <button className="primary-action" onClick={handleRequestLoan} disabled={!canRequestLoan}>
+      <div className={`loan-action-grid ${className}`}>
+        <button className="primary-action loan-command" onClick={handleRequestLoan} disabled={!canRequestLoan}>
           <Send size={17} />
-          {t("submitLoan")}
+          <span>{busyAction === "requestLoan" ? actionText("submitLoan") : t("submitLoan")}</span>
         </button>
-        <button className="outline-action wide" onClick={handleRepay} disabled={!canRepayLoan}>
+        <button className="outline-action loan-command" onClick={handleRepay} disabled={!canRepayLoan}>
           <CircleDollarSign size={17} />
-          {t("repayLoan")}
+          <span>{busyAction === "repay" ? actionText("repayLoan") : t("repayLoan")}</span>
         </button>
-        <button className="outline-action wide" onClick={handleCancelLoan} disabled={!canCancelLoan}>
+        <button className="outline-action loan-command" onClick={handleCancelLoan} disabled={!canCancelLoan}>
           <XCircle size={17} />
-          {t("cancelLoan")}
+          <span>{busyAction === "cancelLoan" ? actionText("cancelLoan") : t("cancelLoan")}</span>
         </button>
       </div>
     );
@@ -1279,8 +1556,8 @@ function App() {
           </div>
           <div>
             <span>{t("proofBinding")}</span>
-            <strong className={proofMatchesPrincipal ? "green-text" : "warn-text"}>
-              {proofMatchesPrincipal ? t("matched") : t("notMatched")}
+            <strong className={displayedProofBound ? "green-text" : "warn-text"}>
+              {displayedProofBound ? t("matched") : t("notMatched")}
             </strong>
           </div>
           <div>
@@ -1308,8 +1585,10 @@ function App() {
             <strong>{activeLockLabel}</strong>
           </div>
         </div>
-        {!proofMatchesPrincipal && (
-          <p className="helper-copy compact-note warn-text">{t("regenerateProofHint")}</p>
+        {!displayedProofBound && (
+          <p className="helper-copy compact-note warn-text">
+            {currentLoan ? t("proofBindingAuditHint") : t("regenerateProofHint")}
+          </p>
         )}
         {activeLoanExists && (
           <p className="helper-copy compact-note warn-text">{t("activeLoanLockHint")}</p>
@@ -1325,7 +1604,7 @@ function App() {
       <section className="activity-panel panel">
         <div className="panel-heading">
           <h2>{t("contractActivity")}</h2>
-          <button className="icon-only" onClick={() => refreshChainState()} title={t("refresh")}>
+          <button className="icon-only" onClick={() => refreshAppState()} title={t("refresh")}>
             {fetchingRecord ? <Loader2 className="spin" size={17} /> : <RefreshCw size={17} />}
           </button>
         </div>
@@ -1400,6 +1679,45 @@ function App() {
     );
   }
 
+  function renderChainRecordExplorer() {
+    return (
+      <article className="record-card panel">
+        <div className="panel-heading">
+          <h2>{t("chainRecordExplorer")}</h2>
+          <Activity size={16} />
+        </div>
+        <div className="chain-record-table">
+          <div className="chain-record-head">
+            <span>{t("propertyId")}</span>
+            <span>{t("propertyKey")}</span>
+            <span>{t("statusVerified")}</span>
+            <span>{t("statusCompliant")}</span>
+            <span>{t("principalCommitment")}</span>
+            <span>{t("updated")}</span>
+          </div>
+          {chainRecords.rows.length === 0 ? (
+            <p className="helper-copy">{chainRecords.loading ? t("loading") : t("noChainRecords")}</p>
+          ) : (
+            chainRecords.rows.map((row) => (
+              <button
+                className={`chain-record-row ${selectedId === row.property.propertyId ? "active" : ""}`}
+                key={row.property.propertyId}
+                onClick={() => setSelectedId(row.property.propertyId)}
+              >
+                <strong>{row.property.propertyId}</strong>
+                <span>{shortHash(row.propertyKey)}</span>
+                <span>{row.record.verified ? t("yes") : t("no")}</span>
+                <span>{row.record.compliant ? t("yes") : t("no")}</span>
+                <span>{row.record.principalCommitment}</span>
+                <span>{row.record.lastUpdated}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </article>
+    );
+  }
+
   function renderActivityFeed(limit = 6) {
     return (
       <article className="activity-feed-card panel">
@@ -1429,34 +1747,21 @@ function App() {
     const stateKeys = ["requested", "approved", "repaid", "rejected", "cancelled"];
 
     return (
-      <article className="loan-table-card panel">
-        <div className="panel-heading">
-          <h2>{t("loanBook")}</h2>
-          <CircleDollarSign size={16} />
-        </div>
-        <div className="loan-table">
-          <div className="loan-table-head">
-            <span>{t("loanId")}</span>
-            <span>{t("loanProperty")}</span>
-            <span>{t("borrower")}</span>
-            <span>{t("state")}</span>
-            <span>{t("requestedAt")}</span>
-          </div>
-          {rows.length === 0 ? (
-            <p>{loanPortfolio.loading ? t("loading") : t("noLoan")}</p>
-          ) : (
-            rows.map((loan) => (
-              <div className="loan-table-row" key={loan.id.toString()}>
-                <strong>#{loan.id.toString()}</strong>
-                <span>{shortHash(loan.propertyId)}</span>
-                <span>{shortHash(loan.borrower)}</span>
-                <span>{t(stateKeys[loan.state] || "loanReadError")}</span>
-                <span>{formatTimestamp(loan.requestedAt)}</span>
-              </div>
-            ))
-          )}
-        </div>
-      </article>
+      <LoanLedger
+        t={t}
+        title={t("loanBook")}
+        loans={rows}
+        loading={loanPortfolio.loading}
+        emptyText={t("noLoan")}
+        rowKey={(loan) => loan.id.toString()}
+        columns={[
+          { key: "id", label: t("loanId"), strong: true, render: (loan) => `#${loan.id.toString()}` },
+          { key: "propertyId", label: t("loanProperty"), render: (loan) => shortHash(loan.propertyId) },
+          { key: "borrower", label: t("borrower"), render: (loan) => shortHash(loan.borrower) },
+          { key: "state", label: t("state"), render: (loan) => t(stateKeys[loan.state] || "loanReadError") },
+          { key: "requestedAt", label: t("requestedAt"), render: (loan) => formatTimestamp(loan.requestedAt) }
+        ]}
+      />
     );
   }
 
@@ -1495,7 +1800,7 @@ function App() {
         </section>
         <section className="view-grid two-col lower">
           {renderRecordCard()}
-          {renderMyLoanLedger()}
+          {renderActivityFeed()}
         </section>
       </div>
     );
@@ -1504,43 +1809,28 @@ function App() {
   function renderMyLoanLedger() {
     const stateKeys = ["requested", "approved", "repaid", "rejected", "cancelled"];
     return (
-      <article className="loan-table-card panel">
-        <div className="panel-heading">
-          <h2>{t("myLoans")}</h2>
-          <CircleDollarSign size={16} />
-        </div>
-        <div className="loan-table my-loan-table">
-          <div className="loan-table-head my-loan-row">
-            <span>{t("loanId")}</span>
-            <span>{t("propertyId")}</span>
-            <span>{t("loanProperty")}</span>
-            <span>{t("state")}</span>
-            <span>{t("requestedAt")}</span>
-            <span>{t("principalCommitment")}</span>
-          </div>
-          {myLoans.length === 0 ? (
-            <p>{loanPortfolio.loading ? t("loading") : t("noBorrowerLoans")}</p>
-          ) : (
-            myLoans.map((loan) => {
-              const ledgerProperty = properties.find((property) => propertyKey(property.propertyId) === loan.propertyId);
-              return (
-              <button
-                className={`loan-table-row my-loan-row selectable ${selectedLoanId === loan.id.toString() ? "active" : ""}`}
-                key={loan.id.toString()}
-                onClick={() => selectLoanRecord(loan)}
-              >
-                <strong>#{loan.id.toString()}</strong>
-                <span>{ledgerProperty?.propertyId || "-"}</span>
-                <span>{shortHash(loan.propertyId)}</span>
-                <span>{t(stateKeys[loan.state] || "loanReadError")}</span>
-                <span>{formatTimestamp(loan.requestedAt)}</span>
-                <span>{shortField(loan.principalCommitment)}</span>
-              </button>
-              );
-            })
-          )}
-        </div>
-      </article>
+      <LoanLedger
+        t={t}
+        title={t("myLoans")}
+        loans={myLoans}
+        loading={loanPortfolio.loading}
+        emptyText={t("noBorrowerLoans")}
+        rowKey={(loan) => loan.id.toString()}
+        selectedLoanId={selectedLoanId}
+        selectLoanRecord={selectLoanRecord}
+        columns={[
+          { key: "id", label: t("loanId"), strong: true, render: (loan) => `#${loan.id.toString()}` },
+          {
+            key: "propertyCode",
+            label: t("propertyId"),
+            render: (loan) => properties.find((property) => propertyKey(property.propertyId) === loan.propertyId)?.propertyId || "-"
+          },
+          { key: "propertyId", label: t("loanProperty"), render: (loan) => shortHash(loan.propertyId) },
+          { key: "state", label: t("state"), render: (loan) => t(stateKeys[loan.state] || "loanReadError") },
+          { key: "requestedAt", label: t("requestedAt"), render: (loan) => formatTimestamp(loan.requestedAt) },
+          { key: "principalCommitment", label: t("principalCommitment"), render: (loan) => shortField(loan.principalCommitment) }
+        ]}
+      />
     );
   }
 
@@ -1598,23 +1888,16 @@ function App() {
               <h2>{t("approvalDecision")}</h2>
               <CircleDollarSign size={16} />
             </div>
-            <dl className="detail-list">
-              {loanDetailItems.map((item) => (
-                <div key={item.label}>
-                  <dt>{item.label}</dt>
-                  <dd>{item.value}</dd>
-                </div>
-              ))}
-            </dl>
+            <DetailList items={loanDetailItems} />
             {currentLoan?.state === 0 ? (
               <div className="view-actions-row">
                 <button className="gold-action" onClick={handleApproveLoan} disabled={!canApproveLoan}>
                   <BadgeCheck size={17} />
-                  {t("approveLoan")}
+                  {busyAction === "approveLoan" ? actionText("approveLoan") : t("approveLoan")}
                 </button>
                 <button className="outline-action" onClick={() => handleRejectLoan()} disabled={!canRejectLoan}>
                   <XCircle size={17} />
-                  {t("rejectLoan")}
+                  {busyAction === "rejectLoan" ? actionText("rejectLoan") : t("rejectLoan")}
                 </button>
               </div>
             ) : (
@@ -1659,7 +1942,7 @@ function App() {
             <div className="view-actions-row">
               <button className="primary-action" onClick={handleRoleUpdate} disabled={!isAdmin || busyAction === "Role"}>
                 {busyAction === "Role" ? <Loader2 className="spin" size={17} /> : <UserRoundCog size={17} />}
-                {t("applyRoleChange")}
+                {busyAction === "Role" ? actionText("applyRoleChange") : t("applyRoleChange")}
               </button>
             </div>
           </article>
@@ -1668,35 +1951,77 @@ function App() {
               <h2>{t("adminStatus")}</h2>
               <ShieldCheck size={16} />
             </div>
-            <dl className="detail-list">
+            <div className="role-status-grid">
               <div>
-                <dt>{t("currentWallet")}</dt>
-                <dd>{address || "-"}</dd>
+                <span>{t("currentWallet")}</span>
+                <strong>{shortHash(address)}</strong>
+                <small>{roleSummary.length ? roleSummary.join(" / ") : t("roleViewer")}</small>
               </div>
               <div>
-                <dt>{t("roleAdmin")}</dt>
-                <dd>{configuredAdminAddress || (isAdmin ? t("yes") : t("no"))}</dd>
+                <span>{t("roleAdmin")}</span>
+                <strong className={isAdmin ? "green-text" : "warn-text"}>
+                  {isAdmin ? t("activeRole") : t("inactiveRole")}
+                </strong>
+                <small>{shortHash(configuredAdminAddress || address)}</small>
               </div>
               <div>
-                <dt>{t("roleOracle")}</dt>
-                <dd>{configuredOracleAddress || "-"}</dd>
+                <span>{t("roleOracle")}</span>
+                <strong className={isOracleOperator ? "green-text" : "warn-text"}>
+                  {isOracleOperator ? t("activeRole") : t("inactiveRole")}
+                </strong>
+                <small>{shortHash(address)}</small>
               </div>
               <div>
-                <dt>{t("roleLoanOfficer")}</dt>
-                <dd>{configuredLoanOfficerAddress || (isLoanOfficer ? t("yes") : t("no"))}</dd>
+                <span>{t("roleLoanOfficer")}</span>
+                <strong className={isLoanOfficer ? "green-text" : "warn-text"}>
+                  {isLoanOfficer ? t("activeRole") : t("inactiveRole")}
+                </strong>
+                <small>{shortHash(address)}</small>
               </div>
               <div>
-                <dt>{t("propertyVerificationContract")}</dt>
-                <dd>{safePropertyVerificationAddress || "-"}</dd>
+                <span>{t("selectedTargetRole")}</span>
+                <strong className={targetHasRole ? "green-text" : "warn-text"}>
+                  {isValidAddress(roleAddress)
+                    ? targetHasRole
+                      ? t("activeRole")
+                      : t("inactiveRole")
+                    : t("invalidRoleAddress")}
+                </strong>
+                <small>{isValidAddress(roleAddress) ? shortHash(roleAddress) : "-"}</small>
               </div>
-              <div>
-                <dt>{t("lendingContract")}</dt>
-                <dd>{safeLendingAddress || "-"}</dd>
-              </div>
-            </dl>
+            </div>
           </article>
         </section>
-        {renderActivityTable()}
+        <section className="operation-panel panel">
+          <div className="panel-heading">
+            <h2>{t("roleAuditTrail")}</h2>
+            <UserRoundCog size={16} />
+          </div>
+          <div className="role-audit-table">
+            <div className="role-audit-head">
+              <span>{t("roleOperation")}</span>
+              <span>{t("roleTarget")}</span>
+              <span>{t("roleAddress")}</span>
+              <span>{t("contract")}</span>
+              <span>{t("latestBlock")}</span>
+              <span>{t("latestTx")}</span>
+            </div>
+            {roleAudit.rows.length === 0 ? (
+              <p className="helper-copy">{roleAudit.loading ? t("loading") : t("noRoleAudit")}</p>
+            ) : (
+              roleAudit.rows.map((row) => (
+                <div className="role-audit-row" key={row.id}>
+                  <strong>{row.action}</strong>
+                  <span>{row.role}</span>
+                  <span>{shortHash(row.account)}</span>
+                  <span>{row.contract}</span>
+                  <span>{row.blockNumber?.toString() || "-"}</span>
+                  <span>{shortHash(row.tx)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
       </div>
     );
   }
@@ -1809,7 +2134,7 @@ function App() {
                 {busyAction === "Verification" ? <Loader2 className="spin" size={17} /> : <FileCheck2 size={17} />}
                 {t("runVerification")}
               </button>
-              <button className="outline-action" onClick={() => refreshChainState()}>
+              <button className="outline-action" onClick={() => refreshAppState()}>
                 <RefreshCw size={17} />
                 {t("refresh")}
               </button>
@@ -1885,6 +2210,7 @@ function App() {
   function renderLoan() {
     return (
       <div className="workspace-view view-scroll">
+        {renderStepsPanel()}
         <section className="view-grid two-col">
           {renderAssetCard()}
           {renderLoanPanel()}
@@ -1895,55 +2221,57 @@ function App() {
               <h2>{t("loanDetails")}</h2>
               <CircleDollarSign size={16} />
             </div>
-            <dl className="detail-list">
-              {loanDetailItems.map((item) => (
-                <div key={item.label}>
-                  <dt>{item.label}</dt>
-                  <dd>{item.value}</dd>
-                </div>
-              ))}
-            </dl>
+            <DetailList items={loanDetailItems} />
           </article>
-          {renderMyLoanLedger()}
+          {renderChainRecordExplorer()}
         </section>
-        {renderStepsPanel()}
       </div>
     );
   }
 
-  function renderContracts() {
-    return (
-      <div className="workspace-view view-scroll">
-        {renderReadinessPanel()}
-        <section className="view-grid three-col">
-          {contractRows.slice(0, 3).map((row) => (
-            <article className="address-card panel" key={row.name}>
-              <div className="panel-heading">
-                <h2>{row.name}</h2>
-                <Cpu size={16} />
-              </div>
-              <span className={statusClass[row.status] || "warn-text"}>
-                {statusLabels[row.status] || row.status}
-              </span>
-              <strong>{shortHash(row.address)}</strong>
-              <small>{row.address}</small>
-            </article>
-          ))}
-        </section>
-        {renderActivityTable()}
-      </div>
-    );
-  }
-
-  function renderRecords() {
+  function renderLoanHistory() {
     return (
       <div className="workspace-view view-scroll">
         <section className="view-grid two-col">
-          {renderRecordCard()}
-          {renderLoanTable(10)}
+          {renderMyLoanLedger()}
+          <article className="operation-panel panel">
+            <div className="panel-heading">
+              <h2>{t("loanDetails")}</h2>
+              <WalletCards size={16} />
+            </div>
+            <DetailList items={loanDetailItems} />
+          </article>
         </section>
+        {renderStepsPanel(true)}
         {renderActivityFeed(8)}
+      </div>
+    );
+  }
+
+  function renderOperations() {
+    return (
+      <div className="workspace-view view-scroll">
+        {renderReadinessPanel()}
+        <section className="view-grid two-col">
+          <article className="operation-panel panel">
+            <div className="panel-heading">
+              <h2>{t("contractAddresses")}</h2>
+              <Cpu size={16} />
+            </div>
+            <div className="ops-address-grid">
+              {contractRows.slice(0, 3).map((row) => (
+                <div className="ops-address-row" key={row.name}>
+                  <span>{row.name}</span>
+                  <strong>{shortHash(row.address)}</strong>
+                  <small>{row.address}</small>
+                </div>
+              ))}
+            </div>
+          </article>
+          {renderRecordCard()}
+        </section>
         {renderActivityTable()}
+        {renderActivityFeed(8)}
       </div>
     );
   }
@@ -1952,7 +2280,7 @@ function App() {
     return (
       <div className="workspace-view view-scroll">
         <section className="view-grid two-col">
-          <article className="operation-panel panel">
+          <article className="operation-panel panel settings-card">
             <div className="panel-heading">
               <h2>{t("settingsViewTitle")}</h2>
               <Settings size={16} />
@@ -1960,15 +2288,7 @@ function App() {
             <div className="settings-list">
               <label>
                 <span>{t("languagePreference")}</span>
-                <div className="language-toggle inline">
-                  <Languages size={17} />
-                  <button className={language === "zh" ? "active" : ""} onClick={() => updateLanguage("zh")}>
-                    中文
-                  </button>
-                  <button className={language === "en" ? "active" : ""} onClick={() => updateLanguage("en")}>
-                    EN
-                  </button>
-                </div>
+                <LanguageToggle language={language} updateLanguage={updateLanguage} t={t} inline />
               </label>
               <label>
                 <span>{t("networkPreference")}</span>
@@ -1987,19 +2307,44 @@ function App() {
               </label>
             </div>
           </article>
-          <article className="operation-panel panel">
+          <article className="operation-panel panel settings-card">
             <div className="panel-heading">
-              <h2>{t("demoSetup")}</h2>
+              <h2>{t("workspacePreferences")}</h2>
               <ListChecks size={16} />
             </div>
-            <div className="command-list">
-              <code>pnpm chain:local</code>
-              <code>pnpm demo:deploy</code>
-              <code>pnpm oracle:api</code>
-              <code>pnpm frontend:dev</code>
-              <code>pnpm demo:check</code>
+            <div className="settings-summary-grid">
+              <div>
+                <span>{t("currentWallet")}</span>
+                <strong>{walletLabel}</strong>
+              </div>
+              <div>
+                <span>{t("workspaceStatus")}</span>
+                <strong>{roleSummary.length ? roleSummary.join(" / ") : t("roleViewer")}</strong>
+              </div>
+              <div>
+                <span>{t("roleAdmin")}</span>
+                <strong className={isAdmin ? "green-text" : "warn-text"}>
+                  {isAdmin ? t("activeRole") : t("inactiveRole")}
+                </strong>
+              </div>
+              <div>
+                <span>{t("roleLoanOfficer")}</span>
+                <strong className={isLoanOfficer ? "green-text" : "warn-text"}>
+                  {isLoanOfficer ? t("activeRole") : t("inactiveRole")}
+                </strong>
+              </div>
+              <div>
+                <span>{t("proofBinding")}</span>
+                <strong className={displayedProofBound ? "green-text" : "warn-text"}>
+                  {displayedProofBound ? t("matched") : t("notMatched")}
+                </strong>
+              </div>
+              <div>
+                <span>{t("readinessTitle")}</span>
+                <strong>{readinessScore}/4 {t("readyStatus")}</strong>
+              </div>
             </div>
-            <p className="helper-copy">{t("walletHint")}</p>
+            <p className="helper-copy">{t("settingsProductNote")}</p>
           </article>
         </section>
         {renderReadinessPanel()}
@@ -2012,12 +2357,31 @@ function App() {
     if (activeView === "verification") return renderVerification();
     if (activeView === "compliance") return renderCompliance();
     if (activeView === "loan") return renderLoan();
+    if (activeView === "loanHistory") return renderLoanHistory();
     if (activeView === "approvals") return renderApprovals();
     if (activeView === "admin") return renderAdmin();
-    if (activeView === "contracts") return renderContracts();
-    if (activeView === "records") return renderRecords();
+    if (activeView === "operations") return renderOperations();
     if (activeView === "settings") return renderSettings();
     return renderOverview();
+  }
+
+  if (!isConnected) {
+    return (
+      <WalletGate
+        t={t}
+        language={language}
+        updateLanguage={updateLanguage}
+        network={network}
+        setNetwork={setNetwork}
+        readinessItems={readinessItems}
+        readinessScore={readinessScore}
+        networkLabel={networkLabel}
+        connectors={connectors}
+        connect={connect}
+        connecting={connecting}
+        walletLabel={walletLabel}
+      />
+    );
   }
 
   return (
@@ -2068,41 +2432,17 @@ function App() {
             <h1>{t(activeNav.title)}</h1>
           </div>
           <div className="topbar-actions">
-            <label className="select-shell">
-              <Network size={17} />
-              <select value={network} onChange={(event) => setNetwork(event.target.value)}>
-                <option value="localhost">{t("local")}</option>
-                <option value="sepolia">{t("sepolia")}</option>
-              </select>
-              <ChevronDown size={16} />
-            </label>
-            <div className="language-toggle" aria-label={t("language")}>
-              <Languages size={17} />
-              <button className={language === "zh" ? "active" : ""} onClick={() => updateLanguage("zh")}>
-                中文
-              </button>
-              <button className={language === "en" ? "active" : ""} onClick={() => updateLanguage("en")}>
-                EN
-              </button>
-            </div>
-            {isConnected ? (
-              <button className="wallet-button" onClick={() => disconnect()} title={t("disconnectWallet")}>
-                <span className="wallet-avatar" />
-                {walletLabel}
-                <small>{t("connected")}</small>
-                <ChevronDown size={16} />
-              </button>
-            ) : (
-              <button
-                className="wallet-button primary"
-                onClick={() => connectors[0] && connect({ connector: connectors[0] })}
-                disabled={connecting || !connectors[0]}
-                title={t("connectWallet")}
-              >
-                <Wallet size={18} />
-                {connecting ? t("connecting") : walletLabel}
-              </button>
-            )}
+            <NetworkSelector network={network} setNetwork={setNetwork} t={t} />
+            <LanguageToggle language={language} updateLanguage={updateLanguage} t={t} />
+            <WalletButton
+              isConnected={isConnected}
+              walletLabel={walletLabel}
+              connecting={connecting}
+              connectors={connectors}
+              connect={connect}
+              disconnect={disconnect}
+              t={t}
+            />
           </div>
         </header>
 

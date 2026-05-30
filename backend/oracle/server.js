@@ -151,6 +151,10 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`Oracle API listening on http://localhost:${port}`);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Oracle API listening on http://localhost:${port}`);
+  });
+}
+
+module.exports = app;

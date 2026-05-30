@@ -7,6 +7,7 @@ interface IPropertyVerificationReader {
     function isVerified(bytes32 propertyId) external view returns (bool);
     function isCompliant(bytes32 propertyId) external view returns (bool);
     function isCompliantFor(bytes32 propertyId, uint256 principalCommitment) external view returns (bool);
+    function ownerOf(bytes32 propertyId) external view returns (address);
 }
 
 contract Lending is AccessControl {
@@ -64,6 +65,7 @@ contract Lending is AccessControl {
     error InvalidLoanId(uint256 loanId);
     error InvalidLoanState(uint256 loanId, LoanState expected, LoanState actual);
     error NotBorrower(uint256 loanId, address caller);
+    error NotPropertyOwner(bytes32 propertyId, address caller, address owner);
     error InvalidVerificationAddress();
     error ActiveLoanExists(bytes32 propertyId, uint256 loanId);
 
@@ -82,6 +84,8 @@ contract Lending is AccessControl {
     {
         if (propertyId == bytes32(0)) revert EmptyPropertyId();
         if (principalCommitment == 0) revert InvalidPrincipalCommitment();
+        address owner = propertyVerification.ownerOf(propertyId);
+        if (owner != msg.sender) revert NotPropertyOwner(propertyId, msg.sender, owner);
         uint256 activeLoan = activeLoanByProperty[propertyId];
         if (activeLoan != 0) revert ActiveLoanExists(propertyId, activeLoan - 1);
 

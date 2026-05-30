@@ -135,6 +135,7 @@ async function buildVerification(propertyId) {
     verified: evaluation.passes,
     evidenceHash: property ? evidenceHashFor(property) : ethers.ZeroHash,
     valuationCommitment: valuationCommitment.toString(),
+    ownerAddress: property?.ownerAddress || ethers.ZeroAddress,
     evaluation,
     property: property || null
   };
@@ -143,6 +144,7 @@ async function buildVerification(propertyId) {
 async function buildCompliance(propertyId, loanPrincipal, principalSalt = randomFieldSalt()) {
   const principal = parsePositiveCircuitInteger(loanPrincipal, "loanPrincipal");
   const property = findProperty(propertyId);
+  const evaluation = evaluateProperty(property);
   if (!property) {
     return {
       propertyId,
@@ -154,6 +156,20 @@ async function buildCompliance(propertyId, loanPrincipal, principalSalt = random
       valuationCommitment: "0",
       principalCommitment: "0",
       publicSignals: []
+    };
+  }
+  if (!evaluation.passes) {
+    return {
+      propertyId,
+      propertyKey: propertyKey(propertyId),
+      exists: true,
+      compliant: false,
+      reasons: evaluation.reasons,
+      principalSalt: principalSalt.toString(),
+      valuationCommitment: "0",
+      principalCommitment: "0",
+      publicSignals: [],
+      evaluation
     };
   }
 

@@ -5,12 +5,13 @@ const path = require("path");
 const { ethers } = require("ethers");
 
 const PROPERTY_VERIFICATION_ABI = [
-  "function setVerified(bytes32 propertyId, bool verified, bytes32 evidenceHash, uint256 valuationCommitment)",
-  "function getRecord(bytes32 propertyId) view returns (tuple(bool verified,bool compliant,bytes32 evidenceHash,bytes32 complianceHash,uint256 valuationCommitment,uint256 principalCommitment,uint64 lastUpdated))",
+  "function setVerified(bytes32 propertyId, bool verified, bytes32 evidenceHash, uint256 valuationCommitment, address owner)",
+  "function getRecord(bytes32 propertyId) view returns (tuple(bool verified,bool compliant,address owner,bytes32 evidenceHash,bytes32 complianceHash,uint256 valuationCommitment,uint256 principalCommitment,uint64 lastUpdated))",
   "function isVerified(bytes32 propertyId) view returns (bool)",
   "function isCompliant(bytes32 propertyId) view returns (bool)",
   "function isCompliantFor(bytes32 propertyId,uint256 principalCommitment) view returns (bool)",
-  "function valuationCommitmentOf(bytes32 propertyId) view returns (uint256)"
+  "function valuationCommitmentOf(bytes32 propertyId) view returns (uint256)",
+  "function ownerOf(bytes32 propertyId) view returns (address)"
 ];
 
 const COMPLIANCE_VERIFIER_ABI = [

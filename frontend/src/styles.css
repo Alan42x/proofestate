@@ -82,6 +82,158 @@ h2 {
   overflow-x: hidden;
 }
 
+.wallet-gate {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 20px;
+  min-height: 100vh;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(5, 7, 13, 0.08), rgba(5, 7, 13, 0.86)),
+    #05070d;
+}
+
+.gate-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.gate-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.92fr) minmax(340px, 0.78fr);
+  gap: 28px;
+  align-items: end;
+  width: min(1240px, 100%);
+  min-height: min(740px, calc(100vh - 108px));
+  margin: auto;
+  overflow: hidden;
+  border: 1px solid rgba(134, 158, 205, 0.22);
+  border-radius: 8px;
+  padding: 38px;
+  background: #070b13;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.38);
+}
+
+.gate-hero > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.34;
+}
+
+.gate-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(5, 7, 13, 0.96), rgba(5, 7, 13, 0.58) 58%, rgba(5, 7, 13, 0.9)),
+    linear-gradient(180deg, rgba(5, 7, 13, 0.12), rgba(5, 7, 13, 0.94));
+}
+
+.gate-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.gate-copy h1 {
+  max-width: 620px;
+  font-size: clamp(2.4rem, 5vw, 5.2rem);
+  line-height: 0.98;
+}
+
+.gate-copy p:not(.eyebrow) {
+  max-width: 620px;
+  color: #aebbd0;
+  line-height: 1.65;
+}
+
+.gate-cta-row,
+.gate-cta-row span {
+  display: flex;
+  align-items: center;
+}
+
+.gate-cta-row {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gate-cta-row span {
+  gap: 7px;
+  color: #c1cee3;
+  font-weight: 780;
+}
+
+.gate-copy .wallet-button {
+  min-width: 220px;
+  width: max-content;
+}
+
+.gate-value-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.gate-value-grid div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid rgba(134, 158, 205, 0.17);
+  border-radius: 8px;
+  background: rgba(8, 12, 21, 0.68);
+  padding: 12px;
+}
+
+.gate-value-grid svg {
+  color: #31e99b;
+}
+
+.gate-value-grid strong {
+  overflow-wrap: anywhere;
+}
+
+.gate-value-grid span {
+  color: #aebbd0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.gate-readiness {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  padding: 16px;
+  background: rgba(9, 13, 23, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.readiness-grid.gate-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 1080px) {
+  .gate-hero {
+    grid-template-columns: 1fr;
+    align-items: start;
+    padding: 28px;
+  }
+
+  .readiness-grid.gate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .panel,
 .sidebar {
   border: 1px solid rgba(134, 158, 205, 0.22);
@@ -621,7 +773,7 @@ h2 {
 
 .steps-panel {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   padding: 14px;
 }
@@ -829,10 +981,25 @@ h2 {
   min-height: 18px;
 }
 
-.button-grid {
+.button-grid,
+.loan-action-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.loan-action-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.loan-command {
+  min-height: 54px;
+  white-space: normal;
+}
+
+.loan-command span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .outline-action,
@@ -880,6 +1047,112 @@ h2 {
 .compact-actions .gold-action {
   padding: 0 8px;
   font-size: 0.8rem;
+}
+
+.ops-address-grid,
+.settings-summary-grid,
+.role-status-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-summary-grid,
+.role-status-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ops-address-row,
+.settings-summary-grid div,
+.role-status-grid div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid rgba(134, 158, 205, 0.13);
+  border-radius: 8px;
+  background: rgba(134, 158, 205, 0.07);
+  padding: 11px;
+}
+
+.ops-address-row span,
+.ops-address-row small,
+.settings-summary-grid span,
+.role-status-grid span,
+.role-status-grid small {
+  color: #96a5bd;
+}
+
+.ops-address-row strong,
+.ops-address-row small,
+.settings-summary-grid strong,
+.role-status-grid strong,
+.role-status-grid small {
+  overflow-wrap: anywhere;
+}
+
+.settings-summary-grid strong,
+.role-status-grid strong {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.chain-record-table,
+.role-audit-table {
+  display: grid;
+  overflow-x: auto;
+}
+
+.chain-record-head,
+.chain-record-row,
+.role-audit-head,
+.role-audit-row {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+}
+
+.chain-record-head,
+.chain-record-row {
+  grid-template-columns: 110px minmax(130px, 1fr) 92px 110px minmax(130px, 1fr) minmax(150px, 1fr);
+  min-width: 900px;
+}
+
+.role-audit-head,
+.role-audit-row {
+  grid-template-columns: 120px 132px 150px minmax(210px, 1fr) 120px 132px;
+  min-width: 900px;
+}
+
+.chain-record-head,
+.role-audit-head {
+  color: #8190aa;
+  font-size: 0.76rem;
+  font-weight: 850;
+  padding-bottom: 9px;
+}
+
+.chain-record-row,
+.role-audit-row {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-top: 1px solid rgba(134, 158, 205, 0.1);
+  background: transparent;
+  color: #dce7f8;
+  text-align: left;
+}
+
+.chain-record-row.active {
+  background: rgba(45, 130, 255, 0.12);
+}
+
+.chain-record-row span,
+.chain-record-row strong,
+.role-audit-row span,
+.role-audit-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .activity-table {
@@ -1289,6 +1562,15 @@ dd {
 }
 
 @media (max-width: 860px) {
+  .gate-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .gate-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .dashboard-shell {
     grid-template-columns: 1fr;
   }
@@ -1362,6 +1644,9 @@ dd {
   }
 
   .readiness-grid,
+  .readiness-grid.gate-grid,
+  .settings-summary-grid,
+  .role-status-grid,
   .steps-panel,
   .asset-meta,
   .proof-content,

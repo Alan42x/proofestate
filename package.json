@@ -9,6 +9,7 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
+    "test:oracle": "node --test backend/oracle/*.test.js",
     "test:gas": "REPORT_GAS=true hardhat test",
     "zk:compile": "node scripts/zk-build.mjs compile",
     "zk:setup": "node scripts/zk-build.mjs setup",
@@ -23,13 +24,16 @@
     "demo:ready": "node scripts/local-demo-check.js --strict",
     "demo:flow": "node scripts/local-wallet-flow.js",
     "layout:check": "node scripts/verify-layout.mjs",
+    "e2e": "node scripts/e2e/wallet-gate-smoke.mjs",
+    "test:all": "pnpm compile && pnpm test && pnpm test:oracle && pnpm frontend:test && pnpm frontend:build",
     "oracle:list": "node backend/oracle/cli.js list",
     "oracle:verify": "node backend/oracle/cli.js verify",
     "oracle:compliance": "node backend/oracle/cli.js compliance",
     "oracle:e2e": "node backend/oracle/cli.js e2e",
     "oracle:api": "node backend/oracle/server.js",
     "frontend:dev": "pnpm --dir frontend dev",
-    "frontend:build": "pnpm --dir frontend build"
+    "frontend:build": "pnpm --dir frontend build",
+    "frontend:test": "pnpm --dir frontend test"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.2",
