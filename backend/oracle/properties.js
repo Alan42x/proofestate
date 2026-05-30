@@ -27,14 +27,31 @@ function inputError(message) {
   return error;
 }
 
+function parsePropertyId(value) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw inputError("propertyId must be a non-empty string");
+  }
+  return value.trim();
+}
+
 function parsePositiveCircuitInteger(value, fieldName) {
   if (value === undefined || value === null || value === "") {
     throw inputError(`${fieldName} is required`);
   }
 
+  if (typeof value === "boolean" || typeof value === "object" || typeof value === "symbol") {
+    throw inputError(`${fieldName} must be an integer`);
+  }
+  if (typeof value === "number" && !Number.isSafeInteger(value)) {
+    throw inputError(`${fieldName} must be a safe integer or integer string`);
+  }
+  if (typeof value === "string" && !/^\d+$/.test(value.trim())) {
+    throw inputError(`${fieldName} must be an integer`);
+  }
+
   let parsed;
   try {
-    parsed = BigInt(value);
+    parsed = BigInt(typeof value === "string" ? value.trim() : value);
   } catch (_error) {
     throw inputError(`${fieldName} must be an integer`);
   }
@@ -53,11 +70,12 @@ function loadProperties() {
 }
 
 function findProperty(propertyId) {
-  return loadProperties().find((property) => property.propertyId === propertyId);
+  const normalizedPropertyId = parsePropertyId(propertyId);
+  return loadProperties().find((property) => property.propertyId === normalizedPropertyId);
 }
 
 function propertyKey(propertyId) {
-  return ethers.id(propertyId);
+  return ethers.id(parsePropertyId(propertyId));
 }
 
 function evidenceHashFor(property) {
@@ -120,16 +138,17 @@ function evaluateLtv(propertyValue, loanPrincipal) {
 }
 
 async function buildVerification(propertyId) {
-  const property = findProperty(propertyId);
+  const normalizedPropertyId = parsePropertyId(propertyId);
+  const property = findProperty(normalizedPropertyId);
   const evaluation = evaluateProperty(property);
-  const key = propertyKey(propertyId);
+  const key = propertyKey(normalizedPropertyId);
   const valuationSalt = property ? valuationSaltForProperty(property) : 0n;
   const valuationCommitment = property
     ? await computeValuationCommitment(fieldFromBytes32(key), property.valuation, valuationSalt)
     : 0n;
 
   return {
-    propertyId,
+    propertyId: normalizedPropertyId,
     propertyKey: key,
     exists: Boolean(property),
     verified: evaluation.passes,
@@ -142,13 +161,14 @@ async function buildVerification(propertyId) {
 }
 
 async function buildCompliance(propertyId, loanPrincipal, principalSalt = randomFieldSalt()) {
+  const normalizedPropertyId = parsePropertyId(propertyId);
   const principal = parsePositiveCircuitInteger(loanPrincipal, "loanPrincipal");
-  const property = findProperty(propertyId);
+  const property = findProperty(normalizedPropertyId);
   const evaluation = evaluateProperty(property);
   if (!property) {
     return {
-      propertyId,
-      propertyKey: propertyKey(propertyId),
+      propertyId: normalizedPropertyId,
+      propertyKey: propertyKey(normalizedPropertyId),
       exists: false,
       compliant: false,
       reasons: ["PROPERTY_NOT_FOUND"],
@@ -160,8 +180,8 @@ async function buildCompliance(propertyId, loanPrincipal, principalSalt = random
   }
   if (!evaluation.passes) {
     return {
-      propertyId,
-      propertyKey: propertyKey(propertyId),
+      propertyId: normalizedPropertyId,
+      propertyKey: propertyKey(normalizedPropertyId),
       exists: true,
       compliant: false,
       reasons: evaluation.reasons,
@@ -173,7 +193,7 @@ async function buildCompliance(propertyId, loanPrincipal, principalSalt = random
     };
   }
 
-  const key = propertyKey(propertyId);
+  const key = propertyKey(normalizedPropertyId);
   const valuationSalt = valuationSaltForProperty(property);
   const proofInputs = await buildProofInputs({
     propertyKey: key,
@@ -186,7 +206,7 @@ async function buildCompliance(propertyId, loanPrincipal, principalSalt = random
   const ltv = evaluateLtv(property.valuation, principal);
 
   return {
-    propertyId,
+    propertyId: normalizedPropertyId,
     propertyKey: key,
     exists: true,
     compliant: ltv.compliant,
@@ -213,6 +233,7 @@ module.exports = {
   evidenceHashFor,
   evaluateProperty,
   evaluateLtv,
+  parsePropertyId,
   parsePositiveCircuitInteger,
   buildVerification,
   buildCompliance

@@ -6,6 +6,7 @@ const {
   buildVerification,
   buildCompliance,
   evaluateProperty,
+  parsePropertyId,
   parsePositiveCircuitInteger
 } = require("../backend/oracle/properties");
 const { deterministicSalt } = require("../zk/ltvCircuit");
@@ -185,7 +186,16 @@ describe("ProofEstate contracts", function () {
       await expectAsyncError(buildCompliance(PROPERTY.verified, 0n), "greater than 0");
       await expectAsyncError(buildCompliance(PROPERTY.verified, -1n), "greater than 0");
       await expectAsyncError(buildCompliance(PROPERTY.verified, "not-a-number"), "must be an integer");
+      await expectAsyncError(buildCompliance(PROPERTY.verified, true), "must be an integer");
+      await expectAsyncError(buildCompliance(PROPERTY.verified, Number.MAX_SAFE_INTEGER + 1), "safe integer");
       await expectAsyncError(buildCompliance(PROPERTY.verified, 1n << 64n), "64-bit circuit range");
+    });
+
+    it("rejects invalid property ids before hashing", async function () {
+      expect(parsePropertyId(" PROP-001 ")).to.equal(PROPERTY.verified);
+      await expectAsyncError(buildVerification(""), "non-empty string");
+      await expectAsyncError(buildVerification({ propertyId: PROPERTY.verified }), "non-empty string");
+      await expectAsyncError(buildCompliance(null, PRINCIPAL.compliant), "non-empty string");
     });
   });
 

@@ -53,6 +53,17 @@ test("POST /verify rejects missing property id", async () => {
   assert.match(body.error, /propertyId is required/);
 });
 
+test("POST /verify rejects non-string property ids without a server error", async () => {
+  const { response, body } = await request("/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ propertyId: { id: "PROP-001" } })
+  });
+
+  assert.equal(response.status, 400);
+  assert.match(body.error, /propertyId must be a non-empty string/);
+});
+
 test("POST /compliance rejects missing and invalid principal", async () => {
   const missing = await request("/compliance", {
     method: "POST",
@@ -69,6 +80,14 @@ test("POST /compliance rejects missing and invalid principal", async () => {
   });
   assert.equal(invalid.response.status, 400);
   assert.match(invalid.body.error, /must be an integer/);
+
+  const booleanPrincipal = await request("/compliance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ propertyId: "PROP-001", loanPrincipal: true })
+  });
+  assert.equal(booleanPrincipal.response.status, 400);
+  assert.match(booleanPrincipal.body.error, /must be an integer/);
 });
 
 test("POST /compliance returns a non-compliant result without proof generation", async () => {

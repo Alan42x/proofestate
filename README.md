@@ -1,255 +1,477 @@
 # ProofEstate
 
-ProofEstate is an Ethereum testnet application for privacy-oriented real-estate lending. It demonstrates how a mocked property registry, an oracle verification service, a Groth16 LTV compliance proof, and role-gated lending contracts can work together without publishing plaintext property valuations or requested loan principal values on-chain.
+ProofEstate is an Ethereum testnet prototype for privacy-oriented real-estate lending. It combines a mocked property registry, an oracle verification service, a Groth16 LTV compliance proof, role-gated smart contracts, and a React DApp to demonstrate a lending workflow where property valuations and requested loan principals are not published on-chain in plaintext.
 
-The prototype is intentionally narrow: one property dataset, one fixed loan product, one compliance statement, and one active loan at a time per property.
+The system proves one narrow but important statement:
+
+```text
+loanPrincipal <= 80% of propertyValue
+```
+
+without revealing `loanPrincipal` or `propertyValue` to the blockchain. The chain stores commitments, verification records, proof hashes, ownership, and loan state.
+
+This is a capstone / prototype implementation. It is intentionally scoped to one mocked registry dataset, one fixed loan product, one ZK compliance rule, and one active loan at a time per property.
 
 ## Table of Contents
 
-- [Scope](#scope)
-- [Technical Stack](#technical-stack)
+- [System Purpose](#system-purpose)
+- [Core Capabilities](#core-capabilities)
 - [Repository Structure](#repository-structure)
-- [Architecture](#architecture)
-- [ZK Compliance Design](#zk-compliance-design)
-- [Smart Contracts](#smart-contracts)
-- [Oracle Service](#oracle-service)
-- [Frontend DApp](#frontend-dapp)
+- [System Architecture Diagram](#system-architecture-diagram)
+- [Business Logic Diagram](#business-logic-diagram)
+- [Technical Architecture Diagram](#technical-architecture-diagram)
+- [ZKP Implementation Architecture Diagram](#zkp-implementation-architecture-diagram)
+- [Smart Contract Architecture](#smart-contract-architecture)
+- [Oracle Service Architecture](#oracle-service-architecture)
+- [Frontend DApp Architecture](#frontend-dapp-architecture)
+- [End-to-End Data Flow](#end-to-end-data-flow)
+- [Loan State Machine](#loan-state-machine)
 - [Security Model](#security-model)
-- [Setup](#setup)
-- [Local Demo](#local-demo)
+- [Local Setup](#local-setup)
 - [Sepolia Deployment](#sepolia-deployment)
 - [Testing and Evaluation](#testing-and-evaluation)
+- [Environment Variables](#environment-variables)
 - [Known Limitations](#known-limitations)
 - [Future Work](#future-work)
 
-## Scope
+## System Purpose
+
+ProofEstate is not a production lending protocol. It is a runnable reference architecture for showing how privacy-preserving lending checks can be composed from off-chain data, zero-knowledge proofs, and on-chain enforcement.
+
+The system is designed to demonstrate four core ideas:
+
+1. **Off-chain registry facts can be written on-chain through constrained oracle logic.** Property existence, region eligibility, valuation floor, encumbrance status, and active registry status are evaluated by the oracle from `data/properties.json`, then committed into `PropertyVerification`.
+2. **Sensitive financial values can remain hidden while still being bound to on-chain state.** Property valuation and loan principal are represented by MiMC commitments tied to the property key.
+3. **Loan approval can depend on proof validity instead of plaintext disclosure.** `ComplianceVerifier` accepts a Groth16 proof only when its public signals match the on-chain property record and the submitted principal commitment.
+4. **The lending workflow can prevent duplicate active borrowing against one asset.** `Lending` maintains a property-level active loan lock while a loan is `Requested` or `Approved`.
+
+## Core Capabilities
 
 ### In Scope
 
-- Mock property registry with 20 Singapore-style property records in `data/properties.json`.
+- Mock Singapore-style property registry with 20 records in `data/properties.json`.
 - Deterministic property verification rules:
-  - region must be `SG-CCR`, `SG-RCR`, or `SG-OCR`;
-  - valuation must be at least `200000`;
-  - property must have no encumbrance;
-  - registry status must be `ACTIVE`.
-- One lending product:
-  - fixed APR: `6.5%`;
+  - `region` must be `SG-CCR`, `SG-RCR`, or `SG-OCR`;
+  - `valuation >= 200000`;
+  - `noEncumbrance === true`;
+  - `status === ACTIVE`.
+- One fixed lending product:
+  - APR: `6.5%`;
   - term: `365` days;
-  - principal represented by a private commitment, not plaintext on-chain.
-- One ZK compliance rule:
-  - `loanPrincipal <= 80% of propertyValue`.
-- One active loan per property:
-  - `Requested` and `Approved` loans lock the property;
-  - `Rejected`, `Cancelled`, and `Repaid` loans release the lock.
-- Product-style React DApp for overview, verification, compliance proof, loan request, contracts, records, and settings.
+  - principal represented by `principalCommitment`, not plaintext.
+- One zero-knowledge compliance rule:
+  - `loanPrincipal * 10000 <= propertyValue * 8000`;
+  - equivalent to `LTV <= 80%`.
+- Role-gated operations:
+  - Admin manages roles.
+  - Oracle writes property verification records.
+  - ComplianceVerifier writes compliance records.
+  - Loan Officer approves or rejects loans.
+  - Borrower requests, cancels, and repays loans.
+- Product-style React DApp:
+  - Overview;
+  - My Properties;
+  - Property Verification;
+  - Compliance Proof;
+  - Loan Request;
+  - Loan Approvals;
+  - Smart Contracts;
+  - Testnet Records;
+  - Settings.
 
 ### Out of Scope
 
-- Production land-title integration.
-- Production KYC or identity.
-- Token or ETH disbursement.
-- Multi-jurisdiction rules.
-- Multi-loan private aggregate exposure.
+- Production land-title registry integration.
+- Production KYC, DID, AML, or identity proofing.
+- Real ETH or ERC20 disbursement.
+- Multi-jurisdiction rule engines.
+- Private aggregate exposure across multiple simultaneous loans.
 - Full Hyperledger Fabric hybrid deployment.
-- Enterprise monitoring, indexing, or analytics infrastructure.
-
-## Technical Stack
-
-### Blockchain
-
-- Solidity `0.8.24`
-- Hardhat `2.22.x`
-- OpenZeppelin Contracts `5.x`
-- Ethers `6.x`
-- Local Hardhat chain, chain ID `31337`
-- Optional Sepolia deployment
-
-### ZK Stack
-
-- Circom `2.1.6`
-- snarkjs `0.7.x`
-- circomlib and circomlibjs
-- Groth16 proof system
-- MiMC Sponge commitments
-- Generated Solidity verifier:
-  - `contracts/generated/LtvGroth16Verifier.sol`
-
-### Backend
-
-- Node.js
-- Express
-- CORS
-- Ethers
-- Oracle CLI and REST API
-
-### Frontend
-
-- Vite
-- React `18`
-- wagmi `2`
-- viem `2`
-- TanStack Query
-- lucide-react
-- Playwright-based layout verification
-
-### Package Manager and Tooling
-
-- pnpm workspace
-- Hardhat tests
-- Vite production build
-- Local layout smoke test with headless Chrome
+- Production-grade monitoring, indexing, liquidation, or risk infrastructure.
 
 ## Repository Structure
 
 ```text
 contracts/
-  PropertyVerification.sol          Oracle-written registry and compliance state
-  ComplianceVerifier.sol            Groth16 proof gateway for LTV compliance
-  Lending.sol                       Loan workflow and collateral locking
-  generated/LtvGroth16Verifier.sol  snarkjs-generated verifier
+  PropertyVerification.sol          Oracle-written verification state and verifier-written compliance state
+  ComplianceVerifier.sol            Groth16 proof gateway with public-signal binding checks
+  Lending.sol                       Loan workflow, property active-loan locking, approval, repayment
+  generated/LtvGroth16Verifier.sol  Solidity verifier generated by snarkjs
 
 backend/oracle/
-  properties.js                     Dataset loading, verification rules, LTV input building
-  service.js                        Oracle verification and compliance workflows
-  contracts.js                      Ethers contract bindings
+  properties.js                     Dataset loading, registry rules, LTV inputs, commitment construction
+  service.js                        Verification, proving, and optional on-chain write workflows
+  contracts.js                      ethers contract bindings
   server.js                         REST API
-  cli.js                            CLI commands
+  cli.js                            CLI entry point
 
 circuits/
-  ltv.circom                        LTV inequality and commitment circuit
+  ltv.circom                        LTV inequality and MiMC commitment circuit
 
 zk/
-  ltvCircuit.js                     JS commitment helpers matching the circuit
-  prover.js                         snarkjs proof generation wrapper
+  ltvCircuit.js                     JS field and commitment helpers matching the Circom circuit
+  prover.js                         snarkjs proof-generation wrapper
+  build/                            R1CS, wasm, witness calculator, and related build outputs
 
 frontend/
-  src/App.jsx                       DApp workspace shell and workflows
+  src/App.jsx                       Main DApp workspace and business workflow orchestration
   src/contracts/abis.js             Minimal frontend ABIs
-  src/lib/                         API, chain formatting, and i18n helpers
+  src/lib/                          API client, chain formatting, i18n helpers
+  src/components/                   Layout, common controls, tables, and LoanLedger
 
 scripts/
-  deploy.js                         Local/Sepolia deployment
-  sync-local-env.js                 Local deployment to .env sync
-  local-demo-check.js               Readiness checks
-  local-wallet-flow.js              CLI happy-path wallet flow
-  verify-layout.mjs                 Responsive layout check
-  zk-build.mjs                      Circom/snarkjs build pipeline
+  deploy.js                         Local and Sepolia deployment
+  sync-local-env.js                 Sync local deployment addresses into .env and frontend/.env
+  local-demo-check.js               Local demo readiness checks
+  local-wallet-flow.js              CLI happy-path wallet workflow
+  verify-layout.mjs                 Responsive layout smoke check
+  zk-build.mjs                      Circom and snarkjs build pipeline
 
 test/
-  proofestate.test.js               Contract, oracle-rule, ZK, and lending tests
+  proofestate.test.js               Contract, oracle-rule, ZK, and lending workflow tests
 ```
 
-Generated folders such as `artifacts/`, `cache/`, `frontend/dist/`, `zk/build/`, and `zk/artifacts/` are build outputs.
+Generated output folders include `artifacts/`, `cache/`, `frontend/dist/`, `zk/build/`, and `zk/artifacts/`.
 
-## Architecture
+## System Architecture Diagram
+
+```mermaid
+flowchart TB
+  subgraph UserLayer["User Layer"]
+    Borrower["Borrower Wallet\nProperty owner / loan applicant"]
+    Officer["Loan Officer Wallet\nLoan approver"]
+    Admin["Admin Wallet\nRole administrator"]
+  end
+
+  subgraph Frontend["Frontend DApp - React + wagmi + viem"]
+    UI["ProofEstate Workspace"]
+    WalletGate["WalletGate\nWallet and network checks"]
+    Views["Verification / Proof / Loan / Records / Settings"]
+  end
+
+  subgraph Backend["Oracle Backend - Node.js + Express"]
+    API["REST API\n/health /properties /verify /compliance /e2e"]
+    Rules["Deterministic Registry Rules"]
+    Prover["snarkjs Groth16 Prover"]
+  end
+
+  subgraph Data["Off-Chain Data and ZK Artifacts"]
+    Dataset["data/properties.json"]
+    Circuit["circuits/ltv.circom"]
+    Wasm["zk/build/ltv_js/ltv.wasm"]
+    ZKey["zk/artifacts/ltv_final.zkey"]
+  end
+
+  subgraph Chain["Ethereum / Hardhat / Sepolia"]
+    PV["PropertyVerification.sol"]
+    CV["ComplianceVerifier.sol"]
+    GV["LtvGroth16Verifier.sol"]
+    Lending["Lending.sol"]
+  end
+
+  Borrower --> UI
+  Officer --> UI
+  Admin --> UI
+  UI --> WalletGate
+  UI --> Views
+  Views --> API
+  API --> Rules
+  Rules --> Dataset
+  API --> Prover
+  Prover --> Circuit
+  Prover --> Wasm
+  Prover --> ZKey
+  API -->|setVerified| PV
+  API -->|verifyProofAndSetCompliance| CV
+  CV --> GV
+  CV -->|setCompliant| PV
+  Views -->|request / approve / cancel / repay| Lending
+  Lending -->|isVerified / isCompliantFor / ownerOf| PV
+```
+
+The architecture is split into four layers:
+
+- **User layer:** borrowers, loan officers, and admins interact through wallets.
+- **Frontend layer:** the DApp coordinates workflow state, wallet connection, network readiness, API calls, and contract writes.
+- **Oracle and ZK layer:** the backend evaluates off-chain registry rules, builds proof inputs, generates Groth16 proofs, and optionally writes verified/compliant state on-chain.
+- **On-chain layer:** contracts enforce permissions, proof validity, ownership, compliance matching, and the loan lifecycle.
+
+## Business Logic Diagram
 
 ```mermaid
 flowchart LR
-  Registry[Mock property registry JSON]
-  Oracle[Node oracle CLI/API]
-  Verify[PropertyVerification contract]
-  Compliance[ComplianceVerifier contract]
-  Lending[Lending contract]
-  DApp[React DApp]
-  Wallet[User wallet]
-
-  Registry --> Oracle
-  Oracle -->|setVerified| Verify
-  Oracle -->|Groth16 proof + public signals| Compliance
-  Compliance -->|setCompliant + principal commitment| Verify
-  DApp --> Oracle
-  Wallet --> DApp
-  DApp -->|request/approve/cancel/repay| Lending
-  Lending -->|isVerified/isCompliantFor| Verify
+  Start["Select property"] --> OwnCheck{"Is connected wallet\nthe property owner?"}
+  OwnCheck -- No --> StopOwner["Loan request blocked"]
+  OwnCheck -- Yes --> Registry["Oracle reads registry record"]
+  Registry --> RuleCheck{"Registry rules pass?"}
+  RuleCheck -- No --> VerifyFail["Verification fails\nwith reasons"]
+  RuleCheck -- Yes --> VerifyWrite["setVerified\nverified=true\nvaluationCommitment"]
+  VerifyWrite --> Principal["Enter loan principal"]
+  Principal --> LtvCheck{"LTV <= 80%?"}
+  LtvCheck -- No --> ProofFail["Compliance fails\nno valid proof written"]
+  LtvCheck -- Yes --> ProofGen["Generate Groth16 proof\nand principalCommitment"]
+  ProofGen --> ProofVerify["verifyProofAndSetCompliance"]
+  ProofVerify --> Request["Borrower requestLoan"]
+  Request --> Lock["Property enters active loan lock"]
+  Lock --> ApproveCheck{"Loan Officer review"}
+  ApproveCheck -- Proof mismatch / not compliant --> Reject["Rejected\nlock released"]
+  ApproveCheck -- Valid --> Approved["Approved\nlock remains"]
+  Approved --> Repay["Borrower repay"]
+  Repay --> Released["Repaid\nlock released"]
+  Request --> Cancel["Borrower cancel"]
+  Cancel --> Released
 ```
 
-### Data Flow
+The business flow is intentionally strict: verify the asset first, prove the requested principal is within policy second, and only then allow the borrower to enter the lending state machine. The loan officer does not need plaintext valuation or plaintext principal; approval depends on a commitment that has already been proven compliant.
 
-1. The oracle loads `data/properties.json`.
-2. The oracle evaluates deterministic registry rules.
-3. The oracle writes `setVerified(propertyId, verified, evidenceHash, valuationCommitment)`.
-4. The ZK prover generates a Groth16 proof for the 80% LTV rule.
-5. `ComplianceVerifier` checks the proof and writes `setCompliant(propertyId, true, proofHash, principalCommitment)`.
-6. The borrower requests a loan with the same `principalCommitment`.
-7. `Lending.approveLoan` checks:
-   - property is verified;
-   - property is compliant for that exact principal commitment;
-   - loan is still in `Requested` state.
-8. The property remains locked while the loan is `Requested` or `Approved`.
-9. Rejection, cancellation, or repayment releases the lock.
+## Technical Architecture Diagram
 
-## ZK Compliance Design
+```mermaid
+flowchart TB
+  subgraph Packages["pnpm workspace"]
+    Root["root package.json\nHardhat / Oracle / ZK scripts"]
+    FEPackage["frontend/package.json\nVite / React / Vitest"]
+  end
 
-### Compliance Statement
+  subgraph Tooling["Development and Build Tooling"]
+    Hardhat["Hardhat\ncompile / test / deploy"]
+    Circom["Circom 2.1.6"]
+    Snarkjs["snarkjs 0.7.x"]
+    Vite["Vite"]
+    Playwright["Playwright layout smoke"]
+  end
 
-Given private inputs:
+  subgraph Runtime["Runtime"]
+    Node["Node.js >=20 <23"]
+    Express["Express Oracle API"]
+    Browser["Browser DApp"]
+    Wallet["MetaMask / injected wallet"]
+    RPC["Localhost 8545 / Sepolia RPC"]
+  end
 
-- `propertyValue`
-- `loanPrincipal`
-- `valuationSalt`
-- `principalSalt`
+  subgraph Contracts["Solidity 0.8.24"]
+    Access["OpenZeppelin AccessControl"]
+    PV2["PropertyVerification"]
+    CV2["ComplianceVerifier"]
+    LV["LtvGroth16Verifier"]
+    LN["Lending"]
+  end
 
-and public signals:
+  Root --> Hardhat
+  Root --> Circom
+  Root --> Snarkjs
+  FEPackage --> Vite
+  FEPackage --> Playwright
+  Node --> Express
+  Browser --> Wallet
+  Wallet --> RPC
+  Express --> RPC
+  Hardhat --> Contracts
+  Access --> PV2
+  Access --> LN
+  CV2 --> LV
+  LN --> PV2
+```
 
-- `propertyKeyField`
-- `valuationCommitment`
-- `principalCommitment`
-- `maxLtvBps`
+### Stack
 
-prove:
+| Layer | Technologies |
+| --- | --- |
+| Smart contracts | Solidity `0.8.24`, Hardhat `2.22.x`, OpenZeppelin Contracts `5.x` |
+| ZK | Circom `2.1.6`, snarkjs `0.7.x`, circomlib, circomlibjs, Groth16, MiMC Sponge |
+| Backend | Node.js, Express, CORS, ethers `6.x` |
+| Frontend | Vite, React `18`, wagmi `2`, viem `2`, TanStack Query, lucide-react |
+| Tooling | pnpm workspace, Hardhat tests, Vitest, Playwright layout check |
+| Networks | Hardhat local chain `31337`, optional Sepolia |
+
+## ZKP Implementation Architecture Diagram
+
+```mermaid
+flowchart TB
+  subgraph PrivateInputs["Private Inputs"]
+    PropertyValue["propertyValue\nProperty valuation"]
+    LoanPrincipal["loanPrincipal\nRequested principal"]
+    ValuationSalt["valuationSalt"]
+    PrincipalSalt["principalSalt"]
+  end
+
+  subgraph PublicInputs["Public Signals"]
+    PropertyKeyField["propertyKeyField"]
+    ValuationCommitment["valuationCommitment"]
+    PrincipalCommitment["principalCommitment"]
+    MaxLtv["maxLtvBps = 8000"]
+  end
+
+  subgraph CircuitLogic["circuits/ltv.circom"]
+    Range["Num2Bits\n64-bit value range"]
+    MiMCVal["MiMCSponge(propertyKeyField,\npropertyValue, valuationSalt)"]
+    MiMCPrincipal["MiMCSponge(propertyKeyField,\nloanPrincipal, principalSalt)"]
+    Inequality["LessThan(80)\nloanPrincipal * 10000\n<= propertyValue * maxLtvBps"]
+  end
+
+  subgraph Proving["Proof Generation"]
+    Inputs["zk/ltvCircuit.js\nbuildProofInputs"]
+    SnarkProof["snarkjs.groth16.fullProve"]
+    SolidityCalldata["a / b / c / publicSignals"]
+  end
+
+  subgraph OnChainVerify["On-Chain Verification"]
+    SignalChecks["ComplianceVerifier\npublic signal binding checks"]
+    Verifier["LtvGroth16Verifier.verifyProof"]
+    WriteState["PropertyVerification.setCompliant"]
+  end
+
+  PropertyValue --> Range
+  LoanPrincipal --> Range
+  PropertyValue --> MiMCVal
+  ValuationSalt --> MiMCVal
+  LoanPrincipal --> MiMCPrincipal
+  PrincipalSalt --> MiMCPrincipal
+  PropertyKeyField --> MiMCVal
+  PropertyKeyField --> MiMCPrincipal
+  MiMCVal --> ValuationCommitment
+  MiMCPrincipal --> PrincipalCommitment
+  Range --> Inequality
+  MaxLtv --> Inequality
+  PrivateInputs --> Inputs
+  PublicInputs --> Inputs
+  Inputs --> SnarkProof
+  SnarkProof --> SolidityCalldata
+  SolidityCalldata --> SignalChecks
+  SignalChecks --> Verifier
+  Verifier --> WriteState
+```
+
+### ZK Statement
+
+The prover demonstrates the following statement without revealing `propertyValue` or `loanPrincipal`:
 
 ```text
 loanPrincipal * 10000 <= propertyValue * maxLtvBps
+maxLtvBps = 8000
 ```
 
-For this ProofEstate configuration, `maxLtvBps = 8000`, equivalent to `LTV <= 80%`.
+Equivalent policy:
 
-### Commitments
+```text
+loanPrincipal <= propertyValue * 80%
+```
 
-The circuit uses `MiMCSponge(3, 220, 1)` with `k = 0`.
+### Commitment Design
+
+The circuit uses `MiMCSponge(3, 220, 1)` with `k = 0`:
 
 ```text
 valuationCommitment = MiMC(propertyKeyField, propertyValue, valuationSalt)
 principalCommitment = MiMC(propertyKeyField, loanPrincipal, principalSalt)
 ```
 
-The Solidity verifier receives proof calldata and public signals only. It does not receive plaintext valuation or plaintext principal.
+`propertyKeyField` is derived from the property ID:
 
-### Circuit Files
-
-- Circuit source: `circuits/ltv.circom`
-- JS commitment mirror: `zk/ltvCircuit.js`
-- Prover wrapper: `zk/prover.js`
-- Generated verifier: `contracts/generated/LtvGroth16Verifier.sol`
-
-### ZK Build
-
-```bash
-pnpm zk:build
+```text
+propertyKey = ethers.id(propertyId)
+propertyKeyField = uint256(propertyKey) % SNARK_SCALAR_FIELD
 ```
 
-This pipeline:
+This binds each commitment to a specific property context. A proof for one property or one principal commitment cannot be reused safely in another context because the verifier checks the public signals against on-chain state.
 
-1. compiles the Circom circuit;
-2. generates witness wasm and R1CS files;
-3. runs a local Groth16 setup;
-4. exports the Solidity verifier;
-5. verifies that a sample proof can be generated.
+### Public Signal Binding
 
-This is a capstone/local trusted setup. A production system would need audited circuits, formal ceremony policy, prover hardening, and operational key controls.
+`ComplianceVerifier.verifyProofAndSetCompliance` does more than call the generated Groth16 verifier. It first checks that every public signal is bound to the expected contract state:
 
-## Smart Contracts
+| index | public signal | Required match |
+| --- | --- | --- |
+| `0` | `propertyKeyField` | `propertyIdToField(propertyId)` |
+| `1` | `valuationCommitment` | `PropertyVerification.valuationCommitmentOf(propertyId)` |
+| `2` | `principalCommitment` | submitted `principalCommitment` |
+| `3` | `maxLtvBps` | `8000` |
+
+Only after these checks pass and `LtvGroth16Verifier.verifyProof` returns `true` does the contract write:
+
+```text
+compliant = true
+complianceHash = keccak256(a, b, c, publicSignals)
+principalCommitment = proven principal commitment
+```
+
+### ZK Build Flow
+
+```mermaid
+sequenceDiagram
+  participant Dev as Developer
+  participant Script as scripts/zk-build.mjs
+  participant Circom as circom
+  participant Snarkjs as snarkjs
+  participant Contracts as contracts/generated
+  participant ZK as zk/build + zk/artifacts
+
+  Dev->>Script: pnpm zk:build
+  Script->>Circom: Compile circuits/ltv.circom
+  Circom-->>ZK: ltv.r1cs, ltv.sym, ltv_js/ltv.wasm
+  Script->>Snarkjs: Groth16 setup
+  Snarkjs-->>ZK: Proving key and verification key
+  Script->>Snarkjs: Export Solidity verifier
+  Snarkjs-->>Contracts: LtvGroth16Verifier.sol
+  Script->>Snarkjs: Run sample proof check
+  Snarkjs-->>Dev: Build complete
+```
+
+This is a local demonstration trusted setup. A production deployment would require audited circuits, a formal ceremony policy, hardened prover infrastructure, key management, and operational monitoring.
+
+## Smart Contract Architecture
+
+```mermaid
+classDiagram
+  class PropertyVerification {
+    ORACLE_ROLE
+    COMPLIANCE_ROLE
+    mapping records
+    setVerified(propertyId, verified, evidenceHash, valuationCommitment, owner)
+    setCompliant(propertyId, compliant, proofHash, principalCommitment)
+    isVerified(propertyId)
+    isCompliantFor(propertyId, principalCommitment)
+    ownerOf(propertyId)
+    valuationCommitmentOf(propertyId)
+    getRecord(propertyId)
+  }
+
+  class ComplianceVerifier {
+    MAX_LTV_BPS = 8000
+    propertyIdToField(propertyId)
+    verifyProofAndSetCompliance(propertyId, principalCommitment, a, b, c, publicSignals)
+  }
+
+  class LtvGroth16Verifier {
+    verifyProof(a, b, c, publicSignals)
+  }
+
+  class Lending {
+    LOAN_OFFICER_ROLE
+    requestLoan(propertyId, principalCommitment)
+    approveLoan(loanId)
+    rejectLoan(loanId)
+    cancelLoan(loanId)
+    repay(loanId)
+    activeLoanIdOf(propertyId)
+    loanIdsOfProperty(propertyId)
+  }
+
+  ComplianceVerifier --> PropertyVerification : setCompliant / read valuation
+  ComplianceVerifier --> LtvGroth16Verifier : verifyProof
+  Lending --> PropertyVerification : ownerOf / isVerified / isCompliantFor
+```
 
 ### `PropertyVerification`
 
 Purpose: stores oracle-verified property state and verifier-written compliance state.
 
-Important fields:
+Core record:
 
 ```solidity
 struct VerificationRecord {
     bool verified;
     bool compliant;
+    address owner;
     bytes32 evidenceHash;
     bytes32 complianceHash;
     uint256 valuationCommitment;
@@ -258,37 +480,38 @@ struct VerificationRecord {
 }
 ```
 
-Important functions:
+Important rules:
 
-- `setVerified(bytes32 propertyId, bool verified, bytes32 evidenceHash, uint256 valuationCommitment)`
-- `setCompliant(bytes32 propertyId, bool compliant, bytes32 proofHash, uint256 principalCommitment)`
-- `isVerified(bytes32 propertyId)`
-- `isCompliant(bytes32 propertyId)`
-- `isCompliantFor(bytes32 propertyId, uint256 principalCommitment)`
-- `getRecord(bytes32 propertyId)`
-
-Roles:
-
-- `DEFAULT_ADMIN_ROLE`: can grant roles.
-- `ORACLE_ROLE`: can write verification records.
-- `COMPLIANCE_ROLE`: granted to `ComplianceVerifier`, not to the deployer by default.
+- Only `ORACLE_ROLE` can call `setVerified`.
+- Only `COMPLIANCE_ROLE` can call `setCompliant`.
+- A new verification write clears old compliance state so stale proofs cannot remain active.
+- A verified property must have a non-zero owner.
+- A compliant record must have a non-zero principal commitment.
 
 ### `ComplianceVerifier`
 
-Purpose: validates Groth16 proofs and writes compliance records.
+Purpose: acts as the Groth16 proof gateway. It does not manage loan state. It validates proof context and writes compliance state only after all public signals are bound to the expected property record.
 
 Validation steps:
 
-1. property must already be verified;
-2. public signal `0` must match `propertyIdToField(propertyId)`;
-3. public signal `1` must match the stored valuation commitment;
-4. public signal `2` must match the submitted principal commitment;
-5. public signal `3` must match `MAX_LTV_BPS`;
-6. generated Groth16 verifier must return `true`.
+1. The property must already be verified.
+2. `publicSignals[0]` must equal `propertyIdToField(propertyId)`.
+3. `publicSignals[1]` must equal the stored valuation commitment.
+4. `publicSignals[2]` must equal the submitted principal commitment.
+5. `publicSignals[3]` must equal `MAX_LTV_BPS`.
+6. The generated verifier must return `true`.
+7. The contract writes `PropertyVerification.setCompliant`.
 
 ### `Lending`
 
 Purpose: manages loan lifecycle and property-level active-loan locking.
+
+Fixed product configuration:
+
+```text
+DEFAULT_INTEREST_RATE_BPS = 650
+DEFAULT_TERM_DAYS = 365
+```
 
 Loan states:
 
@@ -300,27 +523,41 @@ Loan states:
 4 Cancelled
 ```
 
-Important functions:
-
-- `requestLoan(bytes32 propertyId, uint256 principalCommitment)`
-- `approveLoan(uint256 loanId)`
-- `rejectLoan(uint256 loanId)`
-- `cancelLoan(uint256 loanId)`
-- `repay(uint256 loanId)`
-- `getLoan(uint256 loanId)`
-- `activeLoanIdOf(bytes32 propertyId)`
-- `loanIdsOfProperty(bytes32 propertyId)`
-
 Important rules:
 
+- The caller must equal `PropertyVerification.ownerOf(propertyId)` when requesting a loan.
 - `propertyId` cannot be empty.
 - `principalCommitment` cannot be zero.
-- a property cannot have more than one `Requested` or `Approved` loan.
-- approval requires `isCompliantFor(propertyId, principalCommitment)`.
-- only `LOAN_OFFICER_ROLE` can approve or reject.
-- only the borrower can cancel or repay their loan.
+- One property cannot have more than one `Requested` or `Approved` loan.
+- Approval requires `isVerified(propertyId)`.
+- Approval requires `isCompliantFor(propertyId, principalCommitment)`.
+- Only `LOAN_OFFICER_ROLE` can approve or reject.
+- Only the borrower can cancel or repay.
+- Rejected, cancelled, and repaid loans release the active loan lock.
 
-## Oracle Service
+## Oracle Service Architecture
+
+```mermaid
+flowchart TB
+  CLI["CLI\nbackend/oracle/cli.js"]
+  REST["REST API\nbackend/oracle/server.js"]
+  Service["service.js\nworkflow orchestration"]
+  Props["properties.js\nrules + inputs"]
+  Contracts["contracts.js\nethers bindings"]
+  Dataset2["data/properties.json"]
+  Prover2["zk/prover.js"]
+  Chain2["Contracts on RPC"]
+
+  CLI --> Service
+  REST --> Service
+  Service --> Props
+  Props --> Dataset2
+  Service --> Prover2
+  Service --> Contracts
+  Contracts --> Chain2
+```
+
+The oracle exists because the blockchain cannot independently know real-world registry facts such as property existence, valuation, title status, or encumbrance. In this prototype, the oracle is the trusted registry writer.
 
 ### REST API
 
@@ -330,18 +567,17 @@ Default URL:
 http://localhost:8787
 ```
 
-Endpoints:
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Oracle health check |
+| `GET` | `/properties` | List mocked registry records |
+| `GET` | `/properties?owner=0x...` | Filter properties by owner address |
+| `GET` | `/properties/:propertyId/verification` | Evaluate verification rules without writing on-chain |
+| `POST` | `/verify` | Evaluate and optionally write verification state |
+| `POST` | `/compliance` | Generate proof and optionally write compliance state |
+| `POST` | `/e2e` | Run verification and compliance together |
 
-| Method   | Path                                     | Purpose                                        |
-| -------- | ---------------------------------------- | ---------------------------------------------- |
-| `GET`  | `/health`                              | Oracle health check                            |
-| `GET`  | `/properties`                          | List mock registry records                     |
-| `GET`  | `/properties/:propertyId/verification` | Evaluate verification rules without writing    |
-| `POST` | `/verify`                              | Evaluate and optionally write verification     |
-| `POST` | `/compliance`                          | Generate proof and optionally write compliance |
-| `POST` | `/e2e`                                 | Run verification and compliance together       |
-
-`/compliance` and `/e2e` require a positive integer `loanPrincipal` that fits the 64-bit circuit range.
+`/compliance` and `/e2e` require `loanPrincipal` to be a positive integer within the 64-bit circuit range.
 
 ### CLI
 
@@ -354,88 +590,177 @@ pnpm oracle:compliance PROP-001 750000 -- --write
 pnpm oracle:e2e PROP-001 750000 -- --write
 ```
 
-## Frontend DApp
+## Frontend DApp Architecture
 
-The DApp is organized by operational responsibility:
+```mermaid
+flowchart TB
+  App["frontend/src/App.jsx"]
+  API2["src/lib/api.js\nOracle API client"]
+  ChainLib["src/lib/chain.js\nformatting / keys"]
+  I18n["src/lib/i18n.js\nlanguage state"]
+  ABIs["src/contracts/abis.js"]
+  Components["src/components"]
+  Wagmi["src/wagmi.js\nwallet config"]
+  OracleAPI["Oracle REST API"]
+  Contracts3["PropertyVerification / Lending"]
 
-- Overview:
-  - runtime readiness;
-  - loan counts;
-  - active collateral locks;
-  - verification pass rate from the mock registry;
-  - session proof latency;
-  - session gas readings.
-- Property Verification:
-  - asset selection;
-  - registry rule checks;
-  - oracle verification action;
-  - on-chain verification record.
-- Compliance Proof:
-  - principal input;
-  - LTV meter;
-  - proof generation;
-  - proof and commitment state.
-- Loan Request:
-  - submit;
-  - approve;
-  - cancel;
-  - repay;
-  - active collateral lock status.
-- Smart Contracts:
-  - configured/deployed/unreachable/missing status;
-  - address and latest transaction context.
-- Testnet Records:
-  - on-chain record;
-  - loan book;
-  - activity feed.
-- Settings:
-  - language;
-  - network;
-  - oracle-write mode.
+  App --> Components
+  App --> API2
+  App --> ChainLib
+  App --> I18n
+  App --> ABIs
+  App --> Wagmi
+  API2 --> OracleAPI
+  Wagmi --> Contracts3
+  ABIs --> Contracts3
+```
 
-The UI intentionally avoids fake historical metrics. Displayed gas and proof latency are collected from the current browser session.
+The frontend is an operational DApp workspace rather than a marketing page. It supports several user roles:
+
+- **Borrower:** view owned properties, run verification, generate compliance proofs, submit loans, cancel requests, and repay approved loans.
+- **Loan Officer:** inspect requested loans and approve or reject them.
+- **Admin:** check role configuration, contract addresses, and deployment status.
+- **Evaluator:** inspect on-chain records, proof latency, gas samples, and activity logs.
+
+The UI intentionally avoids fake historical metrics. Displayed gas usage and proof latency are collected from real actions in the current browser session.
+
+## End-to-End Data Flow
+
+```mermaid
+sequenceDiagram
+  participant B as Borrower Wallet
+  participant UI as React DApp
+  participant O as Oracle API
+  participant D as properties.json
+  participant P as Prover
+  participant PV as PropertyVerification
+  participant CV as ComplianceVerifier
+  participant GV as LtvGroth16Verifier
+  participant L as Lending
+  participant LO as Loan Officer
+
+  B->>UI: Select owned property
+  UI->>O: POST /verify { propertyId, write:true }
+  O->>D: Load property record
+  O->>O: Evaluate region / valuation / encumbrance / status
+  O->>PV: setVerified(propertyKey, verified, evidenceHash, valuationCommitment, owner)
+  PV-->>O: tx receipt
+  O-->>UI: verification result
+
+  B->>UI: Enter loanPrincipal
+  UI->>O: POST /compliance { propertyId, loanPrincipal, write:true }
+  O->>P: Build proof inputs and generate proof
+  P-->>O: a, b, c, publicSignals, principalCommitment
+  O->>CV: verifyProofAndSetCompliance(...)
+  CV->>PV: read valuationCommitment
+  CV->>CV: check public signals
+  CV->>GV: verifyProof(a,b,c,publicSignals)
+  GV-->>CV: true
+  CV->>PV: setCompliant(propertyId, true, proofHash, principalCommitment)
+  CV-->>O: tx receipt
+  O-->>UI: compliance result
+
+  B->>L: requestLoan(propertyId, principalCommitment)
+  L->>PV: ownerOf(propertyId)
+  L->>L: Create Requested loan and active lock
+  LO->>L: approveLoan(loanId)
+  L->>PV: isVerified(propertyId)
+  L->>PV: isCompliantFor(propertyId, principalCommitment)
+  L->>L: Approved or Rejected
+  B->>L: repay(loanId)
+  L->>L: Repaid and release active lock
+```
+
+## Loan State Machine
+
+```mermaid
+stateDiagram-v2
+  [*] --> Requested: requestLoan
+  Requested --> Approved: approveLoan\nverified + compliantFor
+  Requested --> Rejected: rejectLoan\nor approval validation fails
+  Requested --> Cancelled: cancelLoan by borrower
+  Approved --> Repaid: repay by borrower
+  Rejected --> [*]: active lock released
+  Cancelled --> [*]: active lock released
+  Repaid --> [*]: active lock released
+```
+
+Active lock behavior:
+
+| State | Property locked? |
+| --- | --- |
+| `Requested` | Yes |
+| `Approved` | Yes |
+| `Rejected` | No |
+| `Cancelled` | No |
+| `Repaid` | No |
 
 ## Security Model
 
-### Assets
+### Assets and Sensitive Surfaces
 
-- Mock property records.
-- Verification status.
-- Compliance proof status.
-- Principal and valuation commitments.
-- Loan lifecycle state.
+- Mocked property records.
+- Verified and compliant property status.
+- `valuationCommitment`.
+- `principalCommitment`.
+- `evidenceHash`.
+- `complianceHash`.
 - Oracle private key.
-- Loan officer key.
+- Loan Officer private key.
+- Loan state and property active-loan locks.
 
 ### Covered Risks
 
-- Unauthorized verification writes are blocked by `ORACLE_ROLE`.
-- Unauthorized compliance writes are blocked by `COMPLIANCE_ROLE`.
+- Unauthorized accounts cannot write property verification state.
+- Unauthorized accounts cannot directly write compliance state.
 - The deployer does not hold `COMPLIANCE_ROLE` by default.
 - Invalid or tampered Groth16 proofs cannot set compliance.
-- Mismatched public signals cannot set compliance.
-- A proof accepted for one principal commitment cannot approve a loan with another commitment.
-- Duplicate active loans against one property revert.
-- Double approval, invalid repayment, and invalid cancellation revert.
+- Public signal mismatches revert.
+- A proof generated for one principal commitment cannot approve a loan using another commitment.
+- One property cannot have duplicate active loans.
 - Non-borrowers cannot cancel or repay another user's loan.
+- Double approval, invalid repayment, and invalid cancellation revert.
+- Re-verification clears stale compliance state.
 
 ### Trust Assumptions
 
-- The mock registry is test data, not authoritative title data.
-- The oracle is trusted for deterministic rule evaluation in this testnet application.
-- The loan officer role is trusted to approve through the contract path.
-- Public testnet transactions and commitments are observable.
+- `data/properties.json` is test data, not an authoritative title registry.
+- The oracle is trusted in this prototype.
+- The Loan Officer role is trusted to approve through the contract path.
+- Public testnet transactions, commitments, and state changes are observable.
+- The local Groth16 trusted setup is for demonstration only.
 
-## Setup
+### Privacy Boundary
 
-Requirements:
+Visible on-chain:
+
+- property key as `bytes32`;
+- owner address;
+- evidence hash;
+- valuation commitment;
+- principal commitment;
+- compliance proof hash;
+- loan state;
+- loan timestamps.
+
+Not published on-chain in plaintext:
+
+- property valuation;
+- requested loan principal;
+- valuation salt;
+- principal salt;
+- proof private witness.
+
+## Local Setup
+
+### Requirements
 
 - Node.js `>=20 <23`
 - pnpm
 - Circom installed and available on `PATH`
 - Google Chrome if running `pnpm layout:check`
 
-Install and build:
+### Install and Build
 
 ```bash
 pnpm install
@@ -444,7 +769,7 @@ pnpm compile
 pnpm test
 ```
 
-## Local Demo
+### Local Demo
 
 Terminal 1:
 
@@ -473,71 +798,18 @@ http://localhost:5173/
 
 `pnpm demo:deploy` deploys local contracts and syncs `.env` plus `frontend/.env`.
 
-### Local Role Matrix
-
-The local demo uses separated Hardhat accounts so each screen matches a real business role:
-
-| Account | Address                                        | Role             | Demo use                                                                                |
-| ------- | ---------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------- |
-| #0      | `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` | Deployer + Admin | Deploy contracts and manage roles                                                       |
-| #1      | `0x70997970C51812dc3A010C7d01b50e0d17dc79C8` | Oracle           | Backend signer for registry verification writes                                         |
-| #2      | `0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC` | Loan Officer     | Approve or reject requested loans                                                       |
-| #3      | `0x90F79bf6EB2c4f870365E785982E1f101E93b906` | Borrower         | Owns `PROP-001`, `PROP-002`, `PROP-005`, `PROP-010`, `PROP-012`, `PROP-017` |
-| #4      | `0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65` | Borrower         | Owns `PROP-003`, `PROP-004`, `PROP-011`, `PROP-013`, `PROP-016`, `PROP-018` |
-| #5      | `0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc` | Borrower         | Owns `PROP-006`, `PROP-007`, `PROP-014`, `PROP-019`                             |
-| #6      | `0x976EA74026E726554dB657fA54763abd0C3a0aa9` | Borrower         | Owns `PROP-008`, `PROP-009`, `PROP-015`, `PROP-020`                             |
-
-The Oracle exists because the blockchain cannot independently know real-world registry facts such as property existence, address, valuation, encumbrance, or active title status. In this demo, the Oracle API is the trusted registry writer; it evaluates `data/properties.json` and writes verification/proof results on-chain. It is not a borrower or an approver.
-
-### MetaMask Localhost Setup
-
-- Network name: `Localhost 8545`
-- RPC: `http://127.0.0.1:8545`
-- Chain ID: `31337`
-- Currency: `ETH`
-- Import the accounts you want to demo:
-  - Account #0 for Admin.
-  - Account #2 for Loan Officer.
-  - Account #3 through #6 for Borrower views.
-
-Account #0 private key:
-
-```text
-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-```
-
-Account #2 private key:
-
-```text
-0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
-```
-
-Account #3 private key:
-
-```text
-0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6
-```
-
 ### Demo Flow
 
-Happy path:
-
-1. Admin deploys with `pnpm demo:deploy`.
+1. Admin runs `pnpm demo:deploy`.
 2. Start the Oracle API with `pnpm oracle:api`.
 3. Connect a Borrower wallet, open My Properties, and select an owned property.
-4. Run Property Verification, then open Compliance Proof and enter the requested amount, for example `750000`.
-5. Generate the compliance proof. The loan request screen will use that same amount as read-only proof data; changing amount or property requires regenerating the proof.
-6. Submit the loan request from the Borrower wallet and review it in My Loan Ledger.
-7. Switch MetaMask to Account #2, open Loan Approvals, and use the status tabs to approve, reject, or audit loans.
-8. Switch back to the Borrower wallet and repay approved loans from the selected loan record.
-9. Use Admin to review role configuration and contract status.
-
-Failure paths:
-
-- `PROP-004`: verification fails because the property is encumbered.
-- `PROP-001` with `900000`: compliance fails because LTV exceeds 80%.
-- `PROP-003` with active `500000` loan, then a second `400000` request: second request reverts due to active collateral lock.
-- proof for one principal, loan request with another principal commitment: approval rejects due to proof mismatch.
+4. Run Property Verification.
+5. Enter a loan principal, for example `750000`.
+6. Generate a Compliance Proof and write compliance on-chain.
+7. The Borrower submits a loan with the same `principalCommitment`.
+8. Switch to the Loan Officer wallet and approve or reject in Loan Approvals.
+9. The Borrower repays the approved loan.
+10. Admin can inspect roles and contract deployment status.
 
 Command-line happy path:
 
@@ -545,16 +817,55 @@ Command-line happy path:
 pnpm demo:flow
 ```
 
-Readiness check:
+Readiness checks:
 
 ```bash
 pnpm demo:check
 pnpm demo:ready
 ```
 
+### Local Role Matrix
+
+| Account | Address | Role | Demo use |
+| --- | --- | --- | --- |
+| #0 | `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` | Deployer + Admin | Deploy contracts and manage roles |
+| #1 | `0x70997970C51812dc3A010C7d01b50e0d17dc79C8` | Oracle | Backend signer for registry verification writes |
+| #2 | `0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC` | Loan Officer | Approve or reject requested loans |
+| #3 | `0x90F79bf6EB2c4f870365E785982E1f101E93b906` | Borrower | Owns `PROP-001`, `PROP-002`, `PROP-005`, `PROP-010`, `PROP-012`, `PROP-017` |
+| #4 | `0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65` | Borrower | Owns `PROP-003`, `PROP-004`, `PROP-011`, `PROP-013`, `PROP-016`, `PROP-018` |
+| #5 | `0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc` | Borrower | Owns `PROP-006`, `PROP-007`, `PROP-014`, `PROP-019` |
+| #6 | `0x976EA74026E726554dB657fA54763abd0C3a0aa9` | Borrower | Owns `PROP-008`, `PROP-009`, `PROP-015`, `PROP-020` |
+
+### MetaMask Localhost Setup
+
+- Network name: `Localhost 8545`
+- RPC: `http://127.0.0.1:8545`
+- Chain ID: `31337`
+- Currency: `ETH`
+
+Common local private keys:
+
+```text
+#0 Admin
+0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+#2 Loan Officer
+0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+
+#3 Borrower
+0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6
+```
+
+### Representative Failure Paths
+
+- `PROP-004`: verification fails because the property is encumbered.
+- `PROP-001` with `900000`: compliance fails because LTV exceeds 80%.
+- `PROP-003` with an active `500000` loan, followed by a second `400000` request: the second request reverts due to active collateral locking.
+- Proof for one principal, loan request with another principal commitment: approval rejects due to proof mismatch and releases the lock.
+
 ## Sepolia Deployment
 
-Set:
+Set root `.env`:
 
 ```text
 SEPOLIA_RPC_URL=
@@ -563,13 +874,13 @@ ORACLE_ADDRESS=
 LOAN_OFFICER_ADDRESS=
 ```
 
-Then run:
+Deploy:
 
 ```bash
 pnpm deploy:sepolia
 ```
 
-Copy `deployments/sepolia.json` addresses into `.env` and `frontend/.env`.
+Then copy addresses from `deployments/sepolia.json` into root `.env` and `frontend/.env`.
 
 ## Testing and Evaluation
 
@@ -578,33 +889,34 @@ Copy `deployments/sepolia.json` addresses into `.env` and `frontend/.env`.
 ```bash
 pnpm compile
 pnpm test
+pnpm test:oracle
+pnpm frontend:test
 pnpm frontend:build
 pnpm layout:check
 pnpm test:gas
+pnpm test:all
 ```
 
 ### Test Coverage
 
-The main test suite is `test/proofestate.test.js`.
-
-It covers:
+The main suite is `test/proofestate.test.js`. It covers:
 
 - oracle registry rule evaluation;
-- invalid oracle principal inputs;
+- invalid principal input rejection;
 - deployment address validation;
 - least-privilege role configuration;
 - verification record writes;
-- unauthorized verification writes;
+- unauthorized verification write rejection;
 - blocked direct compliance writes;
 - stale compliance clearing;
 - valid Groth16 proof acceptance;
 - unverified property proof rejection;
-- mismatched public signal rejection;
+- public signal mismatch rejection;
 - tampered proof rejection;
 - above-LTV proof failure;
-- invalid loan ids;
+- invalid loan IDs;
 - invalid loan request inputs;
-- happy-path request, approval, and repayment;
+- request, approval, and repayment happy path;
 - loan officer role checks;
 - double approval rejection;
 - verification rejection release;
@@ -632,10 +944,11 @@ Quantitative:
 
 Qualitative:
 
-- privacy improvement against plaintext valuation/principal disclosure;
+- privacy improvement compared with plaintext valuation and principal disclosure;
 - robustness of failure paths;
 - clarity of trust boundaries;
-- extensibility of replacing the compliance verifier without changing lending flow.
+- ability to replace the compliance verifier without changing the lending workflow;
+- ability of active loan locking to prevent duplicate collateralization.
 
 ## Environment Variables
 
@@ -672,21 +985,24 @@ VITE_DEFAULT_NETWORK=localhost
 
 ## Known Limitations
 
-- The registry is mocked.
+- The property registry is mocked.
 - The oracle is centralized.
 - The local trusted setup is not production-grade.
-- Principal and valuation are hidden, but commitments and loan state are public.
-- The collateral model is conservative: one active loan per property rather than private aggregate multi-loan exposure.
-- Loan repayment is state accounting only; no ETH or token principal is disbursed.
-- No production KYC, title custody, lien registry, or liquidation logic.
-- Property loan history is exposed through the Lending contract; the platform-level loan book still reads `nextLoanId` for operational summaries.
+- Commitments and loan state are public; only valuation, principal, salts, and witness data are hidden.
+- Each property supports only one active loan; private aggregate exposure is not implemented.
+- Repayment is state accounting only; there is no real ETH or ERC20 disbursement.
+- There is no production KYC, title custody, lien registry, delinquency, liquidation, or auction logic.
+- There is no event indexer; the frontend relies mainly on direct contract reads and session state.
+- Sepolia support is for testnet demonstration only.
 
 ## Future Work
 
-- Replace the mock registry with a regulated registry, bank, or Fabric-backed consortium source.
-- Add threshold oracle governance.
-- Upgrade to private aggregate exposure proofs for multiple simultaneous loans per asset.
-- Add audited circuit artifacts and a formal trusted setup policy.
-- Add real fund accounting, repayment amounts, delinquency, and liquidation.
-- Add event indexing and monitoring.
-- Add production identity and lender/borrower role separation.
+- Replace the mock registry with a regulated registry, bank source, or Fabric-backed consortium registry.
+- Add threshold oracle governance or multi-sig oracle control.
+- Support private aggregate exposure proofs across multiple loans.
+- Add audited circuits and a formal trusted setup policy.
+- Add real fund accounting, interest calculations, repayment amounts, delinquency, and liquidation.
+- Add event indexing, monitoring, and risk dashboards.
+- Add DID, KYC, and stronger lender/borrower role separation.
+- Support additional compliance rules such as DSCR, income proof, and region-specific LTV limits.
+- Move proof generation into a worker model to improve concurrency and operational isolation.
