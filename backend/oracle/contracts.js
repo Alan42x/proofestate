@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("../../scripts/load-env");
 
 const fs = require("fs");
 const path = require("path");
@@ -46,6 +46,12 @@ function resolveRpcUrl(network) {
   return process.env.LOCAL_RPC_URL || "http://127.0.0.1:8545";
 }
 
+function createJsonRpcProvider(rpcUrl) {
+  return new ethers.JsonRpcProvider(rpcUrl, undefined, {
+    batchMaxCount: 1
+  });
+}
+
 function connectContracts({ network = "localhost", write = false } = {}) {
   const deployment = loadDeployment(network);
   const rpcUrl = resolveRpcUrl(network);
@@ -53,7 +59,7 @@ function connectContracts({ network = "localhost", write = false } = {}) {
     throw new Error(`Missing RPC URL for network ${network}`);
   }
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const provider = createJsonRpcProvider(rpcUrl);
   const privateKey = process.env.ORACLE_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY || "";
   if (write && !privateKey) {
     throw new Error("Set ORACLE_PRIVATE_KEY or DEPLOYER_PRIVATE_KEY before using --write");
@@ -96,5 +102,6 @@ module.exports = {
   COMPLIANCE_VERIFIER_ABI,
   LENDING_ABI,
   loadDeployment,
+  createJsonRpcProvider,
   connectContracts
 };

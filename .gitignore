@@ -6,6 +6,11 @@ coverage/
 typechain-types/
 deployments/*.json
 .env
+.env.local
+.env.sepolia
+frontend/.env
+frontend/.env.local
+frontend/.env.sepolia
 .DS_Store
 dist/
 frontend/dist/

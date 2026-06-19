@@ -121,7 +121,8 @@ frontend/
 
 scripts/
   deploy.js                         Local and Sepolia deployment
-  sync-local-env.js                 Sync local deployment addresses into .env and frontend/.env
+  sync-local-env.js                 Sync local deployment addresses into .env.local and frontend/.env.local
+  sync-sepolia-env.js               Sync Sepolia deployment addresses into .env.sepolia and frontend/.env.sepolia
   local-demo-check.js               Local demo readiness checks
   local-wallet-flow.js              CLI happy-path wallet workflow
   verify-layout.mjs                 Responsive layout smoke check
@@ -796,7 +797,8 @@ Open:
 http://localhost:5173/
 ```
 
-`pnpm demo:deploy` deploys local contracts and syncs `.env` plus `frontend/.env`.
+`pnpm demo:deploy` deploys local contracts and syncs `.env.local` plus `frontend/.env.local`.
+Local demo commands automatically use `.env.local`. Sepolia deployment commands automatically use `.env.sepolia`.
 
 ### Demo Flow
 
@@ -865,22 +867,135 @@ Common local private keys:
 
 ## Sepolia Deployment
 
-Set root `.env`:
+Sepolia deployment promotes ProofEstate from a private local demo to a public Ethereum testnet deployment. It is useful for reviewer-facing demonstrations because:
+
+- contract addresses have public bytecode and transaction history;
+- MetaMask uses a real testnet network instead of Hardhat account simulation;
+- oracle writes, compliance proof writes, loan requests, approvals, cancellations, and repayments are real Sepolia transactions;
+- reviewers can inspect the deployment without running your local chain;
+- the project demonstrates its intended Ethereum integration path while still using test ETH.
+
+Sepolia does not make the system production-ready. The registry remains mocked, the oracle remains centralized, repayments are still modeled as state transitions only, and testnet ETH has no economic meaning.
+
+### Sepolia Environment
+
+```bash
+cp .env.sepolia.example .env.sepolia
+cp frontend/.env.sepolia.example frontend/.env.sepolia
+```
+
+Fill these required values:
 
 ```text
 SEPOLIA_RPC_URL=
 DEPLOYER_PRIVATE_KEY=
-ORACLE_ADDRESS=
-LOAN_OFFICER_ADDRESS=
 ```
 
-Deploy:
+The deployer account must hold enough Sepolia ETH to deploy and run test transactions. Keep this key testnet-only.
+
+For single-wallet Sepolia testing, set `PROPERTY_OWNER_OVERRIDE_ADDRESS` in `.env.sepolia` to the same address as your admin / deployer account. The oracle will treat every mock property as owned by that address, so you can run borrower and loan officer actions from one funded wallet. Leave it empty when you want to demonstrate borrower / loan officer role separation.
+
+### Deploy
 
 ```bash
 pnpm deploy:sepolia
 ```
 
-Then copy addresses from `deployments/sepolia.json` into root `.env` and `frontend/.env`.
+The deploy command writes the deployment artifact and syncs addresses into both backend and frontend environment files:
+
+```text
+deployments/sepolia.json
+.env.sepolia
+frontend/.env.sepolia
+```
+
+The deployment artifact is intentionally local and ignored by git. Use it as the source of truth for the latest deployed addresses on your machine.
+
+### Current Sepolia Deployment
+
+The current demo deployment is:
+
+| Contract / Account | Address | Explorer |
+| --- | --- | --- |
+| Deployer / Admin / Oracle / Loan Officer | `0xDc5DE2Dbc61179b5cA9Dec58E6f9396D406123B1` | [Etherscan](https://sepolia.etherscan.io/address/0xDc5DE2Dbc61179b5cA9Dec58E6f9396D406123B1) |
+| PropertyVerification | `0x71aee2f627a2f6e9dCf98BFF05fb93d585a6cAC0` | [Etherscan](https://sepolia.etherscan.io/address/0x71aee2f627a2f6e9dCf98BFF05fb93d585a6cAC0) |
+| LtvGroth16Verifier | `0x91f3Eada3Ff8C0C650d1AD3ae3474A223fC83b3c` | [Etherscan](https://sepolia.etherscan.io/address/0x91f3Eada3Ff8C0C650d1AD3ae3474A223fC83b3c) |
+| ComplianceVerifier | `0x6b7Bb127664f447b22DacD3CA55c0441a2eE9F6F` | [Etherscan](https://sepolia.etherscan.io/address/0x6b7Bb127664f447b22DacD3CA55c0441a2eE9F6F) |
+| Lending | `0xbb536E247e0f87118ab2f3F81e35C768087e3072` | [Etherscan](https://sepolia.etherscan.io/address/0xbb536E247e0f87118ab2f3F81e35C768087e3072) |
+
+If contracts are redeployed, update this table from `deployments/sepolia.json`.
+
+### Run
+
+```bash
+pnpm oracle:api:sepolia
+pnpm frontend:dev:sepolia
+```
+
+Then open the Vite URL, connect a wallet on Sepolia, and use the DApp with `VITE_DEFAULT_NETWORK=sepolia`. The frontend reads Sepolia contract addresses from `frontend/.env.sepolia`; the oracle service reads signer, RPC, and contract settings from `.env.sepolia`.
+
+### Inspect On-Chain Results
+
+Run the project-level Sepolia inspection command:
+
+```bash
+pnpm sepolia:inspect
+```
+
+Inspect a specific property key:
+
+```bash
+pnpm sepolia:inspect PROP-001
+```
+
+This command reads Sepolia through `SEPOLIA_RPC_URL` and reports:
+
+- deployed contract addresses and Etherscan links;
+- whether bytecode exists at each address;
+- admin, oracle, compliance, and loan officer role checks;
+- the selected property's chain owner, verification status, compliance status, commitments, and last update timestamp;
+- the latest loan ids and loan states.
+
+You can also inspect manually on Etherscan:
+
+```text
+https://sepolia.etherscan.io/address/<CONTRACT_ADDRESS>
+https://sepolia.etherscan.io/tx/<TRANSACTION_HASH>
+```
+
+Use these addresses from `deployments/sepolia.json`:
+
+```text
+propertyVerification
+ltvGroth16Verifier
+complianceVerifier
+lending
+```
+
+Because source verification is not configured in this prototype, Etherscan is mainly used for bytecode, transaction history, balances, and logs. Use `pnpm sepolia:inspect` or the DApp for ABI-based contract reads.
+
+### Sepolia Manual Smoke Test
+
+For a single-wallet smoke test with `PROPERTY_OWNER_OVERRIDE_ADDRESS` set to the admin / deployer address:
+
+1. Start `pnpm oracle:api:sepolia`.
+2. Start `pnpm frontend:dev:sepolia`.
+3. Connect the admin / deployer wallet on Sepolia.
+4. Select `PROP-001`.
+5. Run Property Verification.
+6. Generate and write a compliant proof with principal `750000`.
+7. Request a loan.
+8. Approve the loan from Loan Approvals.
+9. Repay the loan.
+10. Run `pnpm sepolia:inspect PROP-001` to confirm the chain state.
+
+Useful validation commands:
+
+```bash
+pnpm sepolia:sync
+pnpm frontend:build:sepolia
+pnpm sepolia:inspect PROP-001
+```
 
 ## Testing and Evaluation
 
@@ -952,7 +1067,14 @@ Qualitative:
 
 ## Environment Variables
 
-Root `.env`:
+Environment files:
+
+- `.env.local`: local Hardhat RPC, local oracle signer, local role addresses, and local deployed contract addresses.
+- `.env.sepolia`: Sepolia RPC, Sepolia deployment signer, Sepolia role addresses, and Sepolia deployed contract addresses.
+- `frontend/.env.local`: Vite-visible local frontend settings. Values are generated by `pnpm demo:sync`.
+- `frontend/.env.sepolia`: Vite-visible Sepolia frontend settings. Values are generated by `pnpm sepolia:sync`.
+
+Local `.env.local`:
 
 ```text
 LOCAL_RPC_URL=http://127.0.0.1:8545
@@ -965,21 +1087,41 @@ LOAN_OFFICER_ADDRESS=
 PROPERTY_VERIFICATION_ADDRESS=
 COMPLIANCE_VERIFIER_ADDRESS=
 LENDING_ADDRESS=
-SEPOLIA_RPC_URL=
 ```
 
-Frontend `.env`:
+Sepolia `.env.sepolia`:
 
 ```text
+SEPOLIA_RPC_URL=
+DEPLOYER_PRIVATE_KEY=
+ADMIN_ADDRESS=
+ORACLE_ADDRESS=
+LOAN_OFFICER_ADDRESS=
+PROPERTY_OWNER_OVERRIDE_ADDRESS=
+PROPERTY_VERIFICATION_ADDRESS=
+COMPLIANCE_VERIFIER_ADDRESS=
+LENDING_ADDRESS=
+```
+
+Frontend `frontend/.env.local` or `frontend/.env.sepolia`:
+
+```text
+# Oracle API and RPC endpoints
 VITE_ORACLE_API_URL=http://localhost:8787
 VITE_LOCAL_RPC_URL=http://127.0.0.1:8545
 VITE_SEPOLIA_RPC_URL=
+
+# Role addresses displayed by the DApp
 VITE_ADMIN_ADDRESS=
 VITE_ORACLE_ADDRESS=
 VITE_LOAN_OFFICER_ADDRESS=
+
+# Deployed contract addresses. Local values are filled by `pnpm demo:sync`; Sepolia values are filled by `pnpm sepolia:sync`.
 VITE_PROPERTY_VERIFICATION_ADDRESS=
 VITE_COMPLIANCE_VERIFIER_ADDRESS=
 VITE_LENDING_ADDRESS=
+
+# Initial frontend network: localhost or sepolia
 VITE_DEFAULT_NETWORK=localhost
 ```
 

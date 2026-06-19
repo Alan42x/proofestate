@@ -65,8 +65,23 @@ function parsePositiveCircuitInteger(value, fieldName) {
   return parsed;
 }
 
+function ownerOverrideAddress() {
+  const override = process.env.PROPERTY_OWNER_OVERRIDE_ADDRESS || "";
+  if (!override) return "";
+  if (!ethers.isAddress(override)) {
+    throw inputError("PROPERTY_OWNER_OVERRIDE_ADDRESS must be a valid Ethereum address");
+  }
+  return ethers.getAddress(override);
+}
+
 function loadProperties() {
-  return JSON.parse(fs.readFileSync(DATASET_PATH, "utf8"));
+  const properties = JSON.parse(fs.readFileSync(DATASET_PATH, "utf8"));
+  const override = ownerOverrideAddress();
+  if (!override) return properties;
+  return properties.map((property) => ({
+    ...property,
+    ownerAddress: override
+  }));
 }
 
 function findProperty(propertyId) {

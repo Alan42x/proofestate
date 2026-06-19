@@ -8,8 +8,11 @@ const HARDHAT_ACCOUNT_1_PRIVATE_KEY =
 
 const rootDir = path.join(__dirname, "..");
 const deploymentPath = path.join(rootDir, "deployments", "localhost.json");
-const rootEnvPath = path.join(rootDir, ".env");
-const frontendEnvPath = path.join(rootDir, "frontend", ".env");
+const rootEnvPath = path.join(
+  rootDir,
+  process.env.PROOFESTATE_ENV_FILE || process.env.DOTENV_CONFIG_PATH || ".env.local"
+);
+const frontendEnvPath = path.join(rootDir, "frontend", ".env.local");
 
 function readEnv(filePath) {
   if (!fs.existsSync(filePath)) return {};
@@ -42,8 +45,10 @@ function writeEnv(filePath, values) {
       "PROPERTY_VERIFICATION_ADDRESS",
       "COMPLIANCE_VERIFIER_ADDRESS",
       "LENDING_ADDRESS",
+      "SEPOLIA_RPC_URL",
       "VITE_ORACLE_API_URL",
       "VITE_LOCAL_RPC_URL",
+      "VITE_SEPOLIA_RPC_URL",
       "VITE_ADMIN_ADDRESS",
       "VITE_ORACLE_ADDRESS",
       "VITE_LOAN_OFFICER_ADDRESS",
@@ -70,6 +75,7 @@ function main() {
     throw new Error("Missing deployments/localhost.json. Run pnpm demo:deploy after starting pnpm chain:local.");
   }
 
+  const frontendEnv = readEnv(frontendEnvPath);
   const deployment = JSON.parse(fs.readFileSync(deploymentPath, "utf8"));
   const shared = {
     LOCAL_RPC_URL: "http://127.0.0.1:8545",
@@ -91,6 +97,7 @@ function main() {
   writeEnv(frontendEnvPath, {
     VITE_ORACLE_API_URL: "http://localhost:8787",
     VITE_LOCAL_RPC_URL: "http://127.0.0.1:8545",
+    VITE_SEPOLIA_RPC_URL: frontendEnv.VITE_SEPOLIA_RPC_URL || "",
     VITE_ADMIN_ADDRESS: deployment.adminAddress || "",
     VITE_ORACLE_ADDRESS: deployment.oracleAddress || "",
     VITE_LOAN_OFFICER_ADDRESS: deployment.loanOfficerAddress || "",
@@ -100,7 +107,7 @@ function main() {
     VITE_DEFAULT_NETWORK: "localhost"
   });
 
-  console.log("Synced localhost deployment into .env and frontend/.env");
+  console.log("Synced localhost deployment into .env.local and frontend/.env.local");
   console.log(JSON.stringify(deployment, null, 2));
 }
 
