@@ -15,7 +15,28 @@ function propertyKey(propertyId) {
   return ethers.id(propertyId);
 }
 
+function timestamp() {
+  return new Date().toLocaleTimeString("en-GB", { hour12: false });
+}
+
+function formatDuration(startedAt) {
+  return `${((Date.now() - startedAt) / 1000).toFixed(2)}s`;
+}
+
+function logStep(message) {
+  console.log(`[${timestamp()}] ${message}`);
+}
+
+async function timedStep(label, fn) {
+  const startedAt = Date.now();
+  logStep(`${label} started`);
+  const result = await fn();
+  logStep(`${label} completed in ${formatDuration(startedAt)}`);
+  return result;
+}
+
 async function main() {
+  const flowStartedAt = Date.now();
   const propertyId = process.argv[2] || "PROP-001";
   const principal = BigInt(process.argv[3] || "750000");
   const deploymentPath = path.join(__dirname, "..", "deployments", "localhost.json");
@@ -25,13 +46,15 @@ async function main() {
   }
 
   const deployment = JSON.parse(fs.readFileSync(deploymentPath, "utf8"));
-  console.log(`Running oracle verification + compliance for ${propertyId}`);
-  const oracleResult = await runVerificationAndCompliance(propertyId, principal.toString(), {
-    write: true,
-    network: "localhost"
-  });
-  console.log(`Verification tx: ${oracleResult.verification.txHash}`);
-  console.log(`Compliance tx: ${oracleResult.compliance.txHash}`);
+  logStep(`Starting local wallet flow for ${propertyId} with principal ${principal.toString()}`);
+  const oracleResult = await timedStep("Oracle verification + compliance", async () =>
+    runVerificationAndCompliance(propertyId, principal.toString(), {
+      write: true,
+      network: "localhost"
+    })
+  );
+  logStep(`Verification tx: ${oracleResult.verification.txHash}`);
+  logStep(`Compliance tx: ${oracleResult.compliance.txHash}`);
 
   const rpcUrl = process.env.LOCAL_RPC_URL || "http://127.0.0.1:8545";
   const provider = new ethers.JsonRpcProvider(rpcUrl);
@@ -56,16 +79,21 @@ async function main() {
 
   const principalCommitment = BigInt(oracleResult.compliance.principalCommitment);
 
-  console.log(`Requesting loan ${loanId.toString()} with principal commitment ${principalCommitment.toString()}`);
-  await (await borrowerLending.requestLoan(key, principalCommitment, borrowerOptions())).wait();
+  await timedStep(`Loan request ${loanId.toString()}`, async () => {
+    logStep(`Principal commitment: ${principalCommitment.toString()}`);
+    await (await borrowerLending.requestLoan(key, principalCommitment, borrowerOptions())).wait();
+  });
 
-  console.log(`Approving loan ${loanId.toString()}`);
-  await (await loanOfficerLending.approveLoan(loanId, officerOptions())).wait();
+  await timedStep(`Loan approval ${loanId.toString()}`, async () => {
+    await (await loanOfficerLending.approveLoan(loanId, officerOptions())).wait();
+  });
 
-  console.log(`Repaying loan ${loanId.toString()}`);
-  await (await borrowerLending.repay(loanId, borrowerOptions())).wait();
+  await timedStep(`Loan repayment ${loanId.toString()}`, async () => {
+    await (await borrowerLending.repay(loanId, borrowerOptions())).wait();
+  });
 
   const loan = await borrowerLending.getLoan(loanId);
+  logStep(`Flow completed in ${formatDuration(flowStartedAt)}`);
   console.log(
     JSON.stringify(
       {
