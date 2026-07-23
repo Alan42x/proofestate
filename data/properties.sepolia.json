@@ -1,0 +1,122 @@
+[
+  {
+    "propertyId": "PROP-011",
+    "address": "Novena medical office, unit K-0902",
+    "region": "SG-RCR",
+    "valuation": 850000,
+    "ownerHash": "0x52d01c65d2e6acff550def14b5ce5bf353ac7ad53b132fc531c5d085d77c4ee3",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 81,
+    "noEncumbrance": true,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  },
+  {
+    "propertyId": "PROP-012",
+    "address": "Katong residential unit, unit L-0405",
+    "region": "SG-RCR",
+    "valuation": 610000,
+    "ownerHash": "0x50bc8f7e0f54ca4506533f500202a6d7b90b55a7eb8e0a5d760cccb96a7cf505",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 74,
+    "noEncumbrance": true,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  },
+  {
+    "propertyId": "PROP-013",
+    "address": "Bishan residential unit, unit M-1306",
+    "region": "SG-RCR",
+    "valuation": 730000,
+    "ownerHash": "0x3722c40d45b0aaedcaf8fdd626c110bf4a5ce533a8d228f94f0df9d58f9e336f",
+    "ownerAddress": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+    "esgScore": 77,
+    "noEncumbrance": true,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  },
+  {
+    "propertyId": "PROP-014",
+    "address": "Tampines retail podium, lot N-0108",
+    "region": "SG-OCR",
+    "valuation": 305000,
+    "ownerHash": "0xb51eaf9097c908e870b1e45475f85b7fd2bdb2391d2dbdd95e7c1566bdb49766",
+    "ownerAddress": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+    "esgScore": 62,
+    "noEncumbrance": true,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  },
+  {
+    "propertyId": "PROP-015",
+    "address": "Marina Bay office share, tranche O",
+    "region": "SG-CCR",
+    "valuation": 1750000,
+    "ownerHash": "0x48e13b1f25682cdfda03628a27c86c59946cd9c21dbfd17700c27028ed3c44b6",
+    "ownerAddress": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+    "esgScore": 90,
+    "noEncumbrance": true,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  },
+  {
+    "propertyId": "PROP-016",
+    "address": "Sengkang residential unit, unit P-0609",
+    "region": "SG-OCR",
+    "valuation": 420000,
+    "ownerHash": "0x52d01c65d2e6acff550def14b5ce5bf353ac7ad53b132fc531c5d085d77c4ee3",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 70,
+    "noEncumbrance": true,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  },
+  {
+    "propertyId": "PROP-017",
+    "address": "Bukit Timah residential unit, unit Q-1011",
+    "region": "SG-CCR",
+    "valuation": 1120000,
+    "ownerHash": "0xa5a7102c8538d15f25586f90692aee9b9101a923d4c92399b758cbf5a0ab7d84",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 83,
+    "noEncumbrance": true,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  },
+  {
+    "propertyId": "PROP-018",
+    "address": "Kallang warehouse loft, unit R-0303",
+    "region": "SG-RCR",
+    "valuation": 365000,
+    "ownerHash": "0x52d01c65d2e6acff550def14b5ce5bf353ac7ad53b132fc531c5d085d77c4ee3",
+    "ownerAddress": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    "esgScore": 59,
+    "noEncumbrance": false,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  },
+  {
+    "propertyId": "PROP-019",
+    "address": "Yishun residential unit, unit S-1210",
+    "region": "SG-OCR",
+    "valuation": 250000,
+    "ownerHash": "0xdcb5e65d82e33dd81cf725a710e1ceceaf9e446993d1fb38d709c853b8d6ef4b",
+    "ownerAddress": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+    "esgScore": 66,
+    "noEncumbrance": true,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  },
+  {
+    "propertyId": "PROP-020",
+    "address": "Raffles Place office suite, unit T-2201",
+    "region": "SG-CCR",
+    "valuation": 1450000,
+    "ownerHash": "0xd62a2f370d4977ee93cb9db62b5aeb9be542a3bb2c741d9fb4a6f421b099bc92",
+    "ownerAddress": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+    "esgScore": 87,
+    "noEncumbrance": true,
+    "status": "ACTIVE",
+    "network": "sepolia"
+  }
+]

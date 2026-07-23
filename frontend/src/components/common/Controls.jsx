@@ -1,12 +1,26 @@
 import { ChevronDown, Languages, Network, Wallet } from "lucide-react";
 
-export function NetworkSelector({ network, setNetwork, t }) {
+export function NetworkSelector({ network, setNetwork, t, options, disabled = false }) {
+  const networkOptions = options || [
+    { value: "localhost", label: t("local") },
+    { value: "sepolia", label: t("sepolia") }
+  ];
+  const canSwitch = networkOptions.some((option) => option.value !== network && !option.disabled);
+
   return (
     <label className="select-shell">
       <Network size={17} />
-      <select value={network} onChange={(event) => setNetwork(event.target.value)}>
-        <option value="localhost">{t("local")}</option>
-        <option value="sepolia">{t("sepolia")}</option>
+      <select
+        value={network}
+        onChange={(event) => setNetwork(event.target.value)}
+        disabled={!canSwitch || disabled}
+        title={!canSwitch ? t("networkRuntimeLocked") : t("networkPreference")}
+      >
+        {networkOptions.map((option) => (
+          <option value={option.value} disabled={option.disabled} key={option.value}>
+            {option.label}
+          </option>
+        ))}
       </select>
       <ChevronDown size={16} />
     </label>

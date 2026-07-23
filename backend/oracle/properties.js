@@ -11,7 +11,10 @@ const {
   valuationSaltForProperty
 } = require("../../zk/ltvCircuit");
 
-const DATASET_PATH = path.join(__dirname, "..", "..", "data", "properties.json");
+const DATASET_PATHS = {
+  localhost: path.join(__dirname, "..", "..", "data", "properties.localhost.json"),
+  sepolia: path.join(__dirname, "..", "..", "data", "properties.sepolia.json")
+};
 
 const RULES = {
   allowedRegions: new Set(["SG-CCR", "SG-RCR", "SG-OCR"]),
@@ -74,19 +77,39 @@ function ownerOverrideAddress() {
   return ethers.getAddress(override);
 }
 
-function loadProperties() {
-  const properties = JSON.parse(fs.readFileSync(DATASET_PATH, "utf8"));
+function parseNetwork(network = "localhost") {
+  const normalizedNetwork = typeof network === "string" && network.trim()
+    ? network.trim()
+    : "localhost";
+  if (!DATASET_PATHS[normalizedNetwork]) {
+    throw inputError(`network must be one of: ${Object.keys(DATASET_PATHS).join(", ")}`);
+  }
+  return normalizedNetwork;
+}
+
+function ownerHashFor(ownerAddress) {
+  return ethers.keccak256(ethers.toUtf8Bytes(ethers.getAddress(ownerAddress).toLowerCase()));
+}
+
+function loadNetworkDataset(network) {
+  const normalizedNetwork = parseNetwork(network);
+  return JSON.parse(fs.readFileSync(DATASET_PATHS[normalizedNetwork], "utf8"));
+}
+
+function loadProperties({ network = "localhost" } = {}) {
+  const properties = loadNetworkDataset(network);
   const override = ownerOverrideAddress();
   if (!override) return properties;
   return properties.map((property) => ({
     ...property,
-    ownerAddress: override
+    ownerAddress: override,
+    ownerHash: ownerHashFor(override)
   }));
 }
 
-function findProperty(propertyId) {
+function findProperty(propertyId, { network = "localhost" } = {}) {
   const normalizedPropertyId = parsePropertyId(propertyId);
-  return loadProperties().find((property) => property.propertyId === normalizedPropertyId);
+  return loadProperties({ network }).find((property) => property.propertyId === normalizedPropertyId);
 }
 
 function propertyKey(propertyId) {
@@ -152,9 +175,9 @@ function evaluateLtv(propertyValue, loanPrincipal) {
   };
 }
 
-async function buildVerification(propertyId) {
+async function buildVerification(propertyId, { network = "localhost" } = {}) {
   const normalizedPropertyId = parsePropertyId(propertyId);
-  const property = findProperty(normalizedPropertyId);
+  const property = findProperty(normalizedPropertyId, { network });
   const evaluation = evaluateProperty(property);
   const key = propertyKey(normalizedPropertyId);
   const valuationSalt = property ? valuationSaltForProperty(property) : 0n;
@@ -175,10 +198,20 @@ async function buildVerification(propertyId) {
   };
 }
 
-async function buildCompliance(propertyId, loanPrincipal, principalSalt = randomFieldSalt()) {
+async function buildCompliance(
+  propertyId,
+  loanPrincipal,
+  options = {}
+) {
+  const {
+    network = "localhost",
+    principalSalt = randomFieldSalt()
+  } = typeof options === "object" && options !== null
+    ? options
+    : { principalSalt: options };
   const normalizedPropertyId = parsePropertyId(propertyId);
   const principal = parsePositiveCircuitInteger(loanPrincipal, "loanPrincipal");
-  const property = findProperty(normalizedPropertyId);
+  const property = findProperty(normalizedPropertyId, { network });
   const evaluation = evaluateProperty(property);
   if (!property) {
     return {
@@ -250,6 +283,7 @@ module.exports = {
   evaluateLtv,
   parsePropertyId,
   parsePositiveCircuitInteger,
+  parseNetwork,
   buildVerification,
   buildCompliance
 };

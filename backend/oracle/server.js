@@ -99,16 +99,19 @@ app.get("/health", (_req, res) => {
 
 app.get("/properties", asyncRoute(async (req, res) => {
   const owner = typeof req.query.owner === "string" ? req.query.owner.toLowerCase() : "";
-  const properties = await listProperties();
-  res.json(
-    owner
-      ? properties.filter((property) => property.ownerAddress?.toLowerCase() === owner)
-      : properties
-  );
+  const role = typeof req.query.role === "string" ? req.query.role : "";
+  const network = typeof req.query.network === "string" ? req.query.network : "localhost";
+  const properties = await listProperties({ network });
+  if (!owner) {
+    if (role === "admin" || role === "loanOfficer") return res.json(properties);
+    return res.status(400).json({ error: "owner or privileged role is required" });
+  }
+  res.json(properties.filter((property) => property.ownerAddress?.toLowerCase() === owner));
 }));
 
 app.get("/properties/:propertyId/verification", asyncRoute(async (req, res) => {
-  res.json(await verifyProperty(req.params.propertyId));
+  const network = typeof req.query.network === "string" ? req.query.network : "localhost";
+  res.json(await verifyProperty(req.params.propertyId, { network }));
 }));
 
 app.post("/verify", asyncRoute(async (req, res) => {

@@ -55,7 +55,7 @@ async function main() {
   const { command, values, flags } = parseArgs(process.argv.slice(2));
 
   if (command === "list") {
-    print(await listProperties());
+    print(await listProperties({ network: flags.network }));
     return;
   }
 

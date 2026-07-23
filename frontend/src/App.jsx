@@ -4,12 +4,14 @@ import {
   BadgeCheck,
   Building2,
   Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   Cpu,
   Database,
   FileCheck2,
   Home,
-  Info,
   ListChecks,
   Loader2,
   LockKeyhole,
@@ -20,8 +22,7 @@ import {
   ShieldCheck,
   UserRoundCog,
   WalletCards,
-  XCircle,
-  Zap
+  XCircle
 } from "lucide-react";
 import {
   useAccount,
@@ -30,12 +31,15 @@ import {
   useDisconnect,
   usePublicClient,
   useReadContract,
+  useSwitchChain,
   useWatchContractEvent,
   useWriteContract
 } from "wagmi";
 import { hardhat, sepolia } from "wagmi/chains";
+import localhostDeployment from "../../deployments/localhost.json";
+import sepoliaDeployment from "../../deployments/sepolia.json";
 import { lendingAbi, propertyVerificationAbi } from "./contracts/abis";
-import { getOracleHealth, getProperties, getPropertiesByOwner, postOracle } from "./lib/api";
+import { getOracleHealth, getPropertiesByOwner, getPropertiesForRole, postOracle } from "./lib/api";
 import { formatRecord, propertyKey, roleKey, shortField, shortHash } from "./lib/chain";
 import { detectInitialLanguage, LANG_STORAGE_KEY, translations } from "./lib/i18n";
 import { LanguageToggle, NetworkSelector, WalletButton } from "./components/common/Controls";
@@ -43,20 +47,13 @@ import { DetailList } from "./components/common/DataTable";
 import { LoanLedger } from "./components/domain/LoanLedger";
 import { WalletGate } from "./components/layout/WalletGate";
 
-const propertyVerificationAddress = import.meta.env.VITE_PROPERTY_VERIFICATION_ADDRESS;
-const complianceVerifierAddress = import.meta.env.VITE_COMPLIANCE_VERIFIER_ADDRESS;
-const lendingAddress = import.meta.env.VITE_LENDING_ADDRESS;
-const configuredAdminAddress = import.meta.env.VITE_ADMIN_ADDRESS || "";
-const configuredOracleAddress = import.meta.env.VITE_ORACLE_ADDRESS || "";
-const configuredLoanOfficerAddress = import.meta.env.VITE_LOAN_OFFICER_ADDRESS || "";
-const safePropertyVerificationAddress = isValidAddress(propertyVerificationAddress)
-  ? propertyVerificationAddress
-  : undefined;
-const safeComplianceVerifierAddress = isValidAddress(complianceVerifierAddress)
-  ? complianceVerifierAddress
-  : undefined;
-const safeLendingAddress = isValidAddress(lendingAddress) ? lendingAddress : undefined;
-const defaultNetwork = import.meta.env.VITE_DEFAULT_NETWORK || "localhost";
+const deploymentByNetwork = {
+  localhost: localhostDeployment,
+  sepolia: sepoliaDeployment
+};
+const defaultNetwork = deploymentByNetwork[import.meta.env.VITE_DEFAULT_NETWORK]
+  ? import.meta.env.VITE_DEFAULT_NETWORK
+  : "localhost";
 const allowedRegions = new Set(["SG-CCR", "SG-RCR", "SG-OCR"]);
 const minimumValuation = 200000;
 const defaultAdminRole = "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -70,6 +67,10 @@ function chainIdFor(network) {
 
 function isValidAddress(value) {
   return /^0x[a-fA-F0-9]{40}$/.test(value || "");
+}
+
+function addressOrFallback(value, fallback) {
+  return isValidAddress(value) ? value : fallback;
 }
 
 function formatCurrency(value) {
@@ -111,8 +112,8 @@ function App() {
   const t = (key) => translations[language][key] || translations.en[key] || key;
 
   const [activeView, setActiveView] = useState("overview");
-  const [properties, setProperties] = useState([]);
   const [ownedProperties, setOwnedProperties] = useState([]);
+  const [privilegedProperties, setPrivilegedProperties] = useState([]);
   const [selectedId, setSelectedId] = useState("PROP-001");
   const [principal, setPrincipal] = useState("750000");
   const [principalCommitment, setPrincipalCommitment] = useState("");
@@ -138,13 +139,45 @@ function App() {
   const [txPhase, setTxPhase] = useState("");
   const [chainRecords, setChainRecords] = useState({ loading: false, rows: [] });
   const [roleAudit, setRoleAudit] = useState({ loading: false, rows: [] });
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [workspaceEntered, setWorkspaceEntered] = useState(false);
+  const [verificationDialog, setVerificationDialog] = useState(null);
+  const [complianceDialog, setComplianceDialog] = useState(null);
 
   const { address, isConnected } = useAccount();
   const walletChainId = useChainId();
   const { connect, connectors, isPending: connecting } = useConnect();
   const { disconnect } = useDisconnect();
+  const { switchChainAsync, isPending: switchingChain } = useSwitchChain();
   const { writeContractAsync, isPending: writing } = useWriteContract();
   const publicClient = usePublicClient({ chainId: chainIdFor(network) });
+  const networkDeployment = deploymentByNetwork[network] || deploymentByNetwork[defaultNetwork];
+  const useEnvDeployment = network === defaultNetwork;
+  const propertyVerificationAddress = useEnvDeployment
+    ? addressOrFallback(import.meta.env.VITE_PROPERTY_VERIFICATION_ADDRESS, networkDeployment.propertyVerification)
+    : networkDeployment.propertyVerification;
+  const complianceVerifierAddress = useEnvDeployment
+    ? addressOrFallback(import.meta.env.VITE_COMPLIANCE_VERIFIER_ADDRESS, networkDeployment.complianceVerifier)
+    : networkDeployment.complianceVerifier;
+  const lendingAddress = useEnvDeployment
+    ? addressOrFallback(import.meta.env.VITE_LENDING_ADDRESS, networkDeployment.lending)
+    : networkDeployment.lending;
+  const configuredAdminAddress = useEnvDeployment
+    ? addressOrFallback(import.meta.env.VITE_ADMIN_ADDRESS, networkDeployment.adminAddress)
+    : networkDeployment.adminAddress;
+  const configuredOracleAddress = useEnvDeployment
+    ? addressOrFallback(import.meta.env.VITE_ORACLE_ADDRESS, networkDeployment.oracleAddress)
+    : networkDeployment.oracleAddress;
+  const configuredLoanOfficerAddress = useEnvDeployment
+    ? addressOrFallback(import.meta.env.VITE_LOAN_OFFICER_ADDRESS, networkDeployment.loanOfficerAddress)
+    : networkDeployment.loanOfficerAddress;
+  const safePropertyVerificationAddress = isValidAddress(propertyVerificationAddress)
+    ? propertyVerificationAddress
+    : undefined;
+  const safeComplianceVerifierAddress = isValidAddress(complianceVerifierAddress)
+    ? complianceVerifierAddress
+    : undefined;
+  const safeLendingAddress = isValidAddress(lendingAddress) ? lendingAddress : undefined;
 
   useEffect(() => {
     document.title = t("appTitle");
@@ -153,24 +186,13 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    getProperties().then((items) => {
-      if (!mounted) return;
-      setProperties(items);
-      setSelectedId((current) =>
-        items.length && !items.find((item) => item.propertyId === current)
-          ? items[0].propertyId
-          : current
-      );
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    getPropertiesByOwner(address).then((items) => {
+    if (!isConnected || !address) {
+      setOwnedProperties([]);
+      return () => {
+        mounted = false;
+      };
+    }
+    getPropertiesByOwner(address, network).then((items) => {
       if (!mounted) return;
       setOwnedProperties(items);
       if (isConnected && items.length) {
@@ -183,7 +205,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [address, isConnected, refreshNonce]);
+  }, [address, isConnected, refreshNonce, network]);
 
   useEffect(() => {
     let mounted = true;
@@ -259,14 +281,24 @@ function App() {
     };
   }, [network, publicClient]);
 
-  const selectedProperty = useMemo(
-    () => properties.find((property) => property.propertyId === selectedId) || properties[0],
-    [properties, selectedId]
-  );
   const visibleProperties = useMemo(
-    () => (isConnected && ownedProperties.length ? ownedProperties : properties),
-    [isConnected, ownedProperties, properties]
+    () => (isConnected ? ownedProperties : []),
+    [isConnected, ownedProperties]
   );
+  const selectedProperty = useMemo(
+    () =>
+      visibleProperties.find((property) => property.propertyId === selectedId) ||
+      visibleProperties[0] ||
+      null,
+    [selectedId, visibleProperties]
+  );
+  const knownProperties = useMemo(() => {
+    const byId = new Map();
+    for (const property of [...ownedProperties, ...privilegedProperties]) {
+      byId.set(property.propertyId, property);
+    }
+    return Array.from(byId.values());
+  }, [ownedProperties, privilegedProperties]);
   const isSelectedOwned = Boolean(
     address &&
       selectedProperty?.ownerAddress &&
@@ -290,6 +322,7 @@ function App() {
       contractHealth.lending?.deployed &&
       selectedKey
   );
+  const lendingReady = Boolean(contractHealth.lending?.deployed);
   const fullContractsReady = Boolean(
     contractsDeployed
   );
@@ -436,11 +469,7 @@ function App() {
         );
         if (!mounted) return;
         setPropertyLoanHistory({ loading: false, loans });
-        const selected = activeLoanExists
-          ? activeLoanId
-          : loans.length
-            ? loans[loans.length - 1].id
-            : null;
+        const selected = activeLoanExists ? activeLoanId : null;
         setSelectedLoanId((current) => {
           if (current && loans.some((loan) => loan.id.toString() === current)) return current;
           return selected === null ? null : selected.toString();
@@ -464,11 +493,36 @@ function App() {
       const propertyLoan = propertyLoanHistory.loans.find((loan) => loan.id.toString() === targetId);
       if (propertyLoan) return propertyLoan;
     }
-    if (propertyLoanHistory.loans.length) return propertyLoanHistory.loans[propertyLoanHistory.loans.length - 1];
     return null;
   }, [propertyLoanHistory.loans, selectedLoanId, activeLoanExists, activeLoanId, loanPortfolio.loans]);
   const currentLoan = selectedLoan;
-  const hasLoan = Boolean(currentLoan);
+  const selectedLoanProperty = currentLoan
+    ? knownProperties.find((property) => propertyKey(property.propertyId) === currentLoan.propertyId)
+    : selectedProperty;
+  const currentLoanPropertyKey = currentLoan?.propertyId;
+
+  const {
+    data: loanRecord,
+    refetch: refetchLoanRecord
+  } = useReadContract({
+    address: safePropertyVerificationAddress,
+    abi: propertyVerificationAbi,
+    functionName: "getRecord",
+    args: currentLoanPropertyKey ? [currentLoanPropertyKey] : undefined,
+    chainId: chainIdFor(network),
+    query: {
+      enabled: Boolean(safePropertyVerificationAddress && currentLoanPropertyKey)
+    }
+  });
+  const formattedLoanRecord = currentLoan ? formatRecord(loanRecord) : formattedRecord;
+  const loanCollateralLocked = currentLoan?.state === 0 || currentLoan?.state === 1;
+  const collateralLockLabel = currentLoan
+    ? loanCollateralLocked
+      ? `#${currentLoan.id.toString()}`
+      : t("none")
+    : activeLoanExists
+      ? `#${activeLoanId.toString()}`
+      : t("none");
 
   useEffect(() => {
     let mounted = true;
@@ -510,7 +564,7 @@ function App() {
     let mounted = true;
 
     async function loadChainRecords() {
-      if (!safePropertyVerificationAddress || !publicClient || properties.length === 0) {
+      if (!safePropertyVerificationAddress || !publicClient || knownProperties.length === 0) {
         if (mounted) setChainRecords({ loading: false, rows: [] });
         return;
       }
@@ -518,7 +572,7 @@ function App() {
       setChainRecords((current) => ({ ...current, loading: true }));
       try {
         const rows = await Promise.all(
-          properties.map(async (property) => {
+          knownProperties.map(async (property) => {
             const key = propertyKey(property.propertyId);
             const data = await publicClient.readContract({
               address: safePropertyVerificationAddress,
@@ -550,7 +604,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [properties, publicClient, network, refreshNonce]);
+  }, [knownProperties, publicClient, network, refreshNonce]);
 
   useEffect(() => {
     let mounted = true;
@@ -626,10 +680,36 @@ function App() {
 
   const isVerified = Boolean(formattedRecord.verified);
   const isCompliant = Boolean(formattedRecord.compliant);
+  const loanRecordVerified = Boolean(formattedLoanRecord.verified);
+  const loanRecordCompliant = Boolean(formattedLoanRecord.compliant);
+  const loanRecordPrincipalCommitment = BigInt(formattedLoanRecord.principalCommitmentRaw || 0n);
+  const loanProofMatchesPrincipal = Boolean(
+    currentLoan &&
+      loanRecordCompliant &&
+      loanRecordPrincipalCommitment === BigInt(currentLoan.principalCommitment || 0n)
+  );
+  const loanApprovalReady = Boolean(
+    currentLoan &&
+      loanRecordVerified &&
+      loanProofMatchesPrincipal
+  );
+  const loanApprovalBlockReason = !currentLoan
+    ? t("requestRequired")
+    : !loanRecordVerified
+      ? t("approvalBlockedVerification")
+      : !loanRecordCompliant
+        ? t("approvalBlockedCompliance")
+        : !loanProofMatchesPrincipal
+          ? t("approvalBlockedProofMismatch")
+          : "";
   const targetChainId = chainIdFor(network);
   const walletNetworkReady = !isConnected || walletChainId === targetChainId;
   const rpcReady = chainHealth.ok;
   const networkLabel = network === "sepolia" ? t("sepolia") : t("local");
+  const networkOptions = [
+    { value: "localhost", label: t("local") },
+    { value: "sepolia", label: t("sepolia") }
+  ];
   const walletLabel = isConnected && address
     ? `${address.slice(0, 6)}...${address.slice(-4)}`
     : t("connectWallet");
@@ -646,24 +726,43 @@ function App() {
         : t("blocked");
   const principalAmount = BigInt(principal || "0");
   const principalCommitmentAmount = principalCommitment ? BigInt(principalCommitment) : 0n;
+  const onChainPrincipalCommitmentAmount = BigInt(formattedRecord.principalCommitmentRaw || 0n);
+  const effectivePrincipalCommitmentAmount = onChainPrincipalCommitmentAmount > 0n
+    ? onChainPrincipalCommitmentAmount
+    : principalCommitmentAmount;
   const proofPrincipalAmount = proofPrincipal ? BigInt(proofPrincipal) : 0n;
   const proofMatchesPrincipal =
     principalCommitmentAmount > 0n &&
     proofPrincipalAmount > 0n &&
     proofPropertyKey === selectedKey &&
-    BigInt(formattedRecord.principalCommitmentRaw || 0n) === principalCommitmentAmount;
-  const selectedLoanProofBound = Boolean(
-    currentLoan &&
-      currentLoan.propertyId === selectedKey &&
-      isCompliant &&
-      BigInt(formattedRecord.principalCommitmentRaw || 0n) === BigInt(currentLoan.principalCommitment || 0n)
-  );
-  const displayedProofBound = currentLoan ? selectedLoanProofBound : proofMatchesPrincipal;
+    onChainPrincipalCommitmentAmount === principalCommitmentAmount;
+  const hasOnChainProofBinding = Boolean(isCompliant && onChainPrincipalCommitmentAmount > 0n);
+  const displayedProofBound = proofMatchesPrincipal || hasOnChainProofBinding;
   const principalNumber = Number(principal || 0);
   const propertyValue = Number(selectedProperty?.valuation || 0);
   const ltvPercent = propertyValue ? (principalNumber / propertyValue) * 100 : 0;
   const ltvSafe = principalAmount > 0n && ltvPercent <= 80;
   const maxPrincipal = Math.floor(propertyValue * 0.8);
+  const borrowHeadroom = Math.max(0, maxPrincipal - principalNumber);
+  const ltvRemaining = Math.max(0, 80 - ltvPercent);
+  const latestProofAmountLabel = proofMatchesPrincipal
+    ? formatCurrency(proofPrincipal)
+    : hasOnChainProofBinding
+      ? t("onChainProofBound")
+      : t("noProofGenerated");
+  const complianceProofAmountLabel = proofMatchesPrincipal
+    ? formatCurrency(proofPrincipal)
+    : hasOnChainProofBinding
+      ? t("onChainProofBound")
+      : t("proofRequiredForLoan");
+  const latestProofMeta = effectivePrincipalCommitmentAmount > 0n
+    ? `${
+        proofMatchesPrincipal ? t("sessionProofAmount") : t("onChainProofAmountUnknown")
+      }: ${shortField(effectivePrincipalCommitmentAmount)}`
+    : t("proofRequiredForLoan");
+  const proofReuseNote = hasOnChainProofBinding && !proofMatchesPrincipal
+    ? t("onChainProofReuseHint")
+    : t("loanWorkflowNote");
   const canVerify = Boolean(
     selectedProperty &&
       oracleHealth.ok &&
@@ -682,8 +781,7 @@ function App() {
       contractsReady &&
       isVerified &&
       isCompliant &&
-      proofMatchesPrincipal &&
-      principalCommitmentAmount > 0n &&
+      displayedProofBound &&
       !activeLoanExists &&
       isSelectedOwned &&
       !writing
@@ -691,15 +789,16 @@ function App() {
   const canApproveLoan = Boolean(
     isConnected &&
       walletNetworkReady &&
-      contractsReady &&
+      lendingReady &&
       isLoanOfficer &&
       currentLoan?.state === 0 &&
+      loanApprovalReady &&
       !writing
   );
   const canRejectLoan = Boolean(
     isConnected &&
       walletNetworkReady &&
-      contractsReady &&
+      lendingReady &&
       isLoanOfficer &&
       currentLoan?.state === 0 &&
       !writing
@@ -707,7 +806,7 @@ function App() {
   const canRepayLoan = Boolean(
     isConnected &&
       walletNetworkReady &&
-      contractsReady &&
+      lendingReady &&
       currentLoan?.state === 1 &&
       currentLoan?.borrower?.toLowerCase() === address?.toLowerCase() &&
       !writing
@@ -715,7 +814,7 @@ function App() {
   const canCancelLoan = Boolean(
     isConnected &&
       walletNetworkReady &&
-      contractsReady &&
+      lendingReady &&
       currentLoan?.state === 0 &&
       currentLoan?.borrower?.toLowerCase() === address?.toLowerCase() &&
       !writing
@@ -727,9 +826,6 @@ function App() {
         : [],
     [loanPortfolio.loans, address]
   );
-  const selectedLoanProperty = currentLoan
-    ? properties.find((property) => propertyKey(property.propertyId) === currentLoan.propertyId)
-    : selectedProperty;
   const approvalTabs = [
     { id: "requested", state: 0, label: "requested" },
     { id: "approved", state: 1, label: "approved" },
@@ -761,8 +857,29 @@ function App() {
     }
   ];
   const readinessScore = readinessItems.filter((item) => item.ready).length;
+  const readinessPercent = Math.round((readinessScore / Math.max(readinessItems.length, 1)) * 100);
   const isAdmin = Boolean(isOracleAdmin || isLendingAdmin);
   const isBorrower = Boolean(isConnected && ownedProperties.length > 0);
+
+  useEffect(() => {
+    let mounted = true;
+    const role = isAdmin ? "admin" : isLoanOfficer ? "loanOfficer" : "";
+    if (!isConnected || !role) {
+      setPrivilegedProperties([]);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    getPropertiesForRole(network, role).then((items) => {
+      if (mounted) setPrivilegedProperties(items);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAdmin, isConnected, isLoanOfficer, network]);
+
   const roleSummary = [
     isBorrower ? t("roleBorrower") : null,
     isOracleOperator ? t("roleOracle") : null,
@@ -774,13 +891,11 @@ function App() {
     ...(isAdmin || !isConnected
       ? [{ id: "overview", icon: Home, label: "navOverview", title: "consoleTitle" }]
       : []),
-    ...(isBorrower
+    ...(isConnected
       ? [
-          { id: "properties", icon: Building2, label: "navMyProperties", title: "myPropertiesViewTitle" },
           { id: "verification", icon: Building2, label: "navVerification", title: "verificationViewTitle" },
           { id: "compliance", icon: ShieldCheck, label: "navCompliance", title: "complianceViewTitle" },
-          { id: "loan", icon: CircleDollarSign, label: "navLoan", title: "loanViewTitle" },
-          { id: "loanHistory", icon: WalletCards, label: "navLoanHistory", title: "loanHistoryViewTitle" }
+          { id: "loan", icon: CircleDollarSign, label: "navLoan", title: "loanViewTitle" }
         ]
       : []),
     ...(isLoanOfficer
@@ -790,7 +905,7 @@ function App() {
       ? [{ id: "admin", icon: UserRoundCog, label: "navAdmin", title: "adminViewTitle" }]
       : []),
     ...(isAdmin ? [{ id: "operations", icon: Cpu, label: "navOperations", title: "operationsViewTitle" }] : []),
-    { id: "settings", icon: Settings, label: "navSettings", title: "settingsViewTitle" }
+    ...(isAdmin ? [{ id: "settings", icon: Settings, label: "navSettings", title: "settingsViewTitle" }] : [])
   ];
   const navItems = baseNavItems;
   const activeNav = navItems.find((item) => item.id === activeView) || navItems[0];
@@ -798,6 +913,7 @@ function App() {
   useEffect(() => {
     if (!isConnected) {
       setActiveView("overview");
+      setWorkspaceEntered(false);
       setSelectedLoanId(null);
       setPrincipalCommitment("");
       setProofPrincipal("");
@@ -810,6 +926,18 @@ function App() {
       setActiveView(navItems[0]?.id || "settings");
     }
   }, [activeView, navItems]);
+
+  useEffect(() => {
+    setOwnedProperties([]);
+    setPrivilegedProperties([]);
+    setSelectedLoanId(null);
+    setPrincipalCommitment("");
+    setProofPrincipal("");
+    setProofPropertyKey("");
+    setContractHealth({});
+    setChainRecords({ loading: false, rows: [] });
+    setRoleAudit({ loading: false, rows: [] });
+  }, [network]);
 
   const stepItems = [
     {
@@ -926,8 +1054,8 @@ function App() {
     }
   ];
 
-  const verificationPassRate = properties.length
-    ? Math.round((properties.filter(passesVerificationRules).length / properties.length) * 100)
+  const verificationPassRate = knownProperties.length
+    ? Math.round((knownProperties.filter(passesVerificationRules).length / knownProperties.length) * 100)
     : 0;
   const loanStats = loanPortfolio.loans.reduce(
     (stats, loan) => {
@@ -955,22 +1083,18 @@ function App() {
     { label: t("loanProperty"), value: currentLoan ? shortHash(currentLoan.propertyId) : shortHash(selectedKey) },
     { label: t("borrower"), value: currentLoan ? shortHash(currentLoan.borrower) : walletLabel },
     {
-      label: t("proofAmount"),
-      value: currentLoan ? t("hiddenOnChain") : proofPrincipal ? formatCurrency(proofPrincipal) : t("proofRequiredForLoan")
+      label: t("valuationCommitment"),
+      value: formattedLoanRecord.valuationCommitment
     },
     {
       label: t("principalCommitment"),
-      value: currentLoan ? shortField(currentLoan.principalCommitment) : shortField(principalCommitment)
+      value: currentLoan ? shortField(currentLoan.principalCommitment) : shortField(effectivePrincipalCommitmentAmount)
     },
     { label: t("interestRate"), value: currentLoan ? `${Number(currentLoan.interestRateBps) / 100}%` : "6.5%" },
     { label: t("term"), value: currentLoan ? `${Number(currentLoan.termDays)} ${t("days")}` : t("termValue") },
     {
       label: t("activeCollateralLock"),
-      value: activeLoanExists ? `#${activeLoanId.toString()}` : t("none")
-    },
-    {
-      label: t("proofBinding"),
-      value: displayedProofBound ? t("matched") : t("notMatched")
+      value: collateralLockLabel
     },
     { label: t("requestedAt"), value: currentLoan ? formatTimestamp(currentLoan.requestedAt) : "-" },
     { label: t("approvedAt"), value: currentLoan?.approvedAt ? formatTimestamp(currentLoan.approvedAt) : "-" },
@@ -1012,7 +1136,7 @@ function App() {
 
   function selectLoanRecord(loan) {
     setSelectedLoanId(loan.id.toString());
-    const matchedProperty = properties.find(
+    const matchedProperty = knownProperties.find(
       (property) => propertyKey(property.propertyId) === loan.propertyId
     );
     if (matchedProperty) setSelectedId(matchedProperty.propertyId);
@@ -1025,12 +1149,23 @@ function App() {
     return t(defaultKey);
   }
 
+  async function handleSwitchWalletNetwork() {
+    if (!switchChainAsync) return;
+    try {
+      await switchChainAsync({ chainId: targetChainId });
+      pushActivity("chain", t("walletNetworkSwitched"));
+    } catch (error) {
+      pushActivity("error", error.shortMessage || error.message);
+    }
+  }
+
   const refreshChainState = useCallback(async () => {
     await Promise.allSettled([
       refetchRecord(),
       refetchNextLoanId(),
       refetchActiveLoan(),
       refetchPropertyLoanIds(),
+      refetchLoanRecord(),
       refetchOracleAdminRole(),
       refetchLendingAdminRole(),
       refetchLoanOfficerRole(),
@@ -1042,6 +1177,7 @@ function App() {
     refetchNextLoanId,
     refetchActiveLoan,
     refetchPropertyLoanIds,
+    refetchLoanRecord,
     refetchOracleAdminRole,
     refetchLendingAdminRole,
     refetchLoanOfficerRole,
@@ -1194,7 +1330,7 @@ function App() {
       );
       return;
     }
-    await runOracle(
+    const result = await runOracle(
       "/verify",
       {
         propertyId: selectedProperty.propertyId,
@@ -1203,6 +1339,14 @@ function App() {
       },
       "Verification"
     );
+    if (result) {
+      setVerificationDialog({
+        ok: Boolean(result.verified),
+        propertyId: result.propertyId || selectedProperty.propertyId,
+        reasons: result.evaluation?.reasons || result.reasons || [],
+        txHash: result.txHash || ""
+      });
+    }
   }
 
   async function handleCompliance() {
@@ -1231,11 +1375,23 @@ function App() {
       setPrincipalCommitment(result.principalCommitment);
       setProofPrincipal(principal);
       setProofPropertyKey(selectedKey || "");
+      if (!activeLoanExists) setSelectedLoanId(null);
+    }
+    if (result) {
+      setComplianceDialog({
+        ok: Boolean(result.compliant),
+        propertyId: result.propertyId || selectedProperty.propertyId,
+        ltvBps: result.ltvBps,
+        maxPrincipal: result.maxPrincipal,
+        principalCommitment: result.principalCommitment,
+        reasons: result.reasons || result.evaluation?.reasons || [],
+        txHash: result.txHash || ""
+      });
     }
   }
 
   async function writeLoan(functionName, args, value = 0n) {
-    if (!contractsReady) {
+    if (!lendingReady) {
       pushActivity("error", t("contractsMissing"));
       return null;
     }
@@ -1268,15 +1424,15 @@ function App() {
     if (!canRequestLoan) {
       pushActivity(
         "error",
-        principalAmount <= 0n
+        principalAmount <= 0n && effectivePrincipalCommitmentAmount === 0n
           ? t("invalidPrincipal")
           : !isVerified
             ? t("verificationRequired")
             : !isCompliant
               ? t("complianceRequired")
-              : principalCommitmentAmount === 0n
-                ? t("proofRequiredForLoan")
-                : !proofMatchesPrincipal
+                : effectivePrincipalCommitmentAmount === 0n
+                  ? t("proofRequiredForLoan")
+                : !displayedProofBound
                 ? t("proofMismatch")
                   : activeLoanExists
                     ? t("activeLoanExists")
@@ -1287,13 +1443,13 @@ function App() {
       return;
     }
     const requestedId = nextLoanId ?? 0n;
-    const hash = await writeLoan("requestLoan", [selectedKey, principalCommitmentAmount]);
+    const hash = await writeLoan("requestLoan", [selectedKey, effectivePrincipalCommitmentAmount]);
     if (hash) setSelectedLoanId(requestedId.toString());
   }
 
   async function handleApproveLoan() {
     if (!canApproveLoan) {
-      pushActivity("error", currentLoan ? t("approvalUnavailable") : t("requestRequired"));
+      pushActivity("error", loanApprovalBlockReason || (currentLoan ? t("approvalUnavailable") : t("requestRequired")));
       return;
     }
     await writeLoan("approveLoan", [currentLoan.id]);
@@ -1320,7 +1476,8 @@ function App() {
       pushActivity("error", currentLoan ? t("cancelUnavailable") : t("requestRequired"));
       return;
     }
-    await writeLoan("cancelLoan", [currentLoan.id]);
+    const hash = await writeLoan("cancelLoan", [currentLoan.id]);
+    if (hash) setSelectedLoanId(null);
   }
 
   async function handleRoleUpdate() {
@@ -1387,32 +1544,22 @@ function App() {
       <section className={`asset-card panel ${compact ? "compact" : ""}`}>
         <div className="asset-visual">
           <img src="/property-hero.png" alt="" />
-          <span>{selectedProperty?.propertyId || "PROP-001"}</span>
+          <span>{selectedProperty?.propertyId || "-"}</span>
         </div>
         <div className="asset-copy">
           <div className="asset-title-row">
             <h2>{t("assetTitle")}</h2>
-            <label className="asset-select">
-              <span>{t("chooseAsset")}</span>
-              <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
-                {visibleProperties.map((property) => (
-                  <option value={property.propertyId} key={property.propertyId}>
-                    {property.propertyId} · {property.address}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <span className="mini-pill">{shortHash(selectedKey)}</span>
           </div>
+          <p className="asset-address">
+            <Home size={16} />
+            {selectedProperty?.address || "-"}
+          </p>
           <div className="asset-meta">
             <div>
               <Database size={24} />
               <span>{t("propertyId")}</span>
               <strong>{selectedProperty?.propertyId || "-"}</strong>
-            </div>
-            <div>
-              <Network size={24} />
-              <span>{t("propertyKey")}</span>
-              <strong>{shortHash(selectedKey)}</strong>
             </div>
             <div>
               <Network size={24} />
@@ -1424,27 +1571,62 @@ function App() {
               <span>{t("valuation")}</span>
               <strong>{formatCurrency(selectedProperty?.valuation)}</strong>
             </div>
-          </div>
-          {!compact && (
-            <p className="asset-address">
-              {selectedProperty?.address || "-"} · {t("registryStatus")}: {selectedProperty?.status || "-"}
-            </p>
-          )}
-          <div className="asset-status-row">
-            <span className={`status-chip ${isVerified ? "green" : "muted"}`}>
+            <div>
               <ShieldCheck size={18} />
-              {isVerified ? t("statusVerified") : t("statusUnverified")}
-            </span>
-            <span className={`status-chip ${isCompliant ? "green" : "muted"}`}>
-              <Check size={18} />
-              {isCompliant ? t("statusCompliant") : t("statusPending")}
-            </span>
-            <span className={`status-chip ${isVerified && isCompliant ? "blue" : "muted"}`}>
-              <Zap size={18} />
-              {t("loanEligible")}
-            </span>
+              <span>{t("registryStatus")}</span>
+              <strong>{selectedProperty?.status || "-"}</strong>
+            </div>
+            <div>
+              <LockKeyhole size={18} />
+              <span>{t("titleClear")}</span>
+              <strong>{selectedProperty?.noEncumbrance ? t("yes") : t("no")}</strong>
+            </div>
+            <div>
+              <WalletCards size={18} />
+              <span>{t("propertyOwner")}</span>
+              <strong>{shortHash(selectedProperty?.ownerAddress)}</strong>
+            </div>
           </div>
         </div>
+      </section>
+    );
+  }
+
+  function renderPropertySwitcher() {
+    if (visibleProperties.length === 0) {
+      return (
+        <section className="property-switcher panel">
+          <p className="helper-copy">{isConnected ? t("noOwnedProperties") : t("connectToSeeProperties")}</p>
+        </section>
+      );
+    }
+
+    return (
+      <section className="property-switcher panel">
+        <label className="property-select-control">
+          <span>{t("chooseAsset")}</span>
+          <div className="property-select-shell">
+            <Building2 size={20} />
+            <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+              {visibleProperties.map((property) => (
+                <option value={property.propertyId} key={property.propertyId}>
+                  {property.propertyId} · {property.address}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={18} />
+          </div>
+        </label>
+      </section>
+    );
+  }
+
+  function renderBorrowerFlowHeader({ switchable = false } = {}) {
+    return (
+      <section className="borrower-flow-header">
+        {switchable && renderPropertySwitcher()}
+        {renderAssetCard()}
+        {renderStepsPanel()}
       </section>
     );
   }
@@ -1491,48 +1673,87 @@ function App() {
     );
   }
 
-  function renderProofPanel(compact = false) {
+  function renderComplianceWorkbench() {
     return (
-      <article className={`proof-panel panel ${compact ? "compact-card" : ""}`}>
+      <article className="compliance-workbench panel">
         <div className="panel-heading">
-          <h2>{t("complianceTitle")}</h2>
-          <Info size={16} />
+          <h2>{t("complianceWorkbench")}</h2>
+          <ShieldCheck size={16} />
         </div>
-        <div className="proof-content">
-          <div className="shield-orbit">
-            <LockKeyhole size={compact ? 32 : 42} />
-          </div>
-          <div className="proof-copy">
-            <span>{t("ruleLabel")}</span>
-            <strong>LTV ≤ 80%</strong>
-            <small>{t("publicResult")}</small>
-            <div className={`proof-status ${isCompliant ? "ok" : ""}`}>
-              {isCompliant ? t("proofVerified") : t("statusPending")}
-              <Check size={18} />
+        <div className="proof-command-strip">
+          <div className="proof-command-title">
+            <span className="proof-command-icon">
+              <LockKeyhole size={20} />
+            </span>
+            <div>
+              <span>{t("latestProofAmount")}</span>
+              <strong>{latestProofAmountLabel}</strong>
+              <small>{latestProofMeta}</small>
             </div>
-            {!compact && (
-              <>
-                <small>{t("privateFields")}</small>
-                <div className="private-fields">
-                  <span>
-                    <LockKeyhole size={15} />
-                    {t("propertyValue")} ******
-                  </span>
-                  <span>
-                    <LockKeyhole size={15} />
-                    {t("loanAmount")} ******
-                  </span>
-                </div>
-              </>
-            )}
+          </div>
+          <div className={`proof-studio-status ${isCompliant ? "ok" : ltvSafe ? "ready" : ""}`}>
+            <Check size={18} />
+            <span>{displayedProofBound ? t("matched") : t("notMatched")}</span>
           </div>
         </div>
-        {!compact && (
-          <div className="privacy-note">
-            <LockKeyhole size={16} />
-            {t("privacyNote")}
+        <div className="proof-studio-grid">
+          <div className="proof-risk-panel">
+            <div className="risk-meter-compact">
+              <span>{t("currentLtv")}</span>
+              <strong className={ltvSafe ? "green-text" : "warn-text"}>{ltvPercent.toFixed(1)}%</strong>
+            </div>
+            <div className="risk-track">
+              <span style={{ width: `${Math.min(100, ltvPercent)}%` }} />
+              <i />
+            </div>
+            <small>{t("ltvRemaining")}: {ltvRemaining.toFixed(1)}%</small>
           </div>
-        )}
+          <div className="proof-metrics">
+            <div>
+              <span>{t("maxBorrow")}</span>
+              <strong>{formatCurrency(maxPrincipal)}</strong>
+            </div>
+            <div>
+              <span>{t("principal")}</span>
+              <strong>{formatCurrency(principal)}</strong>
+            </div>
+            <div>
+              <span>{t("borrowHeadroom")}</span>
+              <strong className={ltvSafe ? "green-text" : "warn-text"}>{formatCurrency(borrowHeadroom)}</strong>
+            </div>
+            <div>
+              <span>{t("proofBinding")}</span>
+              <strong className={displayedProofBound ? "green-text" : "warn-text"}>
+                {displayedProofBound ? t("matched") : t("notMatched")}
+              </strong>
+            </div>
+          </div>
+        </div>
+        <div className="proof-input-row">
+          <div className="proof-principal-field">
+            <label htmlFor="principal-input">{t("principal")}</label>
+            <input
+              id="principal-input"
+              value={principal}
+              inputMode="numeric"
+              onChange={(event) => setPrincipal(event.target.value.replace(/\D/g, ""))}
+            />
+          </div>
+        </div>
+        <div className="proof-action-row">
+          <button
+            className="primary-action"
+            onClick={handleCompliance}
+            disabled={!canComply || busyAction === "Compliance"}
+          >
+            {busyAction === "Compliance" ? <Loader2 className="spin" size={17} /> : <ShieldCheck size={17} />}
+            {t("generateProof")}
+          </button>
+          <div className="proof-action-note">
+            <strong>{t("publicResult")}</strong>
+            <span>{t("complianceStudioCopy")}</span>
+          </div>
+        </div>
       </article>
     );
   }
@@ -1540,19 +1761,19 @@ function App() {
   function renderLoanPanel(compact = false) {
     const activeLockLabel = activeLoanExists ? `#${activeLoanId.toString()}` : t("none");
     return (
-      <article className={`loan-panel panel ${compact ? "compact-card" : ""}`}>
+      <article className={`loan-panel panel loan-request-console ${compact ? "compact-card" : ""}`}>
         <div className="panel-heading">
           <h2>{t("loanTitle")}</h2>
           <span className="status-chip amber">{approvalState}</span>
         </div>
-        <div className="loan-fields">
+        <div className="loan-command-strip">
           <div>
-            <span>{t("proofAmount")}</span>
-            <strong>{proofPrincipal ? formatCurrency(proofPrincipal) : t("proofRequiredForLoan")}</strong>
+            <span>{t("propertyKey")}</span>
+            <strong>{shortHash(selectedKey)}</strong>
           </div>
           <div>
-            <span>{t("loanId")}</span>
-            <strong>{currentLoan ? `#${currentLoan.id.toString()}` : t("systemAssignedLoanId")}</strong>
+            <span>{t("loanState")}</span>
+            <strong>{loanStateLabel}</strong>
           </div>
           <div>
             <span>{t("proofBinding")}</span>
@@ -1560,9 +1781,19 @@ function App() {
               {displayedProofBound ? t("matched") : t("notMatched")}
             </strong>
           </div>
+        </div>
+        <div className="loan-amount-board">
           <div>
-            <span>{t("propertyKey")}</span>
-            <strong>{shortHash(selectedKey)}</strong>
+            <span>{t("complianceProofAmount")}</span>
+            <strong>{complianceProofAmountLabel}</strong>
+            <small>{proofReuseNote}</small>
+          </div>
+          <CircleDollarSign size={34} />
+        </div>
+        <div className="loan-fields">
+          <div>
+            <span>{t("loanId")}</span>
+            <strong>{currentLoan ? `#${currentLoan.id.toString()}` : t("systemAssignedLoanId")}</strong>
           </div>
           <div>
             <span>{t("interestRate")}</span>
@@ -1573,28 +1804,106 @@ function App() {
             <strong>{t("termValue")}</strong>
           </div>
           <div>
-            <span>{t("loanState")}</span>
-            <strong>{loanStateLabel}</strong>
-          </div>
-          <div>
-            <span>{t("currentLoan")}</span>
-            <strong>{currentLoan ? formatTimestamp(currentLoan.requestedAt) : "-"}</strong>
-          </div>
-          <div>
             <span>{t("activeCollateralLock")}</span>
             <strong>{activeLockLabel}</strong>
           </div>
         </div>
         {!displayedProofBound && (
           <p className="helper-copy compact-note warn-text">
-            {currentLoan ? t("proofBindingAuditHint") : t("regenerateProofHint")}
+            {t("regenerateProofHint")}
           </p>
         )}
         {activeLoanExists && (
           <p className="helper-copy compact-note warn-text">{t("activeLoanLockHint")}</p>
         )}
-        {!compact && <p className="helper-copy compact-note">{t("loanWorkflowNote")}</p>}
         {renderLoanActionButtons(compact ? "compact-actions" : "")}
+      </article>
+    );
+  }
+
+  function renderLoanDetailPanel() {
+    const loanStatusTone =
+      currentLoan?.state === 1 || currentLoan?.state === 2
+        ? "green"
+        : currentLoan?.state === 3 || currentLoan?.state === 4
+          ? "muted"
+          : currentLoan
+            ? "amber"
+            : "muted";
+    const loanRecordSections = [
+      {
+        title: t("loanRecordIdentity"),
+        icon: WalletCards,
+        items: [
+          { label: t("loanId"), value: currentLoan ? `#${currentLoan.id.toString()}` : t("systemAssignedLoanId") },
+          { label: t("propertyId"), value: selectedLoanProperty?.propertyId || "-" },
+          { label: t("loanProperty"), value: currentLoan ? shortHash(currentLoan.propertyId) : shortHash(selectedKey) },
+          { label: t("borrower"), value: currentLoan ? shortHash(currentLoan.borrower) : walletLabel }
+        ]
+      },
+      {
+        title: t("loanRecordCommitments"),
+        icon: Database,
+        items: [
+          { label: t("valuationCommitment"), value: formattedLoanRecord.valuationCommitment },
+          {
+            label: t("principalCommitment"),
+            value: currentLoan ? shortField(currentLoan.principalCommitment) : shortField(effectivePrincipalCommitmentAmount)
+          },
+          { label: t("activeCollateralLock"), value: collateralLockLabel }
+        ]
+      },
+      {
+        title: t("loanRecordTerms"),
+        icon: CircleDollarSign,
+        items: [
+          { label: t("loanState"), value: loanStateLabel },
+          { label: t("interestRate"), value: currentLoan ? `${Number(currentLoan.interestRateBps) / 100}%` : "6.5%" },
+          { label: t("term"), value: currentLoan ? `${Number(currentLoan.termDays)} ${t("days")}` : t("termValue") },
+          { label: t("requestedAt"), value: currentLoan ? formatTimestamp(currentLoan.requestedAt) : "-" },
+          { label: t("approvedAt"), value: currentLoan?.approvedAt ? formatTimestamp(currentLoan.approvedAt) : "-" },
+          { label: t("repaidAt"), value: currentLoan?.repaidAt ? formatTimestamp(currentLoan.repaidAt) : "-" }
+        ]
+      }
+    ];
+
+    return (
+      <article className="record-card panel loan-record-card">
+        <div className="panel-heading">
+          <h2>{t("loanDetails")}</h2>
+          <CircleDollarSign size={16} />
+        </div>
+        <div className="record-summary-strip">
+          <span className={`status-chip ${loanStatusTone}`}>
+            <CircleDollarSign size={15} />
+            {currentLoan ? loanStateLabel : t("loanDraft")}
+          </span>
+          <span className={`status-chip ${loanCollateralLocked || activeLoanExists ? "green" : "muted"}`}>
+            <LockKeyhole size={15} />
+            {loanCollateralLocked || activeLoanExists ? t("collateralLocked") : t("collateralUnlocked")}
+          </span>
+        </div>
+        <div className="record-section-list">
+          {loanRecordSections.map((section) => {
+            const SectionIcon = section.icon;
+            return (
+              <section className="record-section" key={section.title}>
+                <div className="record-section-title">
+                  <SectionIcon size={16} />
+                  <strong>{section.title}</strong>
+                </div>
+                <dl className="record-list">
+                  {section.items.map((item) => (
+                    <div key={item.label}>
+                      <dt>{item.label}</dt>
+                      <dd>{item.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            );
+          })}
+        </div>
       </article>
     );
   }
@@ -1635,46 +1944,72 @@ function App() {
   }
 
   function renderRecordCard() {
+    const recordSections = [
+      {
+        title: t("recordAssetIdentity"),
+        icon: Database,
+        items: [
+          { label: t("propertyKey"), value: shortHash(selectedKey) },
+          { label: t("statusVerified"), value: isVerified ? t("yes") : t("no") },
+          { label: t("statusCompliant"), value: isCompliant ? t("yes") : t("no") }
+        ]
+      },
+      {
+        title: t("recordVerificationProof"),
+        icon: FileCheck2,
+        items: [
+          { label: t("registryEvidenceFingerprint"), value: formattedRecord.evidenceHash },
+          { label: t("valuationCommitment"), value: formattedRecord.valuationCommitment }
+        ]
+      },
+      {
+        title: t("recordComplianceProof"),
+        icon: ShieldCheck,
+        items: [
+          { label: t("zkProofFingerprint"), value: formattedRecord.complianceHash },
+          { label: t("principalCommitment"), value: formattedRecord.principalCommitment },
+          { label: t("updated"), value: formattedRecord.lastUpdated }
+        ]
+      }
+    ];
+
     return (
-      <article className="record-card panel">
+      <article className="record-card panel onchain-record-card">
         <div className="panel-heading">
           <h2>{t("onChainRecord")}</h2>
           <Activity size={16} />
         </div>
-        <dl className="record-list">
-          <div>
-            <dt>{t("propertyKey")}</dt>
-            <dd>{shortHash(selectedKey)}</dd>
-          </div>
-          <div>
-            <dt>{t("statusVerified")}</dt>
-            <dd>{isVerified ? t("yes") : t("no")}</dd>
-          </div>
-          <div>
-            <dt>{t("statusCompliant")}</dt>
-            <dd>{isCompliant ? t("yes") : t("no")}</dd>
-          </div>
-          <div>
-            <dt>{t("evidence")}</dt>
-            <dd>{formattedRecord.evidenceHash}</dd>
-          </div>
-          <div>
-            <dt>{t("valuationCommitment")}</dt>
-            <dd>{formattedRecord.valuationCommitment}</dd>
-          </div>
-          <div>
-            <dt>{t("principalCommitment")}</dt>
-            <dd>{formattedRecord.principalCommitment}</dd>
-          </div>
-          <div>
-            <dt>{t("proof")}</dt>
-            <dd>{formattedRecord.complianceHash}</dd>
-          </div>
-          <div>
-            <dt>{t("updated")}</dt>
-            <dd>{formattedRecord.lastUpdated}</dd>
-          </div>
-        </dl>
+        <div className="record-summary-strip">
+          <span className={`status-chip ${isVerified ? "green" : "muted"}`}>
+            <Check size={15} />
+            {isVerified ? t("statusVerified") : t("statusUnverified")}
+          </span>
+          <span className={`status-chip ${isCompliant ? "green" : "muted"}`}>
+            <ShieldCheck size={15} />
+            {isCompliant ? t("statusCompliant") : t("statusPending")}
+          </span>
+        </div>
+        <div className="record-section-list">
+          {recordSections.map((section) => {
+            const SectionIcon = section.icon;
+            return (
+              <section className="record-section" key={section.title}>
+                <div className="record-section-title">
+                  <SectionIcon size={16} />
+                  <strong>{section.title}</strong>
+                </div>
+                <dl className="record-list">
+                  {section.items.map((item) => (
+                    <div key={item.label}>
+                      <dt>{item.label}</dt>
+                      <dd>{item.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            );
+          })}
+        </div>
       </article>
     );
   }
@@ -1765,47 +2100,6 @@ function App() {
     );
   }
 
-  function renderMyProperties() {
-    const rows = visibleProperties;
-    return (
-      <div className="workspace-view view-scroll">
-        <section className="view-grid two-col">
-          {renderAssetCard()}
-          <article className="operation-panel panel">
-            <div className="panel-heading">
-              <h2>{t("myProperties")}</h2>
-              <Building2 size={16} />
-            </div>
-            <div className="property-list">
-              {rows.length === 0 ? (
-                <p className="helper-copy">{isConnected ? t("noOwnedProperties") : t("connectToSeeProperties")}</p>
-              ) : (
-                rows.map((property) => {
-                  const key = propertyKey(property.propertyId);
-                  return (
-                    <button
-                      className={`property-row ${selectedId === property.propertyId ? "active" : ""}`}
-                      key={property.propertyId}
-                      onClick={() => setSelectedId(property.propertyId)}
-                    >
-                      <strong>{property.propertyId}</strong>
-                      <span>{property.address}</span>
-                      <small>{t("propertyKey")}: {shortHash(key)}</small>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </article>
-        </section>
-        <section className="view-grid two-col lower">
-          {renderRecordCard()}
-          {renderActivityFeed()}
-        </section>
-      </div>
-    );
-  }
-
   function renderMyLoanLedger() {
     const stateKeys = ["requested", "approved", "repaid", "rejected", "cancelled"];
     return (
@@ -1818,12 +2112,13 @@ function App() {
         rowKey={(loan) => loan.id.toString()}
         selectedLoanId={selectedLoanId}
         selectLoanRecord={selectLoanRecord}
+        pageSize={5}
         columns={[
           { key: "id", label: t("loanId"), strong: true, render: (loan) => `#${loan.id.toString()}` },
           {
             key: "propertyCode",
             label: t("propertyId"),
-            render: (loan) => properties.find((property) => propertyKey(property.propertyId) === loan.propertyId)?.propertyId || "-"
+            render: (loan) => knownProperties.find((property) => propertyKey(property.propertyId) === loan.propertyId)?.propertyId || "-"
           },
           { key: "propertyId", label: t("loanProperty"), render: (loan) => shortHash(loan.propertyId) },
           { key: "state", label: t("state"), render: (loan) => t(stateKeys[loan.state] || "loanReadError") },
@@ -1864,7 +2159,7 @@ function App() {
                 <p className="helper-copy">{loanPortfolio.loading ? t("loading") : t("noLoansForStatus")}</p>
               ) : (
                 filteredLoans.map((loan) => {
-                  const matchedProperty = properties.find(
+                  const matchedProperty = knownProperties.find(
                     (property) => propertyKey(property.propertyId) === loan.propertyId
                   );
                   return (
@@ -1890,16 +2185,21 @@ function App() {
             </div>
             <DetailList items={loanDetailItems} />
             {currentLoan?.state === 0 ? (
-              <div className="view-actions-row">
-                <button className="gold-action" onClick={handleApproveLoan} disabled={!canApproveLoan}>
-                  <BadgeCheck size={17} />
-                  {busyAction === "approveLoan" ? actionText("approveLoan") : t("approveLoan")}
-                </button>
-                <button className="outline-action" onClick={() => handleRejectLoan()} disabled={!canRejectLoan}>
-                  <XCircle size={17} />
-                  {busyAction === "rejectLoan" ? actionText("rejectLoan") : t("rejectLoan")}
-                </button>
-              </div>
+              <>
+                {!loanApprovalReady && (
+                  <p className="helper-copy compact-note warn-text">{loanApprovalBlockReason}</p>
+                )}
+                <div className="view-actions-row">
+                  <button className="gold-action" onClick={handleApproveLoan} disabled={!canApproveLoan}>
+                    <BadgeCheck size={17} />
+                    {busyAction === "approveLoan" ? actionText("approveLoan") : t("approveLoan")}
+                  </button>
+                  <button className="outline-action" onClick={() => handleRejectLoan()} disabled={!canRejectLoan}>
+                    <XCircle size={17} />
+                    {busyAction === "rejectLoan" ? actionText("rejectLoan") : t("rejectLoan")}
+                  </button>
+                </div>
+              </>
             ) : (
               <p className="helper-copy">{t("readOnlyLoanStatus")}</p>
             )}
@@ -2109,8 +2409,8 @@ function App() {
   function renderVerification() {
     return (
       <div className="workspace-view view-scroll">
-        <section className="view-grid two-col">
-          {renderAssetCard()}
+        {renderBorrowerFlowHeader({ switchable: true })}
+        <section className="view-grid two-col verification-work-grid">
           <article className="operation-panel panel">
             <div className="panel-heading">
               <h2>{t("verificationRules")}</h2>
@@ -2132,18 +2432,11 @@ function App() {
                 disabled={!canVerify || busyAction === "Verification"}
               >
                 {busyAction === "Verification" ? <Loader2 className="spin" size={17} /> : <FileCheck2 size={17} />}
-                {t("runVerification")}
-              </button>
-              <button className="outline-action" onClick={() => refreshAppState()}>
-                <RefreshCw size={17} />
-                {t("refresh")}
+                {isVerified ? t("refreshVerification") : t("runVerification")}
               </button>
             </div>
           </article>
-        </section>
-        <section className="view-grid two-col lower">
           {renderRecordCard()}
-          {renderActivityFeed()}
         </section>
       </div>
     );
@@ -2152,56 +2445,10 @@ function App() {
   function renderCompliance() {
     return (
       <div className="workspace-view view-scroll">
-        <section className="view-grid two-col">
-          {renderProofPanel()}
-          <article className="operation-panel panel">
-            <div className="panel-heading">
-              <h2>{t("complianceCalculator")}</h2>
-              <ShieldCheck size={16} />
-            </div>
-            <div className="ltv-meter">
-              <div>
-                <span>{t("currentLtv")}</span>
-                <strong className={ltvSafe ? "green-text" : "warn-text"}>{ltvPercent.toFixed(1)}%</strong>
-              </div>
-              <div className="meter-track">
-                <span style={{ width: `${Math.min(100, ltvPercent)}%` }} />
-              </div>
-              <small>{t("maxBorrow")}: {formatCurrency(maxPrincipal)}</small>
-            </div>
-            <div className="loan-fields single">
-              <label>
-                <span>{t("principal")}</span>
-                <input
-                  value={principal}
-                  inputMode="numeric"
-                  onChange={(event) => setPrincipal(event.target.value.replace(/\D/g, "") || "0")}
-                />
-              </label>
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={writeViaOracle}
-                  onChange={(event) => setWriteViaOracle(event.target.checked)}
-                />
-                <span>{t("oracleWrites")}</span>
-              </label>
-            </div>
-            <div className="view-actions-row">
-              <button
-                className="primary-action"
-                onClick={handleCompliance}
-                disabled={!canComply || busyAction === "Compliance"}
-              >
-                {busyAction === "Compliance" ? <Loader2 className="spin" size={17} /> : <ShieldCheck size={17} />}
-                {t("generateProof")}
-              </button>
-            </div>
-          </article>
-        </section>
-        <section className="view-grid two-col lower">
+        {renderBorrowerFlowHeader()}
+        <section className="view-grid two-col verification-work-grid compliance-work-grid">
+          {renderComplianceWorkbench()}
           {renderRecordCard()}
-          {renderActivityFeed()}
         </section>
       </div>
     );
@@ -2210,40 +2457,12 @@ function App() {
   function renderLoan() {
     return (
       <div className="workspace-view view-scroll">
-        {renderStepsPanel()}
-        <section className="view-grid two-col">
-          {renderAssetCard()}
+        {renderBorrowerFlowHeader()}
+        <section className="view-grid two-col loan-work-grid">
           {renderLoanPanel()}
+          {renderLoanDetailPanel()}
         </section>
-        <section className="view-grid two-col lower">
-          <article className="operation-panel panel">
-            <div className="panel-heading">
-              <h2>{t("loanDetails")}</h2>
-              <CircleDollarSign size={16} />
-            </div>
-            <DetailList items={loanDetailItems} />
-          </article>
-          {renderChainRecordExplorer()}
-        </section>
-      </div>
-    );
-  }
-
-  function renderLoanHistory() {
-    return (
-      <div className="workspace-view view-scroll">
-        <section className="view-grid two-col">
-          {renderMyLoanLedger()}
-          <article className="operation-panel panel">
-            <div className="panel-heading">
-              <h2>{t("loanDetails")}</h2>
-              <WalletCards size={16} />
-            </div>
-            <DetailList items={loanDetailItems} />
-          </article>
-        </section>
-        {renderStepsPanel(true)}
-        {renderActivityFeed(8)}
+        {renderMyLoanLedger()}
       </div>
     );
   }
@@ -2292,11 +2511,18 @@ function App() {
               </label>
               <label>
                 <span>{t("networkPreference")}</span>
-                <select value={network} onChange={(event) => setNetwork(event.target.value)}>
-                  <option value="localhost">{t("local")}</option>
-                  <option value="sepolia">{t("sepolia")}</option>
+                <select
+                  value={network}
+                  onChange={(event) => setNetwork(event.target.value)}
+                >
+                  {networkOptions.map((option) => (
+                    <option value={option.value} disabled={option.disabled} key={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
+              <p className="settings-note">{t("networkRuntimeLocked")}</p>
               <label className="toggle-row setting-toggle">
                 <input
                   type="checkbox"
@@ -2347,17 +2573,14 @@ function App() {
             <p className="helper-copy">{t("settingsProductNote")}</p>
           </article>
         </section>
-        {renderReadinessPanel()}
       </div>
     );
   }
 
   function renderActiveView() {
-    if (activeView === "properties") return renderMyProperties();
     if (activeView === "verification") return renderVerification();
     if (activeView === "compliance") return renderCompliance();
     if (activeView === "loan") return renderLoan();
-    if (activeView === "loanHistory") return renderLoanHistory();
     if (activeView === "approvals") return renderApprovals();
     if (activeView === "admin") return renderAdmin();
     if (activeView === "operations") return renderOperations();
@@ -2365,7 +2588,7 @@ function App() {
     return renderOverview();
   }
 
-  if (!isConnected) {
+  if (!isConnected || !workspaceEntered) {
     return (
       <WalletGate
         t={t}
@@ -2373,25 +2596,38 @@ function App() {
         updateLanguage={updateLanguage}
         network={network}
         setNetwork={setNetwork}
+        networkOptions={networkOptions}
         readinessItems={readinessItems}
         readinessScore={readinessScore}
         networkLabel={networkLabel}
         connectors={connectors}
         connect={connect}
+        disconnect={disconnect}
         connecting={connecting}
+        isConnected={isConnected}
         walletLabel={walletLabel}
+        onEnter={() => setWorkspaceEntered(true)}
       />
     );
   }
 
   return (
-    <main className={`dashboard-shell active-${activeView}`}>
+    <main className={`dashboard-shell active-${activeView} ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
       <aside className="sidebar">
-        <div className="brand-lockup">
-          <div className="brand-mark">
-            <Building2 size={24} />
+        <div className="sidebar-head">
+          <div className="brand-lockup">
+            <div className="brand-mark">
+              <Building2 size={24} />
+            </div>
+            <strong>{t("appTitle")}</strong>
           </div>
-          <strong>{t("appTitle")}</strong>
+          <button
+            className="sidebar-toggle"
+            onClick={() => setSidebarOpen((current) => !current)}
+            title={sidebarOpen ? t("collapseSidebar") : t("expandSidebar")}
+          >
+            {sidebarOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+          </button>
         </div>
 
         <nav className="side-nav" aria-label="Dashboard navigation">
@@ -2417,10 +2653,26 @@ function App() {
           </div>
           <p>{roleSummary.length ? roleSummary.join(" · ") : t("roleViewer")}</p>
           <p>{isConnected ? walletLabel : t("connectWallet")}</p>
-          <div className="network-pill">
-            <Network size={16} />
-            {networkLabel}
-            <span />
+          <div className="sidebar-readiness">
+            <div className="sidebar-readiness-score">
+              <div>
+                <span>{t("workspaceStatus")}</span>
+                <strong>{readinessPercent}%</strong>
+              </div>
+              <small>{readinessScore}/4 {t("readyStatus")}</small>
+            </div>
+            <div className="sidebar-readiness-list">
+              {readinessItems.map((item) => {
+                const StatusIcon = item.ready ? Check : XCircle;
+                return (
+                  <div className={item.ready ? "ready" : "missing"} key={item.label}>
+                    <StatusIcon size={14} />
+                    <span>{item.label}</span>
+                    <small>{item.detail}</small>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </aside>
@@ -2432,7 +2684,23 @@ function App() {
             <h1>{t(activeNav.title)}</h1>
           </div>
           <div className="topbar-actions">
-            <NetworkSelector network={network} setNetwork={setNetwork} t={t} />
+            <NetworkSelector
+              network={network}
+              setNetwork={setNetwork}
+              t={t}
+              options={networkOptions}
+            />
+            {isConnected && !walletNetworkReady && (
+              <button
+                className="network-sync-button"
+                onClick={handleSwitchWalletNetwork}
+                disabled={switchingChain}
+                title={t("walletNetworkMismatchHint")}
+              >
+                {switchingChain ? <Loader2 className="spin" size={16} /> : <Network size={16} />}
+                <span>{switchingChain ? t("switchingNetwork") : t("syncWalletNetwork")}</span>
+              </button>
+            )}
             <LanguageToggle language={language} updateLanguage={updateLanguage} t={t} />
             <WalletButton
               isConnected={isConnected}
@@ -2448,6 +2716,94 @@ function App() {
 
         {renderActiveView()}
       </section>
+      {verificationDialog && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setVerificationDialog(null)}>
+          <section
+            className={`result-dialog panel ${verificationDialog.ok ? "success" : "fail"}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="verification-result-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="result-dialog-icon">
+              {verificationDialog.ok ? <Check size={28} /> : <XCircle size={28} />}
+            </div>
+            <div>
+              <h2 id="verification-result-title">
+                {verificationDialog.ok ? t("verificationPassedTitle") : t("verificationFailedTitle")}
+              </h2>
+              <p>
+                {verificationDialog.ok
+                  ? t("verificationPassedCopy")
+                  : `${t("verificationFailedCopy")}: ${
+                      verificationDialog.reasons.length ? verificationDialog.reasons.join(", ") : "-"
+                    }`}
+              </p>
+              <div className="result-dialog-meta">
+                <span>{t("propertyId")}</span>
+                <strong>{verificationDialog.propertyId}</strong>
+                {verificationDialog.txHash && (
+                  <>
+                    <span>{t("latestTx")}</span>
+                    <strong>{shortHash(verificationDialog.txHash)}</strong>
+                  </>
+                )}
+              </div>
+              <button className="primary-action" onClick={() => setVerificationDialog(null)}>
+                {t("close")}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {complianceDialog && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setComplianceDialog(null)}>
+          <section
+            className={`result-dialog panel ${complianceDialog.ok ? "success" : "fail"}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="compliance-result-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="result-dialog-icon">
+              {complianceDialog.ok ? <Check size={28} /> : <XCircle size={28} />}
+            </div>
+            <div>
+              <h2 id="compliance-result-title">
+                {complianceDialog.ok ? t("compliancePassedTitle") : t("complianceFailedTitle")}
+              </h2>
+              <p>
+                {complianceDialog.ok
+                  ? t("compliancePassedCopy")
+                  : `${t("complianceFailedCopy")}: ${
+                      complianceDialog.reasons.length ? complianceDialog.reasons.join(", ") : "-"
+                    }`}
+              </p>
+              <div className="result-dialog-meta">
+                <span>{t("propertyId")}</span>
+                <strong>{complianceDialog.propertyId}</strong>
+                <span>{t("currentLtv")}</span>
+                <strong>
+                  {complianceDialog.ltvBps !== undefined
+                    ? `${(Number(complianceDialog.ltvBps) / 100).toFixed(1)}%`
+                    : `${ltvPercent.toFixed(1)}%`}
+                </strong>
+                <span>{t("principalCommitment")}</span>
+                <strong>{shortField(complianceDialog.principalCommitment)}</strong>
+                {complianceDialog.txHash && (
+                  <>
+                    <span>{t("latestTx")}</span>
+                    <strong>{shortHash(complianceDialog.txHash)}</strong>
+                  </>
+                )}
+              </div>
+              <button className="primary-action" onClick={() => setComplianceDialog(null)}>
+                {t("close")}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

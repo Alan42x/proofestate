@@ -33,13 +33,55 @@ test("GET /health returns service readiness", async () => {
 });
 
 test("GET /properties supports owner filtering", async () => {
-  const { body: allProperties } = await request("/properties");
-  assert.ok(allProperties.length > 0);
-
-  const owner = allProperties[0].ownerAddress;
+  const owner = "0x90F79bf6EB2c4f870365E785982E1f101E93b906";
   const { body: ownedProperties } = await request(`/properties?owner=${encodeURIComponent(owner)}`);
   assert.ok(ownedProperties.length > 0);
   assert.ok(ownedProperties.every((property) => property.ownerAddress.toLowerCase() === owner.toLowerCase()));
+});
+
+test("GET /properties rejects unscoped registry access", async () => {
+  const { response, body } = await request("/properties");
+  assert.equal(response.status, 400);
+  assert.match(body.error, /owner or privileged role is required/);
+});
+
+test("GET /properties allows privileged registry access for demo roles", async () => {
+  const { response, body } = await request("/properties?network=sepolia&role=loanOfficer");
+  assert.equal(response.status, 200);
+  assert.ok(body.length > 0);
+  assert.ok(body.every((property) => property.network === "sepolia"));
+  assert.ok(body.some((property) => property.propertyId === "PROP-011"));
+});
+
+test("GET /properties scopes assets by network", async () => {
+  const owner = "0x90F79bf6EB2c4f870365E785982E1f101E93b906";
+  const localhost = await request(`/properties?network=localhost&owner=${encodeURIComponent(owner)}`);
+  const sepolia = await request(`/properties?network=sepolia&owner=${encodeURIComponent(owner)}`);
+  const localhostIds = localhost.body.map((property) => property.propertyId);
+  const sepoliaIds = sepolia.body.map((property) => property.propertyId);
+
+  assert.ok(localhostIds.includes("PROP-001"));
+  assert.ok(!localhostIds.includes("PROP-011"));
+  assert.ok(sepoliaIds.includes("PROP-011"));
+  assert.ok(!sepoliaIds.includes("PROP-001"));
+});
+
+test("GET /properties rejects unsupported networks", async () => {
+  const owner = "0x90F79bf6EB2c4f870365E785982E1f101E93b906";
+  const { response, body } = await request(`/properties?network=mainnet&owner=${encodeURIComponent(owner)}`);
+  assert.equal(response.status, 400);
+  assert.match(body.error, /network must be one of: localhost, sepolia/);
+});
+
+test("POST /verify rejects unsupported networks", async () => {
+  const { response, body } = await request("/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ propertyId: "PROP-001", network: "mainnet" })
+  });
+
+  assert.equal(response.status, 400);
+  assert.match(body.error, /network must be one of: localhost, sepolia/);
 });
 
 test("POST /verify rejects missing property id", async () => {

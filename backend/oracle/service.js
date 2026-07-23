@@ -6,12 +6,12 @@ const {
 const { connectContracts } = require("./contracts");
 const { generateComplianceProof } = require("../../zk/prover");
 
-async function listProperties() {
-  return loadProperties();
+async function listProperties({ network = "localhost" } = {}) {
+  return loadProperties({ network });
 }
 
 async function verifyProperty(propertyId, { write = false, network = "localhost" } = {}) {
-  const result = await buildVerification(propertyId);
+  const result = await buildVerification(propertyId, { network });
 
   if (!write) return result;
 
@@ -36,7 +36,7 @@ async function checkCompliance(
   loanPrincipal,
   { write = false, network = "localhost", principalSalt } = {}
 ) {
-  const result = await buildCompliance(propertyId, loanPrincipal, principalSalt);
+  const result = await buildCompliance(propertyId, loanPrincipal, { network, principalSalt });
   if (!result.exists || !result.compliant) return result;
 
   const generatedProof = await generateComplianceProof(result.proofInputs);

@@ -40,7 +40,7 @@ ProofEstate is not a production lending protocol. It is a runnable reference arc
 
 The system is designed to demonstrate four core ideas:
 
-1. **Off-chain registry facts can be written on-chain through constrained oracle logic.** Property existence, region eligibility, valuation floor, encumbrance status, and active registry status are evaluated by the oracle from `data/properties.json`, then committed into `PropertyVerification`.
+1. **Off-chain registry facts can be written on-chain through constrained oracle logic.** Property existence, region eligibility, valuation floor, encumbrance status, and active registry status are evaluated by the oracle from the active network registry file (`data/properties.localhost.json` or `data/properties.sepolia.json`), then committed into `PropertyVerification`.
 2. **Sensitive financial values can remain hidden while still being bound to on-chain state.** Property valuation and loan principal are represented by MiMC commitments tied to the property key.
 3. **Loan approval can depend on proof validity instead of plaintext disclosure.** `ComplianceVerifier` accepts a Groth16 proof only when its public signals match the on-chain property record and the submitted principal commitment.
 4. **The lending workflow can prevent duplicate active borrowing against one asset.** `Lending` maintains a property-level active loan lock while a loan is `Requested` or `Approved`.
@@ -49,7 +49,7 @@ The system is designed to demonstrate four core ideas:
 
 ### In Scope
 
-- Mock Singapore-style property registry with 20 records in `data/properties.json`.
+- Mock Singapore-style property registries split by network: `data/properties.localhost.json` and `data/properties.sepolia.json`.
 - Deterministic property verification rules:
   - `region` must be `SG-CCR`, `SG-RCR`, or `SG-OCR`;
   - `valuation >= 200000`;
@@ -157,7 +157,7 @@ flowchart TB
   end
 
   subgraph Data["Off-Chain Data and ZK Artifacts"]
-    Dataset["data/properties.json"]
+    Dataset["data/properties.{network}.json"]
     Circuit["circuits/ltv.circom"]
     Wasm["zk/build/ltv_js/ltv.wasm"]
     ZKey["zk/artifacts/ltv_final.zkey"]
@@ -545,7 +545,7 @@ flowchart TB
   Service["service.js\nworkflow orchestration"]
   Props["properties.js\nrules + inputs"]
   Contracts["contracts.js\nethers bindings"]
-  Dataset2["data/properties.json"]
+  Dataset2["data/properties.{network}.json"]
   Prover2["zk/prover.js"]
   Chain2["Contracts on RPC"]
 
@@ -571,14 +571,14 @@ http://localhost:8787
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Oracle health check |
-| `GET` | `/properties` | List mocked registry records |
-| `GET` | `/properties?owner=0x...` | Filter properties by owner address |
-| `GET` | `/properties/:propertyId/verification` | Evaluate verification rules without writing on-chain |
+| `GET` | `/properties?owner=0x...&network=localhost` | List mocked registry records owned by an address |
+| `GET` | `/properties?role=loanOfficer&network=sepolia` | List the active network registry for privileged demo roles (`admin` or `loanOfficer`) |
+| `GET` | `/properties/:propertyId/verification?network=localhost` | Evaluate verification rules without writing on-chain |
 | `POST` | `/verify` | Evaluate and optionally write verification state |
 | `POST` | `/compliance` | Generate proof and optionally write compliance state |
 | `POST` | `/e2e` | Run verification and compliance together |
 
-`/compliance` and `/e2e` require `loanPrincipal` to be a positive integer within the 64-bit circuit range.
+`/properties` requires either an `owner` query parameter or a privileged demo `role`. `/verify`, `/compliance`, and `/e2e` accept `network` in the JSON body; `/compliance` and `/e2e` require `loanPrincipal` to be a positive integer within the 64-bit circuit range.
 
 ### CLI
 
@@ -632,7 +632,7 @@ sequenceDiagram
   participant B as Borrower Wallet
   participant UI as React DApp
   participant O as Oracle API
-  participant D as properties.json
+  participant D as properties.{network}.json
   participant P as Prover
   participant PV as PropertyVerification
   participant CV as ComplianceVerifier
@@ -725,7 +725,7 @@ Active lock behavior:
 
 ### Trust Assumptions
 
-- `data/properties.json` is test data, not an authoritative title registry.
+- `data/properties.localhost.json` and `data/properties.sepolia.json` are test data, not authoritative title registries.
 - The oracle is trusted in this prototype.
 - The Loan Officer role is trusted to approve through the contract path.
 - Public testnet transactions, commitments, and state changes are observable.
