@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   BadgeCheck,
@@ -12,6 +12,7 @@ import {
   Database,
   FileCheck2,
   Home,
+  Leaf,
   ListChecks,
   Loader2,
   LockKeyhole,
@@ -38,12 +39,11 @@ import {
 import { hardhat, sepolia } from "wagmi/chains";
 import localhostDeployment from "../../deployments/localhost.json";
 import sepoliaDeployment from "../../deployments/sepolia.json";
-import { lendingAbi, propertyVerificationAbi } from "./contracts/abis";
+import { complianceVerifierAbi, lendingAbi, propertyVerificationAbi, roleAdminManagerAbi } from "./contracts/abis";
 import { getOracleHealth, getPropertiesByOwner, getPropertiesForRole, postOracle } from "./lib/api";
 import { formatRecord, propertyKey, roleKey, shortField, shortHash } from "./lib/chain";
 import { detectInitialLanguage, LANG_STORAGE_KEY, translations } from "./lib/i18n";
 import { LanguageToggle, NetworkSelector, WalletButton } from "./components/common/Controls";
-import { DetailList } from "./components/common/DataTable";
 import { LoanLedger } from "./components/domain/LoanLedger";
 import { WalletGate } from "./components/layout/WalletGate";
 
@@ -60,6 +60,7 @@ const defaultAdminRole = "0x0000000000000000000000000000000000000000000000000000
 const oracleRole = roleKey("ORACLE_ROLE");
 const complianceRole = roleKey("COMPLIANCE_ROLE");
 const loanOfficerRole = roleKey("LOAN_OFFICER_ROLE");
+const sepoliaEventLookbackBlocks = 250000n;
 
 function chainIdFor(network) {
   return network === "sepolia" ? sepolia.id : hardhat.id;
@@ -73,8 +74,45 @@ function addressOrFallback(value, fallback) {
   return isValidAddress(value) ? value : fallback;
 }
 
+function addressesMatch(left, right) {
+  return isValidAddress(left) && isValidAddress(right) && left.toLowerCase() === right.toLowerCase();
+}
+
+function blockNumberOrUndefined(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  try {
+    return BigInt(value);
+  } catch (_error) {
+    return undefined;
+  }
+}
+
+function eventStartBlockFor(network, latestBlock, deployment = {}) {
+  const configuredBlock = blockNumberOrUndefined(
+    deployment.eventStartBlock ?? deployment.startBlock ?? deployment.deployedBlock ?? deployment.blockNumber
+  );
+  if (configuredBlock !== undefined) return configuredBlock;
+  if (network !== "sepolia") return 0n;
+
+  const latest = blockNumberOrUndefined(latestBlock);
+  if (latest === undefined) return undefined;
+  if (latest <= sepoliaEventLookbackBlocks) return 0n;
+  return latest - sepoliaEventLookbackBlocks;
+}
+
 function formatCurrency(value) {
   return `$${Number(value || 0).toLocaleString()}`;
+}
+
+function fullCommitment(value) {
+  if (value === undefined || value === null || value === "" || value === 0 || value === 0n || value === "-") {
+    return "-";
+  }
+  try {
+    return `0x${BigInt(value).toString(16).padStart(64, "0")}`;
+  } catch (_error) {
+    return String(value);
+  }
 }
 
 function normalizeLoan(loan) {
@@ -111,7 +149,7 @@ function App() {
   const [language, setLanguage] = useState(detectInitialLanguage);
   const t = (key) => translations[language][key] || translations.en[key] || key;
 
-  const [activeView, setActiveView] = useState("overview");
+  const [activeView, setActiveView] = useState("verification");
   const [ownedProperties, setOwnedProperties] = useState([]);
   const [privilegedProperties, setPrivilegedProperties] = useState([]);
   const [selectedId, setSelectedId] = useState("PROP-001");
@@ -126,8 +164,17 @@ function App() {
   const [activity, setActivity] = useState([]);
   const [busyAction, setBusyAction] = useState("");
   const [roleAddress, setRoleAddress] = useState("");
-  const [roleTarget, setRoleTarget] = useState("loanOfficer");
+  const [roleTarget, setRoleTarget] = useState("admin");
+  const [roleDirectoryTarget, setRoleDirectoryTarget] = useState("admin");
   const [roleOperation, setRoleOperation] = useState("grant");
+  const [roleDirectoryPage, setRoleDirectoryPage] = useState(1);
+  const [roleAuditPage, setRoleAuditPage] = useState(1);
+  const [expandedRoleAuditId, setExpandedRoleAuditId] = useState("");
+  const [loanAuditPage, setLoanAuditPage] = useState(1);
+  const [chainRecordPage, setChainRecordPage] = useState(1);
+  const [selectedChainRecordId, setSelectedChainRecordId] = useState("");
+  const [onchainAuditPage, setOnchainAuditPage] = useState(1);
+  const [selectedOnchainAuditId, setSelectedOnchainAuditId] = useState("");
   const [oracleHealth, setOracleHealth] = useState({ ok: false, checked: false });
   const [chainHealth, setChainHealth] = useState({ ok: false, checked: false, blockNumber: null });
   const [contractHealth, setContractHealth] = useState({});
@@ -139,10 +186,14 @@ function App() {
   const [txPhase, setTxPhase] = useState("");
   const [chainRecords, setChainRecords] = useState({ loading: false, rows: [] });
   const [roleAudit, setRoleAudit] = useState({ loading: false, rows: [] });
+  const [chainEventAudit, setChainEventAudit] = useState({ loading: false, rows: [] });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [workspaceEntered, setWorkspaceEntered] = useState(false);
   const [verificationDialog, setVerificationDialog] = useState(null);
   const [complianceDialog, setComplianceDialog] = useState(null);
+  const [roleDialog, setRoleDialog] = useState(null);
+  const chainFailureCountRef = useRef(0);
+  const contractFailureCountRef = useRef({});
 
   const { address, isConnected } = useAccount();
   const walletChainId = useChainId();
@@ -150,7 +201,8 @@ function App() {
   const { disconnect } = useDisconnect();
   const { switchChainAsync, isPending: switchingChain } = useSwitchChain();
   const { writeContractAsync, isPending: writing } = useWriteContract();
-  const publicClient = usePublicClient({ chainId: chainIdFor(network) });
+  const targetChainId = chainIdFor(network);
+  const publicClient = usePublicClient({ chainId: targetChainId });
   const networkDeployment = deploymentByNetwork[network] || deploymentByNetwork[defaultNetwork];
   const useEnvDeployment = network === defaultNetwork;
   const propertyVerificationAddress = useEnvDeployment
@@ -159,9 +211,15 @@ function App() {
   const complianceVerifierAddress = useEnvDeployment
     ? addressOrFallback(import.meta.env.VITE_COMPLIANCE_VERIFIER_ADDRESS, networkDeployment.complianceVerifier)
     : networkDeployment.complianceVerifier;
+  const ltvGroth16VerifierAddress = useEnvDeployment
+    ? addressOrFallback(import.meta.env.VITE_LTV_GROTH16_VERIFIER_ADDRESS, networkDeployment.ltvGroth16Verifier)
+    : networkDeployment.ltvGroth16Verifier;
   const lendingAddress = useEnvDeployment
     ? addressOrFallback(import.meta.env.VITE_LENDING_ADDRESS, networkDeployment.lending)
     : networkDeployment.lending;
+  const roleAdminManagerAddress = useEnvDeployment
+    ? addressOrFallback(import.meta.env.VITE_ROLE_ADMIN_MANAGER_ADDRESS, networkDeployment.roleAdminManager)
+    : networkDeployment.roleAdminManager;
   const configuredAdminAddress = useEnvDeployment
     ? addressOrFallback(import.meta.env.VITE_ADMIN_ADDRESS, networkDeployment.adminAddress)
     : networkDeployment.adminAddress;
@@ -177,7 +235,13 @@ function App() {
   const safeComplianceVerifierAddress = isValidAddress(complianceVerifierAddress)
     ? complianceVerifierAddress
     : undefined;
+  const safeLtvGroth16VerifierAddress = isValidAddress(ltvGroth16VerifierAddress)
+    ? ltvGroth16VerifierAddress
+    : undefined;
   const safeLendingAddress = isValidAddress(lendingAddress) ? lendingAddress : undefined;
+  const safeRoleAdminManagerAddress = isValidAddress(roleAdminManagerAddress)
+    ? roleAdminManagerAddress
+    : undefined;
 
   useEffect(() => {
     document.title = t("appTitle");
@@ -224,62 +288,123 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    setChainHealth((current) => ({ ...current, checked: false }));
+    let checking = false;
+    const targetNetwork = network;
+    chainFailureCountRef.current = 0;
+    setChainHealth({ ok: false, checked: false, blockNumber: null, network: targetNetwork });
 
     async function checkChain() {
+      if (checking) return;
+      checking = true;
       try {
         const blockNumber = await publicClient.getBlockNumber();
-        if (mounted) setChainHealth({ ok: true, checked: true, blockNumber });
+        chainFailureCountRef.current = 0;
+        if (mounted) setChainHealth({ ok: true, checked: true, blockNumber, network: targetNetwork });
       } catch (_error) {
-        if (mounted) setChainHealth({ ok: false, checked: true, blockNumber: null });
+        chainFailureCountRef.current += 1;
+        if (!mounted) return;
+        setChainHealth((current) => {
+          if (current.network && current.network !== targetNetwork) return current;
+          if (chainFailureCountRef.current < 3) return { ...current, checked: true };
+          return { ok: false, checked: true, blockNumber: null, network: targetNetwork };
+        });
+      } finally {
+        checking = false;
       }
     }
 
     checkChain();
-    const interval = window.setInterval(checkChain, 5000);
+    const interval = window.setInterval(checkChain, 12000);
     return () => {
       mounted = false;
       window.clearInterval(interval);
     };
-  }, [network, publicClient]);
+  }, [network, targetChainId]);
 
   useEffect(() => {
     let mounted = true;
+    let checking = false;
     const contracts = {
       propertyVerification: safePropertyVerificationAddress,
       complianceVerifier: safeComplianceVerifierAddress,
-      lending: safeLendingAddress
+      ltvGroth16Verifier: safeLtvGroth16VerifierAddress,
+      lending: safeLendingAddress,
+      roleAdminManager: safeRoleAdminManagerAddress
     };
+    contractFailureCountRef.current = {};
+    setContractHealth(
+      Object.fromEntries(
+        Object.entries(contracts).map(([key, addressValue]) => [
+          key,
+          addressValue
+            ? { status: "checking", deployed: false, address: addressValue }
+            : { status: "missing", deployed: false, address: "" }
+        ])
+      )
+    );
 
     async function checkContracts() {
-      const entries = await Promise.all(
-        Object.entries(contracts).map(async ([key, addressValue]) => {
-          if (!addressValue) return [key, { status: "missing", deployed: false, address: "" }];
-          try {
-            const bytecode = await publicClient.getBytecode({ address: addressValue });
-            return [
-              key,
-              {
-                status: bytecode && bytecode !== "0x" ? "deployed" : "configured",
-                deployed: Boolean(bytecode && bytecode !== "0x"),
-                address: addressValue
-              }
-            ];
-          } catch (_error) {
-            return [key, { status: "unreachable", deployed: false, address: addressValue }];
-          }
-        })
-      );
-      if (mounted) setContractHealth(Object.fromEntries(entries));
+      if (checking) return;
+      checking = true;
+      try {
+        const entries = await Promise.all(
+          Object.entries(contracts).map(async ([key, addressValue]) => {
+            if (!addressValue) return { key, next: { status: "missing", deployed: false, address: "" } };
+            try {
+              const bytecode = await publicClient.getBytecode({ address: addressValue });
+              contractFailureCountRef.current[key] = 0;
+              return {
+                key,
+                next: {
+                  status: bytecode && bytecode !== "0x" ? "deployed" : "configured",
+                  deployed: Boolean(bytecode && bytecode !== "0x"),
+                  address: addressValue
+                }
+              };
+            } catch (_error) {
+              contractFailureCountRef.current[key] = (contractFailureCountRef.current[key] || 0) + 1;
+              return { key, failed: true, address: addressValue };
+            }
+          })
+        );
+        if (!mounted) return;
+        setContractHealth((current) => {
+          const nextState = { ...current };
+          entries.forEach((entry) => {
+            if (entry.next) {
+              nextState[entry.key] = entry.next;
+              return;
+            }
+            const previous = current[entry.key];
+            const sameAddress = addressesMatch(previous?.address, entry.address);
+            if (entry.failed && contractFailureCountRef.current[entry.key] < 3 && sameAddress) {
+              nextState[entry.key] = previous;
+              return;
+            }
+            nextState[entry.key] = { status: "unreachable", deployed: false, address: entry.address };
+          });
+          return nextState;
+        });
+      } finally {
+        checking = false;
+      }
     }
 
     checkContracts();
-    const interval = window.setInterval(checkContracts, 5000);
+    const interval = window.setInterval(checkContracts, 12000);
     return () => {
       mounted = false;
       window.clearInterval(interval);
     };
-  }, [network, publicClient]);
+  }, [
+    network,
+    targetChainId,
+    safePropertyVerificationAddress,
+    safeComplianceVerifierAddress,
+    safeLtvGroth16VerifierAddress,
+    safeLendingAddress,
+    safeRoleAdminManagerAddress
+  ]);
 
   const visibleProperties = useMemo(
     () => (isConnected ? ownedProperties : []),
@@ -315,7 +440,9 @@ function App() {
   const contractsDeployed = Boolean(
     contractHealth.propertyVerification?.deployed &&
       contractHealth.complianceVerifier?.deployed &&
-      contractHealth.lending?.deployed
+      contractHealth.ltvGroth16Verifier?.deployed &&
+      contractHealth.lending?.deployed &&
+      contractHealth.roleAdminManager?.deployed
   );
   const contractsReady = Boolean(
     contractHealth.propertyVerification?.deployed &&
@@ -423,17 +550,37 @@ function App() {
     }
   });
 
-  const targetRole = roleTarget === "oracle" ? oracleRole : loanOfficerRole;
-  const targetRoleContract = roleTarget === "oracle" ? safePropertyVerificationAddress : safeLendingAddress;
-  const targetRoleAbi = roleTarget === "oracle" ? propertyVerificationAbi : lendingAbi;
-  const { data: targetHasRole = false, refetch: refetchTargetRole } = useReadContract({
-    address: targetRoleContract,
-    abi: targetRoleAbi,
-    functionName: "hasRole",
-    args: isValidAddress(roleAddress) ? [targetRole, roleAddress] : undefined,
+  const { data: protocolAdminStatus, refetch: refetchProtocolAdminStatus } = useReadContract({
+    address: safeRoleAdminManagerAddress,
+    abi: roleAdminManagerAbi,
+    functionName: "hasProtocolAdmin",
+    args: address ? [address] : undefined,
     chainId: chainIdFor(network),
     query: {
-      enabled: Boolean(targetRoleContract && isValidAddress(roleAddress))
+      enabled: Boolean(safeRoleAdminManagerAddress && address)
+    }
+  });
+
+  const selectedRoleConfig = managedRoleConfigFor(roleTarget);
+  const targetRoleContract = selectedRoleConfig.readContract;
+  const targetRoleAbi = selectedRoleConfig.readAbi;
+  const targetRoleReadArgs = isValidAddress(roleAddress)
+    ? selectedRoleConfig.readFunctionName === "hasProtocolAdmin"
+      ? [roleAddress]
+      : [selectedRoleConfig.roleKey, roleAddress]
+    : undefined;
+  const {
+    data: targetHasRole,
+    refetch: refetchTargetRole,
+    isFetching: fetchingTargetRole
+  } = useReadContract({
+    address: targetRoleContract,
+    abi: targetRoleAbi,
+    functionName: selectedRoleConfig.readFunctionName,
+    args: targetRoleReadArgs,
+    chainId: chainIdFor(network),
+    query: {
+      enabled: Boolean(targetRoleContract && targetRoleAbi && isValidAddress(roleAddress))
     }
   });
 
@@ -585,6 +732,14 @@ function App() {
               property,
               propertyKey: key,
               record: formatted,
+              rawRecord: {
+                owner: data?.owner || "-",
+                evidenceHash: data?.evidenceHash || "-",
+                complianceHash: data?.complianceHash || "-",
+                valuationCommitment: fullCommitment(data?.valuationCommitment),
+                principalCommitment: fullCommitment(data?.principalCommitment),
+                lastUpdated: formatted.lastUpdated
+              },
               updatedRaw: Number(data?.lastUpdated || 0n)
             };
           })
@@ -614,7 +769,7 @@ function App() {
       if (normalized === defaultAdminRole.toLowerCase()) return t("roleAdmin");
       if (normalized === oracleRole.toLowerCase()) return t("roleOracle");
       if (normalized === loanOfficerRole.toLowerCase()) return t("roleLoanOfficer");
-      if (normalized === complianceRole.toLowerCase()) return "Compliance";
+      if (normalized === complianceRole.toLowerCase()) return t("complianceVerifierRole");
       return shortHash(role);
     }
 
@@ -625,6 +780,9 @@ function App() {
       }
 
       const sources = [
+        safeRoleAdminManagerAddress
+          ? { contract: t("roleAdminManagerContract"), address: safeRoleAdminManagerAddress, abi: roleAdminManagerAbi }
+          : null,
         safePropertyVerificationAddress
           ? { contract: t("propertyVerificationContract"), address: safePropertyVerificationAddress, abi: propertyVerificationAbi }
           : null,
@@ -638,34 +796,47 @@ function App() {
         return;
       }
 
+      const eventStartBlock = eventStartBlockFor(network, chainHealth.blockNumber, networkDeployment);
+      if (eventStartBlock === undefined) {
+        if (mounted) setRoleAudit({ loading: false, rows: [] });
+        return;
+      }
+
       setRoleAudit((current) => ({ ...current, loading: true }));
       try {
-        const eventGroups = await Promise.all(
+        const eventGroups = await Promise.allSettled(
           sources.flatMap((source) =>
             ["RoleGranted", "RoleRevoked"].map(async (eventName) => {
               const logs = await publicClient.getContractEvents({
-                address: source.address,
-                abi: source.abi,
-                eventName,
-                fromBlock: 0n
-              });
-              return logs.map((log) => ({
-                id: `${source.address}-${eventName}-${log.transactionHash}-${log.logIndex}`,
-                contract: source.contract,
-                action: eventName === "RoleGranted" ? t("grantRole") : t("revokeRole"),
-                role: roleName(log.args.role),
-                account: log.args.account,
-                sender: log.args.sender,
-                blockNumber: log.blockNumber,
-                tx: log.transactionHash
-              }));
-            })
-          )
-        );
-        const rows = eventGroups
-          .flat()
-          .sort((a, b) => Number(b.blockNumber || 0n) - Number(a.blockNumber || 0n))
-          .slice(0, 20);
+                  address: source.address,
+                  abi: source.abi,
+                  eventName,
+                  fromBlock: eventStartBlock
+                });
+                return logs.map((log) => ({
+                  id: `${source.address}-${eventName}-${log.transactionHash}-${log.logIndex}`,
+                  contract: source.contract,
+                  contractAddress: source.address,
+                  action: eventName === "RoleGranted" ? t("grantRole") : t("revokeRole"),
+                  actionType: eventName === "RoleGranted" ? "grant" : "revoke",
+                  roleId: String(log.args.role || ""),
+                  role: roleName(log.args.role),
+                  account: log.args.account,
+                  sender: log.args.sender,
+                  blockNumber: log.blockNumber,
+                  logIndex: Number(log.logIndex || 0),
+                  tx: log.transactionHash
+                }));
+              })
+            )
+          );
+          const rows = eventGroups
+            .filter((result) => result.status === "fulfilled")
+            .flatMap((result) => result.value)
+            .sort((a, b) =>
+              Number(b.blockNumber || 0n) - Number(a.blockNumber || 0n) ||
+              Number(b.logIndex || 0) - Number(a.logIndex || 0)
+            );
         if (mounted) setRoleAudit({ loading: false, rows });
       } catch (_error) {
         if (mounted) setRoleAudit({ loading: false, rows: [] });
@@ -676,7 +847,197 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [publicClient, network, refreshNonce, language]);
+  }, [
+    publicClient,
+    network,
+    refreshNonce,
+    language,
+    chainHealth.blockNumber,
+    networkDeployment,
+    safeRoleAdminManagerAddress,
+    safePropertyVerificationAddress,
+    safeLendingAddress
+  ]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    function loanEventLabel(eventName) {
+      const labels = {
+        LoanRequested: t("loanRequestedEvent"),
+        LoanApproved: t("loanApprovedEvent"),
+        LoanRejected: t("loanRejectedEvent"),
+        LoanRejectedDueToVerification: t("loanRejectedVerificationEvent"),
+        LoanRejectedDueToCompliance: t("loanRejectedComplianceEvent"),
+        LoanRejectedDueToProofMismatch: t("loanRejectedProofMismatchEvent"),
+        LoanRepaid: t("loanRepaidEvent"),
+        LoanCancelled: t("loanCancelledEvent")
+      };
+      return labels[eventName] || eventName;
+    }
+
+    async function loadChainEventAudit() {
+      if (!publicClient) {
+        if (mounted) setChainEventAudit({ loading: false, rows: [] });
+        return;
+      }
+
+      const eventSources = [
+        safePropertyVerificationAddress
+          ? [
+              {
+                source: t("propertyVerificationContract"),
+                address: safePropertyVerificationAddress,
+                abi: propertyVerificationAbi,
+                eventName: "PropertyVerificationUpdated"
+              },
+              {
+                source: t("propertyVerificationContract"),
+                address: safePropertyVerificationAddress,
+                abi: propertyVerificationAbi,
+                eventName: "PropertyComplianceUpdated"
+              }
+            ]
+          : [],
+        safeComplianceVerifierAddress
+          ? [
+              {
+                source: t("complianceVerifierContract"),
+                address: safeComplianceVerifierAddress,
+                abi: complianceVerifierAbi,
+                eventName: "ComplianceProofVerified"
+              }
+            ]
+          : [],
+        safeLendingAddress
+          ? [
+              "LoanRequested",
+              "LoanApproved",
+              "LoanRejected",
+              "LoanRejectedDueToVerification",
+              "LoanRejectedDueToCompliance",
+              "LoanRejectedDueToProofMismatch",
+              "LoanRepaid",
+              "LoanCancelled"
+            ].map((eventName) => ({
+              source: t("lendingContract"),
+              address: safeLendingAddress,
+              abi: lendingAbi,
+              eventName
+            }))
+          : []
+      ].flat();
+
+      if (eventSources.length === 0) {
+        if (mounted) setChainEventAudit({ loading: false, rows: [] });
+        return;
+      }
+
+      const eventStartBlock = eventStartBlockFor(network, chainHealth.blockNumber, networkDeployment);
+      if (eventStartBlock === undefined) {
+        if (mounted) setChainEventAudit({ loading: false, rows: [] });
+        return;
+      }
+
+      setChainEventAudit((current) => ({ ...current, loading: true }));
+      try {
+        const eventGroups = await Promise.allSettled(
+          eventSources.map(async (source) => {
+            const logs = await publicClient.getContractEvents({
+              address: source.address,
+              abi: source.abi,
+              eventName: source.eventName,
+              fromBlock: eventStartBlock
+            });
+            return Promise.all(logs.map(async (log) => {
+              let transactionFrom = "-";
+              try {
+                const transaction = await publicClient.getTransaction({ hash: log.transactionHash });
+                transactionFrom = transaction?.from || "-";
+              } catch (_error) {
+                transactionFrom = "-";
+              }
+              const args = log.args || {};
+              const loanId = args.loanId !== undefined ? `#${args.loanId.toString()}` : "-";
+              const propertyId = args.propertyId || "-";
+              const isPropertyVerificationEvent = source.eventName === "PropertyVerificationUpdated";
+              const isProofEvent = source.eventName === "PropertyComplianceUpdated" || source.eventName === "ComplianceProofVerified";
+              const isLoanEvent = source.eventName.startsWith("Loan");
+              const action =
+                source.eventName === "ComplianceProofVerified"
+                  ? t("complianceProofVerifiedEvent")
+                  : isPropertyVerificationEvent
+                  ? t("propertyVerificationEvent")
+                  : isProofEvent
+                    ? t("complianceProofEvent")
+                    : loanEventLabel(source.eventName);
+              const category = isLoanEvent ? t("loanEvent") : isProofEvent ? t("proofEvent") : t("assetEvent");
+              const target = isLoanEvent ? loanId : propertyId;
+              return {
+                id: `${source.eventName}-${log.transactionHash}-${log.logIndex}`,
+                category,
+                categoryTone: isLoanEvent ? "amber" : isProofEvent ? "green" : "blue",
+                source: source.source,
+                eventName: source.eventName,
+                action,
+                contract: source.source,
+                contractAddress: source.address,
+                loanId,
+                propertyId,
+                target,
+                operator: transactionFrom !== "-" ? transactionFrom : args.borrower || args.owner || "-",
+                block: log.blockNumber?.toString() || "-",
+                logIndex: Number(log.logIndex || 0),
+                tx: log.transactionHash,
+                fields: [
+                  isLoanEvent && loanId !== "-" ? { label: t("loanId"), value: loanId } : null,
+                  propertyId !== "-" ? { label: t("propertyKey"), value: propertyId, variant: "hash" } : null,
+                  args.borrower ? { label: t("borrower"), value: args.borrower, variant: "hash" } : null,
+                  args.owner ? { label: t("owner"), value: args.owner, variant: "hash" } : null,
+                  args.verified !== undefined ? { label: t("statusVerified"), value: args.verified ? t("yes") : t("no") } : null,
+                  args.compliant !== undefined ? { label: t("statusCompliant"), value: args.compliant ? t("yes") : t("no") } : null,
+                  args.evidenceHash ? { label: t("registryEvidenceFingerprint"), value: args.evidenceHash, variant: "hash" } : null,
+                  args.proofHash ? { label: t("zkProofFingerprint"), value: args.proofHash, variant: "hash" } : null,
+                  args.valuationCommitment !== undefined
+                    ? { label: t("valuationCommitment"), value: fullCommitment(args.valuationCommitment), variant: "hash" }
+                    : null,
+                  args.principalCommitment !== undefined
+                    ? { label: t("principalCommitment"), value: fullCommitment(args.principalCommitment), variant: "hash" }
+                    : null
+                ].filter(Boolean),
+                detail: []
+              };
+            }));
+          })
+        );
+        const rows = eventGroups
+          .filter((result) => result.status === "fulfilled")
+          .flatMap((result) => result.value)
+          .sort((a, b) =>
+            Number(b.block === "-" ? 0 : b.block || 0) - Number(a.block === "-" ? 0 : a.block || 0) ||
+            Number(b.logIndex || 0) - Number(a.logIndex || 0)
+          );
+        if (mounted) setChainEventAudit({ loading: false, rows });
+      } catch (_error) {
+        if (mounted) setChainEventAudit({ loading: false, rows: [] });
+      }
+    }
+
+    loadChainEventAudit();
+    return () => {
+      mounted = false;
+    };
+  }, [
+    publicClient,
+    network,
+    refreshNonce,
+    language,
+    safePropertyVerificationAddress,
+    safeComplianceVerifierAddress,
+    safeLendingAddress,
+    chainHealth.blockNumber,
+    networkDeployment
+  ]);
 
   const isVerified = Boolean(formattedRecord.verified);
   const isCompliant = Boolean(formattedRecord.compliant);
@@ -702,7 +1063,6 @@ function App() {
         : !loanProofMatchesPrincipal
           ? t("approvalBlockedProofMismatch")
           : "";
-  const targetChainId = chainIdFor(network);
   const walletNetworkReady = !isConnected || walletChainId === targetChainId;
   const rpcReady = chainHealth.ok;
   const networkLabel = network === "sepolia" ? t("sepolia") : t("local");
@@ -713,6 +1073,13 @@ function App() {
   const walletLabel = isConnected && address
     ? `${address.slice(0, 6)}...${address.slice(-4)}`
     : t("connectWallet");
+  const protocolAdminComplete = Boolean(protocolAdminStatus?.complete ?? protocolAdminStatus?.[3]);
+  const legacyAdmin = Boolean(isOracleAdmin || isLendingAdmin);
+  const isAdmin = Boolean(
+    safeRoleAdminManagerAddress ? protocolAdminComplete : legacyAdmin
+  );
+  const roleOracleOperatorActive = Boolean(isOracleOperator);
+  const roleLoanOfficerActive = Boolean(isLoanOfficer);
   const loanStateKey = currentLoan
     ? ["requested", "approved", "repaid", "rejected", "cancelled"][currentLoan.state] || "loanReadError"
     : "noLoan";
@@ -771,7 +1138,7 @@ function App() {
   const canComply = Boolean(
     selectedProperty &&
       isVerified &&
-      principalAmount > 0n &&
+      ltvSafe &&
       oracleHealth.ok &&
       (!writeViaOracle || oracleWriteReady)
   );
@@ -787,19 +1154,19 @@ function App() {
       !writing
   );
   const canApproveLoan = Boolean(
-    isConnected &&
+      isConnected &&
       walletNetworkReady &&
       lendingReady &&
-      isLoanOfficer &&
+      roleLoanOfficerActive &&
       currentLoan?.state === 0 &&
       loanApprovalReady &&
       !writing
   );
   const canRejectLoan = Boolean(
-    isConnected &&
+      isConnected &&
       walletNetworkReady &&
       lendingReady &&
-      isLoanOfficer &&
+      roleLoanOfficerActive &&
       currentLoan?.state === 0 &&
       !writing
   );
@@ -835,7 +1202,14 @@ function App() {
     { id: "all", state: null, label: "allLoans" }
   ];
 
-  const deployedContractCount = ["propertyVerification", "complianceVerifier", "lending"].filter(
+  const coreContractKeys = [
+    "propertyVerification",
+    "ltvGroth16Verifier",
+    "complianceVerifier",
+    "lending",
+    "roleAdminManager"
+  ];
+  const deployedContractCount = coreContractKeys.filter(
     (key) => contractHealth[key]?.deployed
   ).length;
   const readinessItems = [
@@ -848,7 +1222,7 @@ function App() {
     {
       label: t("contractsReadyLabel"),
       ready: fullContractsReady,
-      detail: `${deployedContractCount}/3 ${t("deployedStatus")}`
+      detail: `${deployedContractCount}/${coreContractKeys.length} ${t("deployedStatus")}`
     },
     {
       label: t("walletNetwork"),
@@ -858,61 +1232,272 @@ function App() {
   ];
   const readinessScore = readinessItems.filter((item) => item.ready).length;
   const readinessPercent = Math.round((readinessScore / Math.max(readinessItems.length, 1)) * 100);
-  const isAdmin = Boolean(isOracleAdmin || isLendingAdmin);
   const isBorrower = Boolean(isConnected && ownedProperties.length > 0);
 
   useEffect(() => {
     let mounted = true;
-    const role = isAdmin ? "admin" : isLoanOfficer ? "loanOfficer" : "";
-    if (!isConnected || !role) {
+    const activePropertyRoles = [
+      isAdmin ? "admin" : null,
+      roleLoanOfficerActive ? "loanOfficer" : null,
+      roleOracleOperatorActive ? "oracle" : null
+    ].filter(Boolean);
+    if (!isConnected || activePropertyRoles.length === 0) {
       setPrivilegedProperties([]);
       return () => {
         mounted = false;
       };
     }
 
-    getPropertiesForRole(network, role).then((items) => {
-      if (mounted) setPrivilegedProperties(items);
+    Promise.all(activePropertyRoles.map((role) => getPropertiesForRole(network, role))).then((groups) => {
+      if (!mounted) return;
+      const byId = new Map();
+      for (const property of groups.flat()) byId.set(property.propertyId, property);
+      setPrivilegedProperties(Array.from(byId.values()));
     });
 
     return () => {
       mounted = false;
     };
-  }, [isAdmin, isConnected, isLoanOfficer, network]);
+  }, [isAdmin, isConnected, roleLoanOfficerActive, roleOracleOperatorActive, network]);
 
   const roleSummary = [
     isBorrower ? t("roleBorrower") : null,
-    isOracleOperator ? t("roleOracle") : null,
-    isLoanOfficer ? t("roleLoanOfficer") : null,
+    roleOracleOperatorActive ? t("roleOracle") : null,
+    roleLoanOfficerActive ? t("roleLoanOfficer") : null,
     isAdmin ? t("roleAdmin") : null
   ].filter(Boolean);
 
+  useEffect(() => {
+    setRoleDirectoryPage(1);
+  }, [roleDirectoryTarget]);
+
+  useEffect(() => {
+    setExpandedRoleAuditId("");
+  }, [roleAuditPage]);
+
+  useEffect(() => {
+    setLoanAuditPage(1);
+    setChainRecordPage(1);
+    setSelectedChainRecordId("");
+    setOnchainAuditPage(1);
+    setSelectedOnchainAuditId("");
+  }, [network]);
+
+  function roleLabelFor(roleId) {
+    if (roleId === "admin") return t("roleAdmin");
+    if (roleId === "oracle") return t("roleOracle");
+    return t("roleLoanOfficer");
+  }
+
+  function managedRoleConfigFor(roleId = roleTarget) {
+    if (roleId === "admin") {
+      if (!safeRoleAdminManagerAddress) {
+        return {
+          contracts: [safePropertyVerificationAddress, safeLendingAddress].filter(Boolean),
+          readContract: safePropertyVerificationAddress,
+          readAbi: propertyVerificationAbi,
+          readFunctionName: "hasRole",
+          writeContract: safePropertyVerificationAddress,
+          writeAbi: propertyVerificationAbi,
+          writeTargets: [
+            { contract: safePropertyVerificationAddress, abi: propertyVerificationAbi },
+            { contract: safeLendingAddress, abi: lendingAbi }
+          ].filter((target) => target.contract),
+          grantFunctionName: "grantRole",
+          revokeFunctionName: "revokeRole",
+          configuredAddresses: [configuredAdminAddress],
+          roleKey: defaultAdminRole
+        };
+      }
+      return {
+        contracts: [safeRoleAdminManagerAddress],
+        readContract: safeRoleAdminManagerAddress,
+        readAbi: roleAdminManagerAbi,
+        readFunctionName: "hasProtocolAdmin",
+        writeContract: safeRoleAdminManagerAddress,
+        writeAbi: roleAdminManagerAbi,
+        writeTargets: [{ contract: safeRoleAdminManagerAddress, abi: roleAdminManagerAbi }],
+        grantFunctionName: "grantProtocolAdmin",
+        revokeFunctionName: "revokeProtocolAdmin",
+        configuredAddresses: [configuredAdminAddress],
+        roleKey: defaultAdminRole
+      };
+    }
+    if (roleId === "oracle") {
+      return {
+        contracts: [safePropertyVerificationAddress].filter(Boolean),
+        readContract: safePropertyVerificationAddress,
+        readAbi: propertyVerificationAbi,
+        readFunctionName: "hasRole",
+        writeContract: safePropertyVerificationAddress,
+        writeAbi: propertyVerificationAbi,
+        writeTargets: [{ contract: safePropertyVerificationAddress, abi: propertyVerificationAbi }].filter((target) => target.contract),
+        grantFunctionName: "grantRole",
+        revokeFunctionName: "revokeRole",
+        configuredAddresses: [configuredOracleAddress],
+        roleKey: oracleRole
+      };
+    }
+    return {
+      contracts: [safeLendingAddress].filter(Boolean),
+      readContract: safeLendingAddress,
+      readAbi: lendingAbi,
+      readFunctionName: "hasRole",
+      writeContract: safeLendingAddress,
+      writeAbi: lendingAbi,
+      writeTargets: [{ contract: safeLendingAddress, abi: lendingAbi }].filter((target) => target.contract),
+      grantFunctionName: "grantRole",
+      revokeFunctionName: "revokeRole",
+      configuredAddresses: [configuredLoanOfficerAddress],
+      roleKey: loanOfficerRole
+    };
+  }
+
+  function buildManagedRoleMembers(roleConfig) {
+    const contractSet = new Set((roleConfig.contracts || []).map((item) => String(item || "").toLowerCase()));
+    const members = new Map();
+    const addContract = (account, contractAddress) => {
+      if (!isValidAddress(account) || !isValidAddress(contractAddress)) return;
+      const normalized = account.toLowerCase();
+      const existing = members.get(normalized) || { address: account, contracts: new Set() };
+      existing.contracts.add(contractAddress.toLowerCase());
+      members.set(normalized, existing);
+    };
+    const removeContract = (account, contractAddress) => {
+      const normalized = String(account || "").toLowerCase();
+      const existing = members.get(normalized);
+      if (!existing || !isValidAddress(contractAddress)) return;
+      existing.contracts.delete(contractAddress.toLowerCase());
+      if (existing.contracts.size === 0) members.delete(normalized);
+    };
+
+    for (const configuredAddress of roleConfig.configuredAddresses || []) {
+      for (const contractAddress of roleConfig.contracts || []) addContract(configuredAddress, contractAddress);
+    }
+
+    roleAudit.rows
+      .slice()
+      .sort((a, b) =>
+        Number(a.blockNumber || 0n) - Number(b.blockNumber || 0n) ||
+        Number(a.logIndex || 0) - Number(b.logIndex || 0)
+      )
+      .forEach((row) => {
+        if (String(row.roleId || "").toLowerCase() !== String(roleConfig.roleKey || "").toLowerCase()) return;
+        if (!contractSet.has(String(row.contractAddress || "").toLowerCase())) return;
+        if (row.actionType === "grant") addContract(row.account, row.contractAddress);
+        if (row.actionType === "revoke") removeContract(row.account, row.contractAddress);
+      });
+
+    return Array.from(members.values()).sort((a, b) => a.address.localeCompare(b.address));
+  }
+
+  function addressHasManagedRole(roleId, targetAddress) {
+    if (!isValidAddress(targetAddress)) return false;
+    return buildManagedRoleMembers(managedRoleConfigFor(roleId)).some((member) => addressesMatch(member.address, targetAddress));
+  }
+
+  function addressHasCompleteManagedRole(roleConfig, targetAddress) {
+    if (!isValidAddress(targetAddress)) return false;
+    const contracts = roleConfig.contracts || [];
+    const member = buildManagedRoleMembers(roleConfig).find((item) => addressesMatch(item.address, targetAddress));
+    return Boolean(member && contracts.every((contractAddress) => member.contracts.has(String(contractAddress).toLowerCase())));
+  }
+
+  function normalizeRoleCheckResult(value, roleConfig = selectedRoleConfig) {
+    if (roleConfig.readFunctionName === "hasProtocolAdmin") {
+      return Boolean(value?.complete ?? value?.[3]);
+    }
+    return Boolean(value);
+  }
+
+  function operatorRoleLabelFor(targetAddress) {
+    if (!isValidAddress(targetAddress)) return t("unknownActor");
+    const labels = [];
+    const coreContracts = [
+      safePropertyVerificationAddress,
+      safeComplianceVerifierAddress,
+      safeLendingAddress,
+      safeRoleAdminManagerAddress
+    ].filter(Boolean);
+    if (coreContracts.some((contractAddress) => addressesMatch(contractAddress, targetAddress))) {
+      labels.push(t("contractActor"));
+    }
+    [
+      ["admin", t("roleAdmin")],
+      ["oracle", t("roleOracle")],
+      ["loanOfficer", t("roleLoanOfficer")]
+    ].forEach(([roleId, label]) => {
+      if (addressHasManagedRole(roleId, targetAddress)) labels.push(label);
+    });
+    if (loanPortfolio.loans.some((loan) => addressesMatch(loan.borrower, targetAddress))) {
+      labels.push(t("roleBorrower"));
+    }
+    return labels.length ? Array.from(new Set(labels)).join(" / ") : t("standardUserPermission");
+  }
+
+  function roleOperationBlockReason(roleId = roleTarget, targetAddress = roleAddress, operation = roleOperation) {
+    if (!isValidAddress(targetAddress)) return t("invalidRoleAddress");
+    const roleLabel = roleLabelFor(roleId);
+    const roleConfig = managedRoleConfigFor(roleId);
+    if ((roleConfig.contracts || []).length === 0 || (roleConfig.writeTargets || []).length === 0) return t("contractsMissing");
+    const isCurrentRoleCheck = roleId === roleTarget && addressesMatch(targetAddress, roleAddress);
+    const canUseLiveRoleCheck = Boolean(isCurrentRoleCheck && roleConfig.readContract);
+    if (canUseLiveRoleCheck && (fetchingTargetRole || targetHasRole === undefined)) return t("checkingStatus");
+    const liveHasRole = canUseLiveRoleCheck ? normalizeRoleCheckResult(targetHasRole, roleConfig) : false;
+    const hasCompleteRole = isCurrentRoleCheck && (roleConfig.writeTargets || []).length === 1
+      ? liveHasRole
+      : addressHasCompleteManagedRole(roleConfig, targetAddress);
+    const hasAnyRole = isCurrentRoleCheck && (roleConfig.writeTargets || []).length === 1
+      ? liveHasRole
+      : liveHasRole || addressHasManagedRole(roleId, targetAddress);
+    if (operation === "grant" && hasCompleteRole) return `${t("duplicateGrantPrefix")}${roleLabel}${t("duplicateGrantSuffix")}`;
+    if (operation === "revoke" && !hasAnyRole) return `${t("missingRevokePrefix")}${roleLabel}${t("missingRevokeSuffix")}`;
+    if (operation === "revoke") {
+      const roleMembers = buildManagedRoleMembers(roleConfig);
+      const replacementMembers = roleId === "admin"
+        ? roleMembers.filter((member) => !addressesMatch(member.address, safeRoleAdminManagerAddress))
+        : roleMembers;
+      const protectedContracts = roleConfig.contracts || [];
+      const targetContracts = roleMembers.find((member) => addressesMatch(member.address, targetAddress))?.contracts || new Set();
+      const wouldBreakRequiredRole = protectedContracts.some((contractAddress) => {
+        const normalizedContract = String(contractAddress || "").toLowerCase();
+        if (!targetContracts.has(normalizedContract)) return false;
+        return !replacementMembers.some(
+          (member) => !addressesMatch(member.address, targetAddress) && member.contracts.has(normalizedContract)
+        );
+      });
+      if (wouldBreakRequiredRole) return t("minimumRoleRevokeBlocked");
+    }
+    return "";
+  }
+
+  const showBorrowerWorkflow = isConnected && !isAdmin && !roleLoanOfficerActive;
   const baseNavItems = [
-    ...(isAdmin || !isConnected
-      ? [{ id: "overview", icon: Home, label: "navOverview", title: "consoleTitle" }]
-      : []),
-    ...(isConnected
+    ...(showBorrowerWorkflow
       ? [
           { id: "verification", icon: Building2, label: "navVerification", title: "verificationViewTitle" },
           { id: "compliance", icon: ShieldCheck, label: "navCompliance", title: "complianceViewTitle" },
           { id: "loan", icon: CircleDollarSign, label: "navLoan", title: "loanViewTitle" }
         ]
       : []),
-    ...(isLoanOfficer
+    ...(roleLoanOfficerActive
       ? [{ id: "approvals", icon: BadgeCheck, label: "navApprovals", title: "approvalViewTitle" }]
       : []),
     ...(isAdmin
-      ? [{ id: "admin", icon: UserRoundCog, label: "navAdmin", title: "adminViewTitle" }]
-      : []),
-    ...(isAdmin ? [{ id: "operations", icon: Cpu, label: "navOperations", title: "operationsViewTitle" }] : []),
-    ...(isAdmin ? [{ id: "settings", icon: Settings, label: "navSettings", title: "settingsViewTitle" }] : [])
+      ? [
+          { id: "admin-roles", icon: UserRoundCog, label: "navAdminRoles", title: "roleAccessManagement" },
+          { id: "admin-ops", icon: Cpu, label: "navAdminOps", title: "contractNetworkOps" },
+          { id: "admin-audit", icon: ListChecks, label: "navAdminAudit", title: "auditLogs" }
+        ]
+      : [])
   ];
   const navItems = baseNavItems;
   const activeNav = navItems.find((item) => item.id === activeView) || navItems[0];
+  const activeViewId = activeNav?.id || activeView;
 
   useEffect(() => {
     if (!isConnected) {
-      setActiveView("overview");
+      setActiveView("verification");
       setWorkspaceEntered(false);
       setSelectedLoanId(null);
       setPrincipalCommitment("");
@@ -937,6 +1522,7 @@ function App() {
     setContractHealth({});
     setChainRecords({ loading: false, rows: [] });
     setRoleAudit({ loading: false, rows: [] });
+    setChainEventAudit({ loading: false, rows: [] });
   }, [network]);
 
   const stepItems = [
@@ -983,26 +1569,45 @@ function App() {
     deployed: t("deployedStatus"),
     configured: t("configuredStatus"),
     unreachable: t("unreachableStatus"),
-    missing: t("missingStatus")
+    missing: t("missingStatus"),
+    checking: t("checkingStatus")
   };
   const statusClass = {
     deployed: "success-text",
     configured: "warn-text",
     unreachable: "danger-text",
-    missing: "warn-text"
+    missing: "warn-text",
+    checking: "warn-text"
   };
   const contractRows = [
     {
       name: t("propertyVerificationContract"),
       type: t("onChain"),
+      description: t("propertyVerificationOpsHint"),
+      icon: Database,
+      tone: "blue",
       status: contractHealth.propertyVerification?.status || (safePropertyVerificationAddress ? "configured" : "missing"),
       address: safePropertyVerificationAddress || "-",
       block: latestOracleActivity?.time || (chainHealth.blockNumber !== null ? chainHealth.blockNumber.toString() : "-"),
       tx: latestOracleActivity?.hash || "-"
     },
     {
+      name: t("ltvGroth16VerifierContract"),
+      type: t("onChain"),
+      description: t("ltvGroth16VerifierOpsHint"),
+      icon: LockKeyhole,
+      tone: "green",
+      status: contractHealth.ltvGroth16Verifier?.status || (safeLtvGroth16VerifierAddress ? "configured" : "missing"),
+      address: safeLtvGroth16VerifierAddress || "-",
+      block: latestOracleActivity?.time || (chainHealth.blockNumber !== null ? chainHealth.blockNumber.toString() : "-"),
+      tx: latestOracleActivity?.hash || "-"
+    },
+    {
       name: t("complianceVerifierContract"),
       type: t("onChain"),
+      description: t("complianceVerifierOpsHint"),
+      icon: ShieldCheck,
+      tone: "green",
       status: contractHealth.complianceVerifier?.status || (safeComplianceVerifierAddress ? "configured" : "missing"),
       address: safeComplianceVerifierAddress || "-",
       block: latestOracleActivity?.time || (chainHealth.blockNumber !== null ? chainHealth.blockNumber.toString() : "-"),
@@ -1011,14 +1616,31 @@ function App() {
     {
       name: t("lendingContract"),
       type: t("onChain"),
+      description: t("lendingOpsHint"),
+      icon: CircleDollarSign,
+      tone: "amber",
       status: contractHealth.lending?.status || (safeLendingAddress ? "configured" : "missing"),
       address: safeLendingAddress || "-",
       block: latestChainActivity?.time || (chainHealth.blockNumber !== null ? chainHealth.blockNumber.toString() : "-"),
       tx: latestChainActivity?.hash || "-"
     },
     {
+      name: t("roleAdminManagerContract"),
+      type: t("onChain"),
+      description: t("roleAdminManagerOpsHint"),
+      icon: UserRoundCog,
+      tone: "blue",
+      status: contractHealth.roleAdminManager?.status || (safeRoleAdminManagerAddress ? "configured" : "missing"),
+      address: safeRoleAdminManagerAddress || "-",
+      block: latestChainActivity?.time || (chainHealth.blockNumber !== null ? chainHealth.blockNumber.toString() : "-"),
+      tx: latestChainActivity?.hash || "-"
+    },
+    {
       name: t("oracleUpdate"),
       type: t("oracle"),
+      description: t("oracleApiOpsHint"),
+      icon: Network,
+      tone: "blue",
       status: oracleHealth.ok ? "deployed" : oracleHealth.checked ? "unreachable" : "missing",
       address: import.meta.env.VITE_ORACLE_API_URL || "http://localhost:8787",
       block: latestOracleActivity?.time || "-",
@@ -1076,30 +1698,6 @@ function App() {
     ? gasSamples.reduce((sum, sample) => sum + Number(sample.gasUsed), 0) / gasSamples.length
     : 0;
   const latestGas = gasSamples[0]?.gasUsed;
-
-  const loanDetailItems = [
-    { label: t("loanId"), value: currentLoan ? `#${currentLoan.id.toString()}` : t("systemAssignedLoanId") },
-    { label: t("propertyId"), value: selectedLoanProperty?.propertyId || "-" },
-    { label: t("loanProperty"), value: currentLoan ? shortHash(currentLoan.propertyId) : shortHash(selectedKey) },
-    { label: t("borrower"), value: currentLoan ? shortHash(currentLoan.borrower) : walletLabel },
-    {
-      label: t("valuationCommitment"),
-      value: formattedLoanRecord.valuationCommitment
-    },
-    {
-      label: t("principalCommitment"),
-      value: currentLoan ? shortField(currentLoan.principalCommitment) : shortField(effectivePrincipalCommitmentAmount)
-    },
-    { label: t("interestRate"), value: currentLoan ? `${Number(currentLoan.interestRateBps) / 100}%` : "6.5%" },
-    { label: t("term"), value: currentLoan ? `${Number(currentLoan.termDays)} ${t("days")}` : t("termValue") },
-    {
-      label: t("activeCollateralLock"),
-      value: collateralLockLabel
-    },
-    { label: t("requestedAt"), value: currentLoan ? formatTimestamp(currentLoan.requestedAt) : "-" },
-    { label: t("approvedAt"), value: currentLoan?.approvedAt ? formatTimestamp(currentLoan.approvedAt) : "-" },
-    { label: t("repaidAt"), value: currentLoan?.repaidAt ? formatTimestamp(currentLoan.repaidAt) : "-" }
-  ];
 
   function updateLanguage(nextLanguage) {
     setLanguage(nextLanguage);
@@ -1170,6 +1768,7 @@ function App() {
       refetchLendingAdminRole(),
       refetchLoanOfficerRole(),
       refetchOracleOperatorRole(),
+      refetchProtocolAdminStatus(),
       refetchTargetRole()
     ]);
   }, [
@@ -1182,6 +1781,7 @@ function App() {
     refetchLendingAdminRole,
     refetchLoanOfficerRole,
     refetchOracleOperatorRole,
+    refetchProtocolAdminStatus,
     refetchTargetRole
   ]);
 
@@ -1280,6 +1880,14 @@ function App() {
     enabled: Boolean(safePropertyVerificationAddress),
     onLogs: handleContractEvent
   });
+  useWatchContractEvent({
+    address: safeComplianceVerifierAddress,
+    abi: complianceVerifierAbi,
+    chainId: chainIdFor(network),
+    eventName: "ComplianceProofVerified",
+    enabled: Boolean(safeComplianceVerifierAddress),
+    onLogs: handleContractEvent
+  });
 
   async function waitForReceipt(hash) {
     if (!publicClient || !hash) return;
@@ -1357,7 +1965,9 @@ function App() {
           ? t("verificationRequired")
           : principalAmount <= 0n
             ? t("invalidPrincipal")
-            : t("configHint")
+            : !ltvSafe
+              ? t("principalExceedsLimit")
+              : t("configHint")
       );
       return;
     }
@@ -1456,7 +2066,7 @@ function App() {
   }
 
   async function handleRejectLoan(loan = currentLoan) {
-    if (!loan || !isLoanOfficer) {
+    if (!loan || !roleLoanOfficerActive) {
       pushActivity("error", loan ? t("approvalUnavailable") : t("requestRequired"));
       return;
     }
@@ -1482,36 +2092,75 @@ function App() {
 
   async function handleRoleUpdate() {
     if (!isValidAddress(roleAddress) || !isAdmin) {
-      pushActivity("error", isAdmin ? t("invalidRoleAddress") : t("adminRequired"));
+      const message = isAdmin ? t("invalidRoleAddress") : t("adminRequired");
+      pushActivity("error", message);
+      setRoleDialog({ ok: false, message, role: roleLabelFor(roleTarget), operation: t(roleOperation === "grant" ? "grantRole" : "revokeRole"), address: roleAddress });
       return;
     }
-    const isOracleTarget = roleTarget === "oracle";
-    const targetContract = isOracleTarget ? safePropertyVerificationAddress : safeLendingAddress;
-    const targetAbi = isOracleTarget ? propertyVerificationAbi : lendingAbi;
-    const targetRole = isOracleTarget ? oracleRole : loanOfficerRole;
+    const blockedReason = roleOperationBlockReason();
+    if (blockedReason) {
+      pushActivity("error", blockedReason);
+      setRoleDialog({ ok: false, message: blockedReason, role: roleLabelFor(roleTarget), operation: t(roleOperation === "grant" ? "grantRole" : "revokeRole"), address: roleAddress });
+      return;
+    }
+    const writeTargets = selectedRoleConfig.writeTargets || [];
 
-    if (!targetContract) {
+    if (writeTargets.length === 0) {
       pushActivity("error", t("contractsMissing"));
+      setRoleDialog({
+        ok: false,
+        message: t("contractsMissing"),
+        role: roleLabelFor(roleTarget),
+        operation: t(roleOperation === "grant" ? "grantRole" : "revokeRole"),
+        address: roleAddress
+      });
       return;
     }
 
     setBusyAction("Role");
     setTxPhase("submitting");
     try {
-      const functionName = roleOperation === "grant" ? "grantRole" : "revokeRole";
-      const hash = await writeContractAsync({
-        address: targetContract,
-        abi: targetAbi,
-        functionName,
-        args: [targetRole, roleAddress],
-        chainId: chainIdFor(network)
-      });
-      pushActivity("chain", `${functionName} ${t("txSubmitted")}`, hash);
-      const receipt = await waitForReceipt(hash);
-      recordGas(functionName, receipt);
+      const functionName = roleOperation === "grant"
+        ? selectedRoleConfig.grantFunctionName
+        : selectedRoleConfig.revokeFunctionName;
+      const args = selectedRoleConfig.readFunctionName === "hasProtocolAdmin"
+        ? [roleAddress]
+        : [selectedRoleConfig.roleKey, roleAddress];
+      const hashes = [];
+      for (const target of writeTargets) {
+        const hash = await writeContractAsync({
+          address: target.contract,
+          abi: target.abi,
+          functionName,
+          args,
+          chainId: chainIdFor(network)
+        });
+        hashes.push(hash);
+        pushActivity("chain", `${functionName} ${t("txSubmitted")}`, hash);
+        const receipt = await waitForReceipt(hash);
+        recordGas(functionName, receipt);
+      }
       await refreshAppState();
+      setRoleDialog({
+        ok: true,
+        message: t("roleChangeSuccessCopy"),
+        role: roleLabelFor(roleTarget),
+        operation: t(roleOperation === "grant" ? "grantRole" : "revokeRole"),
+        address: roleAddress,
+        txHash: hashes.at(-1),
+        contractCount: hashes.length
+      });
     } catch (error) {
-      pushActivity("error", error.shortMessage || error.message);
+      await refreshAppState();
+      const message = error.shortMessage || error.message;
+      pushActivity("error", message);
+      setRoleDialog({
+        ok: false,
+        message,
+        role: roleLabelFor(roleTarget),
+        operation: t(roleOperation === "grant" ? "grantRole" : "revokeRole"),
+        address: roleAddress
+      });
     } finally {
       setBusyAction("");
       window.setTimeout(() => setTxPhase(""), 1200);
@@ -1549,17 +2198,24 @@ function App() {
         <div className="asset-copy">
           <div className="asset-title-row">
             <h2>{t("assetTitle")}</h2>
-            <span className="mini-pill">{shortHash(selectedKey)}</span>
           </div>
-          <p className="asset-address">
-            <Home size={16} />
-            {selectedProperty?.address || "-"}
-          </p>
-          <div className="asset-meta">
+          <div className="asset-identity-row">
             <div>
               <Database size={24} />
               <span>{t("propertyId")}</span>
               <strong>{selectedProperty?.propertyId || "-"}</strong>
+            </div>
+            <div>
+              <Home size={24} />
+              <span>{t("assetAddress")}</span>
+              <strong>{selectedProperty?.address || "-"}</strong>
+            </div>
+          </div>
+          <div className="asset-meta">
+            <div>
+              <Leaf size={24} />
+              <span>{t("esgScore")}</span>
+              <strong>{selectedProperty?.esgScore ?? "-"}</strong>
             </div>
             <div>
               <Network size={24} />
@@ -1583,8 +2239,8 @@ function App() {
             </div>
             <div>
               <WalletCards size={18} />
-              <span>{t("propertyOwner")}</span>
-              <strong>{shortHash(selectedProperty?.ownerAddress)}</strong>
+              <span>{t("loanAsset")}</span>
+              <strong>{shortHash(selectedKey)}</strong>
             </div>
           </div>
         </div>
@@ -1642,7 +2298,7 @@ function App() {
                 <StepIcon size={compact ? 18 : 22} />
               </div>
               <div>
-                <strong>{step.title}</strong>
+                <strong className={index === 2 ? "step-title-loan" : ""}>{step.title}</strong>
                 <span>{step.state}</span>
                 {!compact && <small>{step.subtitle}</small>}
               </div>
@@ -1652,6 +2308,22 @@ function App() {
         })}
       </section>
     );
+  }
+
+  function updatePrincipalFromInput(nextValue) {
+    const digits = nextValue.replace(/\D/g, "");
+    if (!digits) {
+      setPrincipal("");
+      return;
+    }
+    const normalized = digits.replace(/^0+(?=\d)/, "");
+    const maxAmount = BigInt(Math.max(0, maxPrincipal));
+    const requestedAmount = BigInt(normalized);
+    setPrincipal(String(maxAmount > 0n && requestedAmount > maxAmount ? maxAmount : requestedAmount));
+  }
+
+  function applyMaxPrincipal() {
+    if (maxPrincipal > 0) setPrincipal(String(maxPrincipal));
   }
 
   function renderLoanActionButtons(className = "") {
@@ -1731,28 +2403,33 @@ function App() {
         </div>
         <div className="proof-input-row">
           <div className="proof-principal-field">
-            <label htmlFor="principal-input">{t("principal")}</label>
-            <input
-              id="principal-input"
-              value={principal}
-              inputMode="numeric"
-              onChange={(event) => setPrincipal(event.target.value.replace(/\D/g, ""))}
-            />
+            <div className="proof-principal-header">
+              <label htmlFor="principal-input">{t("principal")}</label>
+            </div>
+            <div className="proof-principal-control">
+              <input
+                id="principal-input"
+                name="proof-principal-current"
+                value={principal}
+                inputMode="numeric"
+                autoComplete="off"
+                onChange={(event) => updatePrincipalFromInput(event.target.value)}
+              />
+              <button type="button" onClick={applyMaxPrincipal} disabled={!maxPrincipal}>
+                {t("maxAmountAction")}
+              </button>
+            </div>
           </div>
         </div>
         <div className="proof-action-row">
           <button
-            className="primary-action"
+            className="primary-action workflow-action"
             onClick={handleCompliance}
             disabled={!canComply || busyAction === "Compliance"}
           >
             {busyAction === "Compliance" ? <Loader2 className="spin" size={17} /> : <ShieldCheck size={17} />}
             {t("generateProof")}
           </button>
-          <div className="proof-action-note">
-            <strong>{t("publicResult")}</strong>
-            <span>{t("complianceStudioCopy")}</span>
-          </div>
         </div>
       </article>
     );
@@ -1768,8 +2445,8 @@ function App() {
         </div>
         <div className="loan-command-strip">
           <div>
-            <span>{t("propertyKey")}</span>
-            <strong>{shortHash(selectedKey)}</strong>
+            <span>{t("propertyId")}</span>
+            <strong>{selectedProperty?.propertyId || "-"}</strong>
           </div>
           <div>
             <span>{t("loanState")}</span>
@@ -1837,18 +2514,20 @@ function App() {
         items: [
           { label: t("loanId"), value: currentLoan ? `#${currentLoan.id.toString()}` : t("systemAssignedLoanId") },
           { label: t("propertyId"), value: selectedLoanProperty?.propertyId || "-" },
-          { label: t("loanProperty"), value: currentLoan ? shortHash(currentLoan.propertyId) : shortHash(selectedKey) },
-          { label: t("borrower"), value: currentLoan ? shortHash(currentLoan.borrower) : walletLabel }
+          { label: t("loanProperty"), value: currentLoan?.propertyId || selectedKey || "-", variant: "hash" },
+          { label: t("borrower"), value: currentLoan?.borrower || address || "-", variant: "hash" }
         ]
       },
       {
         title: t("loanRecordCommitments"),
+        className: "commitment-section",
         icon: Database,
         items: [
-          { label: t("valuationCommitment"), value: formattedLoanRecord.valuationCommitment },
+          { label: t("valuationCommitment"), value: fullCommitment(loanRecord?.valuationCommitment || record?.valuationCommitment), variant: "hash" },
           {
             label: t("principalCommitment"),
-            value: currentLoan ? shortField(currentLoan.principalCommitment) : shortField(effectivePrincipalCommitmentAmount)
+            value: fullCommitment(currentLoan ? currentLoan.principalCommitment : effectivePrincipalCommitmentAmount),
+            variant: "hash"
           },
           { label: t("activeCollateralLock"), value: collateralLockLabel }
         ]
@@ -1887,7 +2566,7 @@ function App() {
           {loanRecordSections.map((section) => {
             const SectionIcon = section.icon;
             return (
-              <section className="record-section" key={section.title}>
+              <section className={`record-section ${section.className || ""}`} key={section.title}>
                 <div className="record-section-title">
                   <SectionIcon size={16} />
                   <strong>{section.title}</strong>
@@ -1896,7 +2575,7 @@ function App() {
                   {section.items.map((item) => (
                     <div key={item.label}>
                       <dt>{item.label}</dt>
-                      <dd>{item.value}</dd>
+                      <dd className={item.variant === "hash" ? "full-hash-value" : ""}>{item.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -1949,7 +2628,7 @@ function App() {
         title: t("recordAssetIdentity"),
         icon: Database,
         items: [
-          { label: t("propertyKey"), value: shortHash(selectedKey) },
+          { label: t("propertyKey"), value: selectedKey || "-", variant: "hash" },
           { label: t("statusVerified"), value: isVerified ? t("yes") : t("no") },
           { label: t("statusCompliant"), value: isCompliant ? t("yes") : t("no") }
         ]
@@ -1958,16 +2637,16 @@ function App() {
         title: t("recordVerificationProof"),
         icon: FileCheck2,
         items: [
-          { label: t("registryEvidenceFingerprint"), value: formattedRecord.evidenceHash },
-          { label: t("valuationCommitment"), value: formattedRecord.valuationCommitment }
+          { label: t("registryEvidenceFingerprint"), value: record?.evidenceHash || "-", variant: "hash" },
+          { label: t("valuationCommitment"), value: fullCommitment(record?.valuationCommitment), variant: "hash" }
         ]
       },
       {
         title: t("recordComplianceProof"),
         icon: ShieldCheck,
         items: [
-          { label: t("zkProofFingerprint"), value: formattedRecord.complianceHash },
-          { label: t("principalCommitment"), value: formattedRecord.principalCommitment },
+          { label: t("zkProofFingerprint"), value: record?.complianceHash || "-", variant: "hash" },
+          { label: t("principalCommitment"), value: fullCommitment(record?.principalCommitment), variant: "hash" },
           { label: t("updated"), value: formattedRecord.lastUpdated }
         ]
       }
@@ -2002,7 +2681,7 @@ function App() {
                   {section.items.map((item) => (
                     <div key={item.label}>
                       <dt>{item.label}</dt>
-                      <dd>{item.value}</dd>
+                      <dd className={item.variant === "hash" ? "full-hash-value" : ""}>{item.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -2014,11 +2693,19 @@ function App() {
     );
   }
 
-  function renderChainRecordExplorer() {
+  function renderPropertyRecordAudit({
+    rows = chainRecords.rows,
+    selectedRow = null,
+    page = 1,
+    pageCount = 1,
+    onPrevious,
+    onNext,
+    onSelect
+  } = {}) {
     return (
-      <article className="record-card panel">
+      <article className="record-card panel admin-chain-record-panel">
         <div className="panel-heading">
-          <h2>{t("chainRecordExplorer")}</h2>
+          <h2>{t("propertyRecordAudit")}</h2>
           <Activity size={16} />
         </div>
         <div className="chain-record-table">
@@ -2027,29 +2714,278 @@ function App() {
             <span>{t("propertyKey")}</span>
             <span>{t("statusVerified")}</span>
             <span>{t("statusCompliant")}</span>
-            <span>{t("principalCommitment")}</span>
             <span>{t("updated")}</span>
           </div>
           {chainRecords.rows.length === 0 ? (
             <p className="helper-copy">{chainRecords.loading ? t("loading") : t("noChainRecords")}</p>
           ) : (
-            chainRecords.rows.map((row) => (
+            rows.map((row) => (
               <button
-                className={`chain-record-row ${selectedId === row.property.propertyId ? "active" : ""}`}
+                className={`chain-record-row ${selectedRow?.property.propertyId === row.property.propertyId ? "active" : ""}`}
                 key={row.property.propertyId}
-                onClick={() => setSelectedId(row.property.propertyId)}
+                onClick={() => {
+                  setSelectedId(row.property.propertyId);
+                  onSelect?.(row.property.propertyId);
+                }}
               >
                 <strong>{row.property.propertyId}</strong>
                 <span>{shortHash(row.propertyKey)}</span>
                 <span>{row.record.verified ? t("yes") : t("no")}</span>
                 <span>{row.record.compliant ? t("yes") : t("no")}</span>
-                <span>{row.record.principalCommitment}</span>
                 <span>{row.record.lastUpdated}</span>
               </button>
             ))
           )}
         </div>
+        <div className="ledger-pagination">
+          <span>{page} / {pageCount}</span>
+          <button
+            className="icon-only"
+            onClick={onPrevious}
+            disabled={page <= 1}
+            aria-label={t("previousPage")}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            className="icon-only"
+            onClick={onNext}
+            disabled={page >= pageCount}
+            aria-label={t("nextPage")}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        {selectedRow ? (
+          <dl className="admin-role-change-detail audit-detail-grid audit-chain-detail">
+            <div>
+              <dt>{t("propertyId")}</dt>
+              <dd>{selectedRow.property.propertyId}</dd>
+            </div>
+            <div>
+              <dt>{t("assetAddress")}</dt>
+              <dd>{selectedRow.property.address || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("propertyKey")}</dt>
+              <dd>{selectedRow.propertyKey}</dd>
+            </div>
+            <div>
+              <dt>{t("registryEvidenceFingerprint")}</dt>
+              <dd>{selectedRow.rawRecord?.evidenceHash || selectedRow.record.evidenceHash || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("valuationCommitment")}</dt>
+              <dd>{selectedRow.rawRecord?.valuationCommitment || selectedRow.record.valuationCommitment || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("zkProofFingerprint")}</dt>
+              <dd>{selectedRow.rawRecord?.complianceHash || selectedRow.record.complianceHash || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("principalCommitment")}</dt>
+              <dd>{selectedRow.rawRecord?.principalCommitment || selectedRow.record.principalCommitment || "-"}</dd>
+            </div>
+            <div>
+              <dt>{t("updated")}</dt>
+              <dd>{selectedRow.record.lastUpdated}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="helper-copy">{chainRecords.loading ? t("loading") : t("selectPropertyRecord")}</p>
+        )}
       </article>
+    );
+  }
+
+  function renderLoanLedgerAudit({
+    rows = [],
+    selectedRow = null,
+    loading = false,
+    page = 1,
+    pageCount = 1,
+    totalCount = 0,
+    onPrevious,
+    onNext
+  } = {}) {
+    const stateKeys = ["requested", "approved", "repaid", "rejected", "cancelled"];
+    const selectedLoanPropertyForAudit = selectedRow
+      ? knownProperties.find((property) => propertyKey(property.propertyId) === selectedRow.propertyId)
+      : null;
+    const selectedLoanRecordForAudit = selectedRow
+      ? chainRecords.rows.find((row) => String(row.propertyKey).toLowerCase() === String(selectedRow.propertyId).toLowerCase())
+      : null;
+    const selectedLoanState = selectedRow ? t(stateKeys[selectedRow.state] || "loanReadError") : "-";
+    const selectedLoanSections = selectedRow
+      ? [
+          {
+            title: t("loanRecordIdentity"),
+            icon: WalletCards,
+            items: [
+              { label: t("loanId"), value: `#${selectedRow.id.toString()}` },
+              { label: t("loanState"), value: selectedLoanState },
+              { label: t("propertyId"), value: selectedLoanPropertyForAudit?.propertyId || "-" },
+              { label: t("borrower"), value: selectedRow.borrower || "-", variant: "hash" }
+            ]
+          },
+          {
+            title: t("loanRecordCommitments"),
+            icon: Database,
+            items: [
+              { label: t("loanProperty"), value: selectedRow.propertyId || "-", variant: "hash" },
+              {
+                label: t("valuationCommitment"),
+                value: selectedLoanRecordForAudit?.rawRecord?.valuationCommitment || "-",
+                variant: "hash"
+              },
+              { label: t("principalCommitment"), value: fullCommitment(selectedRow.principalCommitment), variant: "hash" }
+            ]
+          },
+          {
+            title: t("loanRecordTerms"),
+            icon: CircleDollarSign,
+            items: [
+              { label: t("interestRate"), value: `${Number(selectedRow.interestRateBps || 0) / 100}%` },
+              { label: t("term"), value: `${Number(selectedRow.termDays || 0)} ${t("days")}` },
+              { label: t("requestedAt"), value: formatTimestamp(selectedRow.requestedAt) },
+              { label: t("approvedAt"), value: selectedRow.approvedAt ? formatTimestamp(selectedRow.approvedAt) : "-" },
+              { label: t("repaidAt"), value: selectedRow.repaidAt ? formatTimestamp(selectedRow.repaidAt) : "-" }
+            ]
+          }
+        ]
+      : [];
+
+    return (
+      <article className="record-card panel admin-loan-audit-panel">
+        <div className="panel-heading">
+          <h2>{t("loanLedgerAudit")}</h2>
+          <CircleDollarSign size={16} />
+        </div>
+        <div className="chain-record-table admin-loan-audit-table">
+          <div className="chain-record-head">
+            <span>{t("loanId")}</span>
+            <span>{t("propertyId")}</span>
+            <span>{t("borrower")}</span>
+            <span>{t("state")}</span>
+            <span>{t("requestedAt")}</span>
+          </div>
+          {totalCount === 0 ? (
+            <p className="helper-copy">{loading ? t("loading") : t("noLoanAuditRecords")}</p>
+          ) : (
+            rows.map((loan) => (
+              <button
+                className={`chain-record-row ${selectedRow?.id?.toString() === loan.id.toString() ? "active" : ""}`}
+                key={loan.id.toString()}
+                onClick={() => selectLoanRecord(loan)}
+              >
+                <strong>{`#${loan.id.toString()}`}</strong>
+                <span>{knownProperties.find((property) => propertyKey(property.propertyId) === loan.propertyId)?.propertyId || "-"}</span>
+                <span>{shortHash(loan.borrower)}</span>
+                <span>{t(stateKeys[loan.state] || "loanReadError")}</span>
+                <span>{formatTimestamp(loan.requestedAt)}</span>
+              </button>
+            ))
+          )}
+        </div>
+        <div className="ledger-pagination">
+          <span>{page} / {pageCount}</span>
+          <button
+            className="icon-only"
+            onClick={onPrevious}
+            disabled={page <= 1}
+            aria-label={t("previousPage")}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            className="icon-only"
+            onClick={onNext}
+            disabled={page >= pageCount}
+            aria-label={t("nextPage")}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        {selectedRow ? (
+          <div className="record-section-list admin-loan-audit-detail">
+            {selectedLoanSections.map((section) => {
+              const SectionIcon = section.icon;
+              return (
+                <section className="record-section" key={section.title}>
+                  <div className="record-section-title">
+                    <SectionIcon size={16} />
+                    <strong>{section.title}</strong>
+                  </div>
+                  <dl className="record-list">
+                    {section.items.map((item) => (
+                      <div key={item.label}>
+                        <dt>{item.label}</dt>
+                        <dd className={item.variant === "hash" ? "full-hash-value" : ""}>{item.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="helper-copy">{loading ? t("loading") : t("selectLoanAuditRecord")}</p>
+        )}
+      </article>
+    );
+  }
+
+  function renderOnchainAuditDetail(row) {
+    if (!row) return <p className="helper-copy">{t("selectOnchainAuditRecord")}</p>;
+    const eventFields = row.fields && row.fields.length ? row.fields : [{ label: t("eventTarget"), value: row.target || "-" }];
+    const metadataFields = [
+      { label: t("eventName"), value: row.eventName },
+      { label: t("operatorRole"), value: operatorRoleLabelFor(row.operator) },
+      { label: t("changedBy"), value: row.operator || "-", variant: "hash" },
+      { label: t("contract"), value: row.contract },
+      { label: t("contractAddress"), value: row.contractAddress, variant: "hash" },
+      { label: t("latestBlock"), value: row.block },
+      { label: t("latestTx"), value: row.tx, variant: "hash" }
+    ];
+
+    return (
+      <div className="onchain-event-detail">
+        <div className="onchain-event-summary">
+          <span className={`event-type-pill ${row.categoryTone || "blue"}`}>{row.category}</span>
+          <div>
+            <strong>{row.action}</strong>
+            <small>{row.target || "-"}</small>
+          </div>
+        </div>
+        <section className="record-section">
+          <div className="record-section-title">
+            <ListChecks size={16} />
+            <strong>{t("eventPayload")}</strong>
+          </div>
+          <dl className="record-list onchain-event-fields">
+            {eventFields.map((item) => (
+              <div key={item.label}>
+                <dt>{item.label}</dt>
+                <dd className={item.variant === "hash" ? "full-hash-value" : ""}>{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+        <section className="record-section">
+          <div className="record-section-title">
+            <Activity size={16} />
+            <strong>{t("eventMetadata")}</strong>
+          </div>
+          <dl className="record-list onchain-event-fields">
+            {metadataFields.map((item) => (
+              <div key={item.label}>
+                <dt>{item.label}</dt>
+                <dd className={item.variant === "hash" ? "full-hash-value" : ""}>{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      </div>
     );
   }
 
@@ -2135,193 +3071,833 @@ function App() {
       ? loanPortfolio.loans
       : loanPortfolio.loans.filter((loan) => loan.state === activeTab.state);
     const stateKeys = ["requested", "approved", "repaid", "rejected", "cancelled"];
+    const stateTones = ["amber", "green", "muted", "danger", "muted"];
+    const currentLoanTone = currentLoan ? stateTones[currentLoan.state] || "muted" : "muted";
+    const closedLoanCount = loanStats.repaid + loanStats.rejected + loanStats.cancelled;
+    const approvalOverviewCards = [
+      {
+        label: t("pendingApprovals"),
+        value: loanStats.requested,
+        detail: t("currentlyPending"),
+        icon: Send,
+        tone: "amber"
+      },
+      {
+        label: t("issuedLoans"),
+        value: loanStats.approved,
+        detail: t("activeApproved"),
+        icon: BadgeCheck,
+        tone: "green"
+      },
+      {
+        label: t("activeCollateral"),
+        value: loanStats.activeProperties.size,
+        detail: t("lockedAssets"),
+        icon: Building2,
+        tone: "blue"
+      },
+      {
+        label: t("closedLoans"),
+        value: closedLoanCount,
+        detail: t("repaidRejectedCancelled"),
+        icon: ListChecks,
+        tone: "muted"
+      }
+    ];
+    const approvalDecisionSections = [
+      {
+        title: t("loanRecordIdentity"),
+        icon: WalletCards,
+        items: [
+          { label: t("loanId"), value: currentLoan ? `#${currentLoan.id.toString()}` : t("selectLoanToReview") },
+          { label: t("loanState"), value: currentLoan ? loanStateLabel : "-" },
+          { label: t("propertyId"), value: selectedLoanProperty?.propertyId || "-" },
+          { label: t("loanProperty"), value: currentLoan?.propertyId || "-", variant: "hash" },
+          { label: t("borrower"), value: currentLoan?.borrower || "-", variant: "hash" }
+        ]
+      },
+      {
+        title: t("loanRecordCommitments"),
+        icon: Database,
+        items: [
+          { label: t("valuationCommitment"), value: currentLoan ? fullCommitment(loanRecord?.valuationCommitment) : "-", variant: "hash" },
+          { label: t("principalCommitment"), value: currentLoan ? fullCommitment(currentLoan.principalCommitment) : "-", variant: "hash" },
+          { label: t("proofBinding"), value: currentLoan ? (loanProofMatchesPrincipal ? t("matched") : t("notMatched")) : "-" },
+          { label: t("activeCollateralLock"), value: currentLoan ? collateralLockLabel : "-" }
+        ]
+      },
+      {
+        title: t("loanRecordTerms"),
+        icon: CircleDollarSign,
+        items: [
+          { label: t("interestRate"), value: currentLoan ? `${Number(currentLoan.interestRateBps) / 100}%` : "-" },
+          { label: t("term"), value: currentLoan ? `${Number(currentLoan.termDays)} ${t("days")}` : "-" },
+          { label: t("requestedAt"), value: currentLoan ? formatTimestamp(currentLoan.requestedAt) : "-" },
+          { label: t("approvedAt"), value: currentLoan?.approvedAt ? formatTimestamp(currentLoan.approvedAt) : "-" },
+          { label: t("repaidAt"), value: currentLoan?.repaidAt ? formatTimestamp(currentLoan.repaidAt) : "-" }
+        ]
+      }
+    ];
+
     return (
-      <div className="workspace-view view-scroll">
-        <section className="view-grid two-col">
-          <article className="loan-table-card panel">
-            <div className="panel-heading">
-              <h2>{t("loanOfficerWorkbench")}</h2>
-              <BadgeCheck size={16} />
-            </div>
-            <div className="approval-tabs">
-              {approvalTabs.map((tab) => (
-                <button
-                  className={approvalFilter === tab.id ? "active" : ""}
-                  key={tab.id}
-                  onClick={() => setApprovalFilter(tab.id)}
-                >
-                  {t(tab.label)}
-                </button>
-              ))}
-            </div>
-            <div className="approval-list">
-              {filteredLoans.length === 0 ? (
-                <p className="helper-copy">{loanPortfolio.loading ? t("loading") : t("noLoansForStatus")}</p>
-              ) : (
-                filteredLoans.map((loan) => {
-                  const matchedProperty = knownProperties.find(
-                    (property) => propertyKey(property.propertyId) === loan.propertyId
-                  );
-                  return (
-                  <button
-                    className={`approval-row ${selectedLoanId === loan.id.toString() ? "active" : ""}`}
-                    key={loan.id.toString()}
-                    onClick={() => selectLoanRecord(loan)}
-                  >
-                    <strong>#{loan.id.toString()}</strong>
-                    <span>{matchedProperty?.propertyId || "-"} · {t(stateKeys[loan.state] || "loanReadError")}</span>
-                    <span>{t("loanProperty")}: {shortHash(loan.propertyId)}</span>
-                    <small>{t("borrower")}: {shortHash(loan.borrower)}</small>
-                  </button>
-                  );
-                })
-              )}
-            </div>
-          </article>
-          <article className="operation-panel panel">
-            <div className="panel-heading">
-              <h2>{t("approvalDecision")}</h2>
-              <CircleDollarSign size={16} />
-            </div>
-            <DetailList items={loanDetailItems} />
-            {currentLoan?.state === 0 ? (
-              <>
-                {!loanApprovalReady && (
-                  <p className="helper-copy compact-note warn-text">{loanApprovalBlockReason}</p>
-                )}
-                <div className="view-actions-row">
-                  <button className="gold-action" onClick={handleApproveLoan} disabled={!canApproveLoan}>
-                    <BadgeCheck size={17} />
-                    {busyAction === "approveLoan" ? actionText("approveLoan") : t("approveLoan")}
-                  </button>
-                  <button className="outline-action" onClick={() => handleRejectLoan()} disabled={!canRejectLoan}>
-                    <XCircle size={17} />
-                    {busyAction === "rejectLoan" ? actionText("rejectLoan") : t("rejectLoan")}
-                  </button>
+      <div className="workspace-view view-scroll approval-view">
+        <section className="approval-overview-grid">
+          {approvalOverviewCards.map((card) => {
+            const CardIcon = card.icon;
+            return (
+              <article className={`approval-overview-card panel ${card.tone}`} key={card.label}>
+                <div>
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <small>{card.detail}</small>
                 </div>
-              </>
-            ) : (
-              <p className="helper-copy">{t("readOnlyLoanStatus")}</p>
-            )}
-          </article>
+                <CardIcon size={20} />
+              </article>
+            );
+          })}
         </section>
-        {renderActivityFeed(8)}
+
+        <section className="approval-ledger-shell">
+          <div className="panel-heading">
+            <h2>{t("loanOfficerWorkbench")}</h2>
+            <span className="status-chip blue">{filteredLoans.length} {t("record")}</span>
+          </div>
+          <div className="approval-tabs">
+            {approvalTabs.map((tab) => (
+              <button
+                className={approvalFilter === tab.id ? "active" : ""}
+                key={tab.id}
+                onClick={() => setApprovalFilter(tab.id)}
+              >
+                {t(tab.label)}
+              </button>
+            ))}
+          </div>
+          <LoanLedger
+            t={t}
+            title={t("loanBook")}
+            loans={filteredLoans}
+            loading={loanPortfolio.loading}
+            emptyText={t("noLoansForStatus")}
+            rowKey={(loan) => loan.id.toString()}
+            selectedLoanId={selectedLoanId}
+            selectLoanRecord={selectLoanRecord}
+            pageSize={5}
+            columns={[
+              { key: "id", label: t("loanId"), strong: true, render: (loan) => `#${loan.id.toString()}` },
+              {
+                key: "propertyCode",
+                label: t("propertyId"),
+                render: (loan) =>
+                  knownProperties.find((property) => propertyKey(property.propertyId) === loan.propertyId)?.propertyId || "-"
+              },
+              { key: "borrower", label: t("borrower"), render: (loan) => shortHash(loan.borrower) },
+              { key: "state", label: t("state"), render: (loan) => t(stateKeys[loan.state] || "loanReadError") },
+              { key: "requestedAt", label: t("requestedAt"), render: (loan) => formatTimestamp(loan.requestedAt) },
+              { key: "principalCommitment", label: t("principalCommitment"), render: (loan) => shortField(loan.principalCommitment) }
+            ]}
+          />
+        </section>
+
+        <article className="approval-decision-full panel">
+          <div className="panel-heading">
+            <h2>{t("approvalDecision")}</h2>
+            <span className={`status-chip ${currentLoanTone}`}>
+              {currentLoan ? loanStateLabel : t("selectLoanToReview")}
+            </span>
+          </div>
+          <div className="approval-decision-layout">
+            <div className="approval-detail-sections">
+              {approvalDecisionSections.map((section) => {
+                const SectionIcon = section.icon;
+                return (
+                  <section className="record-section" key={section.title}>
+                    <div className="record-section-title">
+                      <SectionIcon size={16} />
+                      <strong>{section.title}</strong>
+                    </div>
+                    <dl className="record-list">
+                      {section.items.map((item) => (
+                        <div key={item.label}>
+                          <dt>{item.label}</dt>
+                          <dd className={item.variant === "hash" ? "full-hash-value" : ""}>{item.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                );
+              })}
+            </div>
+            <div className="approval-decision-actions">
+              <button
+                className="approval-approve-button"
+                onClick={handleApproveLoan}
+                disabled={!canApproveLoan}
+              >
+                <BadgeCheck size={18} />
+                {busyAction === "approveLoan" ? actionText("approveLoan") : t("approveLoan")}
+              </button>
+              <button
+                className="approval-reject-button"
+                onClick={() => handleRejectLoan()}
+                disabled={!canRejectLoan}
+              >
+                <XCircle size={18} />
+                {busyAction === "rejectLoan" ? actionText("rejectLoan") : t("rejectLoan")}
+              </button>
+            </div>
+          </div>
+        </article>
       </div>
     );
   }
 
-  function renderAdmin() {
+  function renderAdmin(section = "roles") {
+    const opsOverviewCards = [
+      {
+        label: t("proofLatency"),
+        value: averageProofLatency ? `${(averageProofLatency / 1000).toFixed(2)}s` : "-",
+        detail: averageProofLatency ? t("sessionAverage") : t("sessionMetric"),
+        icon: Activity,
+        tone: averageProofLatency ? "green" : "muted"
+      },
+      {
+        label: t("gasCost"),
+        value: latestGas ? Number(latestGas).toLocaleString() : "-",
+        detail: averageGas ? `${t("avgGas")} ${Math.round(averageGas).toLocaleString()}` : t("latestGasUsed"),
+        icon: CircleDollarSign,
+        tone: latestGas ? "blue" : "muted"
+      },
+      {
+        label: t("rpcStatus"),
+        value: rpcReady ? t("readyStatus") : t("unreachableStatus"),
+        detail: chainHealth.blockNumber !== null ? `${t("blockHeight")} ${chainHealth.blockNumber.toString()}` : networkLabel,
+        icon: Network,
+        tone: rpcReady ? "green" : "amber"
+      },
+      {
+        label: t("contractCoverage"),
+        value: `${deployedContractCount}/${coreContractKeys.length}`,
+        detail: fullContractsReady ? t("allCoreContractsOnline") : t("contractAttentionNeeded"),
+        icon: Cpu,
+        tone: fullContractsReady ? "green" : "amber"
+      },
+      {
+        label: t("oracleService"),
+        value: oracleHealth.ok ? t("readyStatus") : oracleHealth.checked ? t("unreachableStatus") : t("missingStatus"),
+        detail: import.meta.env.VITE_ORACLE_API_URL || "http://localhost:8787",
+        icon: Database,
+        tone: oracleHealth.ok ? "green" : "amber"
+      },
+      {
+        label: t("onchainEventIndex"),
+        value: chainEventAudit.rows.length + roleAudit.rows.length,
+        detail: t("onchainEventIndexDetail"),
+        icon: ListChecks,
+        tone: chainEventAudit.rows.length + roleAudit.rows.length ? "blue" : "muted"
+      }
+    ];
+    const manageableRoleCards = [
+      {
+        id: "admin",
+        label: t("roleAdmin"),
+        description: t("adminRoleDescription"),
+        ...managedRoleConfigFor("admin"),
+        icon: ShieldCheck
+      },
+      {
+        id: "oracle",
+        label: t("roleOracle"),
+        description: t("oracleRoleDescription"),
+        ...managedRoleConfigFor("oracle"),
+        icon: Database
+      },
+      {
+        id: "loanOfficer",
+        label: t("roleLoanOfficer"),
+        description: t("loanOfficerRoleDescription"),
+        ...managedRoleConfigFor("loanOfficer"),
+        icon: BadgeCheck
+      }
+    ];
+    const selectedRoleCard = manageableRoleCards.find((item) => item.id === roleTarget) || manageableRoleCards[0];
+    const roleDirectoryCards = manageableRoleCards.map((roleCard) => ({
+      ...roleCard,
+      members: buildManagedRoleMembers(roleCard)
+    }));
+    const roleDirectoryPageSize = 4;
+    const roleAuditPageSize = 5;
+    const selectedDirectoryRole = roleDirectoryCards.find((item) => item.id === roleDirectoryTarget) || roleDirectoryCards[0];
+    const roleMemberPageCount = Math.max(1, Math.ceil(selectedDirectoryRole.members.length / roleDirectoryPageSize));
+    const currentRoleDirectoryPage = Math.min(roleDirectoryPage, roleMemberPageCount);
+    const visibleRoleMembers = selectedDirectoryRole.members.slice(
+      (currentRoleDirectoryPage - 1) * roleDirectoryPageSize,
+      currentRoleDirectoryPage * roleDirectoryPageSize
+    );
+    const currentTargetRoleLabel = !isValidAddress(roleAddress)
+      ? t("invalidRoleAddress")
+      : fetchingTargetRole || targetHasRole === undefined
+        ? t("checkingStatus")
+        : normalizeRoleCheckResult(targetHasRole)
+          ? selectedRoleCard.label
+          : t("standardUserPermission");
+    const managedRoleIds = new Set(manageableRoleCards.map((item) => String(item.roleKey || "").toLowerCase()));
+    const initialConfiguredGrantIds = new Set();
+    const seenConfiguredGrants = new Set();
+    roleAudit.rows
+      .slice()
+      .sort((a, b) =>
+        Number(a.blockNumber || 0n) - Number(b.blockNumber || 0n) ||
+        Number(a.logIndex || 0) - Number(b.logIndex || 0)
+      )
+      .forEach((row) => {
+        if (row.actionType !== "grant") return;
+        const roleCard = manageableRoleCards.find((item) =>
+          String(row.roleId || "").toLowerCase() === String(item.roleKey || "").toLowerCase()
+        );
+        if (!roleCard || !(roleCard.configuredAddresses || []).some((configuredAddress) => addressesMatch(configuredAddress, row.account))) {
+          return;
+        }
+        const baselineKey = [
+          String(row.roleId || "").toLowerCase(),
+          String(row.contractAddress || "").toLowerCase(),
+          String(row.account || "").toLowerCase()
+        ].join(":");
+        if (seenConfiguredGrants.has(baselineKey)) return;
+        seenConfiguredGrants.add(baselineKey);
+        initialConfiguredGrantIds.add(row.id);
+      });
+    const roleChangeRows = roleAudit.rows.filter((row) =>
+      managedRoleIds.has(String(row.roleId || "").toLowerCase()) &&
+      manageableRoleCards.some((item) =>
+        String(row.roleId || "").toLowerCase() === String(item.roleKey || "").toLowerCase() &&
+        (item.contracts || []).some((contractAddress) => addressesMatch(contractAddress, row.contractAddress))
+      ) &&
+      !initialConfiguredGrantIds.has(row.id)
+    );
+    const roleAuditPageCount = Math.max(1, Math.ceil(roleChangeRows.length / roleAuditPageSize));
+    const currentRoleAuditPage = Math.min(roleAuditPage, roleAuditPageCount);
+    const visibleRoleAuditRows = roleChangeRows.slice(
+      (currentRoleAuditPage - 1) * roleAuditPageSize,
+      currentRoleAuditPage * roleAuditPageSize
+    );
+    const expandedRoleAuditRow = visibleRoleAuditRows.find((row) => row.id === expandedRoleAuditId);
+    const loanAuditPageSize = 5;
+    const loanAuditPageCount = Math.max(1, Math.ceil(loanPortfolio.loans.length / loanAuditPageSize));
+    const currentLoanAuditPage = Math.min(loanAuditPage, loanAuditPageCount);
+    const visibleLoanAuditRows = loanPortfolio.loans.slice(
+      (currentLoanAuditPage - 1) * loanAuditPageSize,
+      currentLoanAuditPage * loanAuditPageSize
+    );
+    const selectedLoanAuditRow =
+      visibleLoanAuditRows.find((loan) => loan.id.toString() === selectedLoanId) ||
+      visibleLoanAuditRows[0] ||
+      null;
+    const chainRecordPageSize = 5;
+    const chainRecordPageCount = Math.max(1, Math.ceil(chainRecords.rows.length / chainRecordPageSize));
+    const currentChainRecordPage = Math.min(chainRecordPage, chainRecordPageCount);
+    const visibleChainRecordRows = chainRecords.rows.slice(
+      (currentChainRecordPage - 1) * chainRecordPageSize,
+      currentChainRecordPage * chainRecordPageSize
+    );
+    const selectedChainRecord =
+      visibleChainRecordRows.find((row) => row.property.propertyId === selectedChainRecordId) ||
+      visibleChainRecordRows[0] ||
+      null;
+    const roleOnchainRows = roleChangeRows.map((row) => ({
+      id: `role-${row.id}`,
+      category: t("permissionEvent"),
+      categoryTone: row.actionType === "grant" ? "green" : "muted",
+      source: t("roleAuditTrail"),
+      eventName: row.actionType === "grant" ? "RoleGranted" : "RoleRevoked",
+      action: row.action,
+      contract: row.contract,
+      contractAddress: row.contractAddress,
+      loanId: "-",
+      propertyId: "-",
+      target: row.account,
+      operator: row.sender,
+      block: row.blockNumber?.toString() || "-",
+      logIndex: row.logIndex || 0,
+      tx: row.tx,
+      fields: [
+        { label: t("roleTarget"), value: row.role },
+        { label: t("roleAddress"), value: row.account, variant: "hash" },
+        { label: t("changedBy"), value: row.sender, variant: "hash" }
+      ],
+      detail: []
+    }));
+    const onchainAuditRows = [...chainEventAudit.rows, ...roleOnchainRows].sort((a, b) =>
+      Number(b.block === "-" ? 0 : b.block || 0) - Number(a.block === "-" ? 0 : a.block || 0) ||
+      Number(b.logIndex || 0) - Number(a.logIndex || 0)
+    );
+    const onchainAuditPageSize = 5;
+    const onchainAuditPageCount = Math.max(1, Math.ceil(onchainAuditRows.length / onchainAuditPageSize));
+    const currentOnchainAuditPage = Math.min(onchainAuditPage, onchainAuditPageCount);
+    const visibleOnchainAuditRows = onchainAuditRows.slice(
+      (currentOnchainAuditPage - 1) * onchainAuditPageSize,
+      currentOnchainAuditPage * onchainAuditPageSize
+    );
+    const selectedOnchainAuditRow =
+      visibleOnchainAuditRows.find((row) => row.id === selectedOnchainAuditId) ||
+      visibleOnchainAuditRows[0] ||
+      null;
+    const loanAuditEventCount = onchainAuditRows.filter((row) => String(row.eventName || "").startsWith("Loan")).length;
+    const proofAuditEventCount = onchainAuditRows.filter((row) =>
+      ["PropertyComplianceUpdated", "ComplianceProofVerified"].includes(row.eventName)
+    ).length;
+    const assetAuditEventCount = onchainAuditRows.filter((row) => row.eventName === "PropertyVerificationUpdated").length;
+    const permissionAuditEventCount = onchainAuditRows.filter((row) =>
+      ["RoleGranted", "RoleRevoked"].includes(row.eventName)
+    ).length;
+    const auditSummaryCards = [
+      {
+        label: t("auditPortfolioSnapshot"),
+        value: loanPortfolio.loans.length,
+        detail: `${loanStats.requested} ${t("requested")} / ${loanStats.approved} ${t("approved")}`,
+        icon: ListChecks,
+        tone: loanPortfolio.loans.length ? "blue" : "muted"
+      },
+      {
+        label: t("auditPendingReview"),
+        value: loanStats.requested,
+        detail: t("auditPendingReviewDetail"),
+        icon: Send,
+        tone: loanStats.requested ? "amber" : "muted"
+      },
+      {
+        label: t("auditIssuedExposure"),
+        value: loanStats.approved,
+        detail: `${loanStats.activeProperties.size} ${t("auditLockedAssets")}`,
+        icon: BadgeCheck,
+        tone: loanStats.approved ? "green" : "muted"
+      },
+      {
+        label: t("auditOnchainActivity"),
+        value: onchainAuditRows.length,
+        detail: `${loanAuditEventCount} ${t("loanEvent")} / ${proofAuditEventCount} ${t("proofEvent")}`,
+        icon: Database,
+        tone: onchainAuditRows.length ? "green" : "muted"
+      },
+      {
+        label: t("auditAssetProofCoverage"),
+        value: proofAuditEventCount,
+        detail: `${assetAuditEventCount} ${t("assetEvent")}`,
+        icon: ShieldCheck,
+        tone: proofAuditEventCount ? "green" : assetAuditEventCount ? "blue" : "muted"
+      },
+      {
+        label: t("auditPermissionChanges"),
+        value: permissionAuditEventCount,
+        detail: t("auditPermissionChangesDetail"),
+        icon: UserRoundCog,
+        tone: permissionAuditEventCount ? "blue" : "muted"
+      }
+    ];
+    const targetOperationBlockReason = roleOperationBlockReason();
+    const targetOperationBlocked = Boolean(targetOperationBlockReason);
+    const targetOperationStatus = !isValidAddress(roleAddress)
+      ? t("waitingForAddress")
+      : targetOperationBlockReason === t("checkingStatus")
+        ? t("checkingStatus")
+      : targetOperationBlocked
+        ? t("cannotSubmit")
+        : t("canSubmit");
+    const targetImpactLabel = !isValidAddress(roleAddress)
+      ? t("invalidRoleAddress")
+      : targetOperationBlockReason || (roleOperation === "grant"
+        ? `${t("addRoleAction")}${selectedRoleCard.label}${t("roleSuffix")}`
+        : `${t("removeRoleAction")}${selectedRoleCard.label}${t("roleSuffix")}`);
+
     return (
-      <div className="workspace-view view-scroll">
-        <section className="view-grid two-col">
-          <article className="operation-panel panel">
+      <div className="workspace-view view-scroll admin-console-view">
+        {section === "roles" && (
+        <section className="admin-section admin-role-page admin-page-panel">
+          <article className="admin-role-directory-panel panel">
             <div className="panel-heading">
-              <h2>{t("roleManagement")}</h2>
+              <h2>{t("permissionAddressDirectory")}</h2>
               <UserRoundCog size={16} />
             </div>
-            <div className="settings-list">
-              <label>
-                <span>{t("roleTarget")}</span>
-                <select value={roleTarget} onChange={(event) => setRoleTarget(event.target.value)}>
-                  <option value="loanOfficer">{t("roleLoanOfficer")}</option>
-                  <option value="oracle">{t("roleOracle")}</option>
-                </select>
-              </label>
-              <label>
-                <span>{t("roleOperation")}</span>
-                <select value={roleOperation} onChange={(event) => setRoleOperation(event.target.value)}>
-                  <option value="grant">{t("grantRole")}</option>
-                  <option value="revoke">{t("revokeRole")}</option>
-                </select>
-              </label>
-              <label className="full-row">
-                <span>{t("roleAddress")}</span>
-                <input value={roleAddress} onChange={(event) => setRoleAddress(event.target.value)} />
-              </label>
+            <div className="admin-role-directory-shell">
+              <div className="admin-role-directory-nav">
+                {roleDirectoryCards.map((item) => {
+                  const RoleIcon = item.icon;
+                  return (
+                    <button
+                      className={roleDirectoryTarget === item.id ? "active" : ""}
+                      key={item.id}
+                      onClick={() => {
+                        setRoleDirectoryTarget(item.id);
+                        setRoleDirectoryPage(1);
+                      }}
+                    >
+                      <RoleIcon size={18} />
+                      <span>{item.label}</span>
+                      <strong>{item.members.length}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="admin-role-address-book">
+                <div className="admin-address-list">
+                  {selectedDirectoryRole.members.length === 0 ? (
+                    <p className="helper-copy">{t("noRoleMembers")}</p>
+                  ) : (
+                    visibleRoleMembers.map((member) => (
+                      <div className="admin-address-row" key={member.address}>
+                        <span>{member.address}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="ledger-pagination admin-address-pagination">
+                  <span>{currentRoleDirectoryPage} / {roleMemberPageCount}</span>
+                  <button
+                    className="icon-only"
+                    onClick={() => setRoleDirectoryPage((page) => Math.max(1, page - 1))}
+                    disabled={currentRoleDirectoryPage <= 1}
+                    aria-label={t("previousPage")}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    className="icon-only"
+                    onClick={() => setRoleDirectoryPage((page) => Math.min(roleMemberPageCount, page + 1))}
+                    disabled={currentRoleDirectoryPage >= roleMemberPageCount}
+                    aria-label={t("nextPage")}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="view-actions-row">
-              <button className="primary-action" onClick={handleRoleUpdate} disabled={!isAdmin || busyAction === "Role"}>
+          </article>
+
+          <div className="admin-role-main-grid">
+            <article className="admin-control-panel admin-role-command panel">
+              <div className="panel-heading">
+                <h2>{t("roleCommandCenter")}</h2>
+                <UserRoundCog size={16} />
+              </div>
+              <div className="admin-field-group">
+                <span>{t("roleTarget")}</span>
+                <div className="admin-role-selector">
+                  {manageableRoleCards.map((item) => {
+                    const RoleIcon = item.icon;
+                    return (
+                      <button
+                        className={roleTarget === item.id ? "active" : ""}
+                        key={item.id}
+                        onClick={() => {
+                          setRoleTarget(item.id);
+                          setRoleDirectoryPage(1);
+                        }}
+                      >
+                        <RoleIcon size={17} />
+                        <div>
+                          <strong>{item.label}</strong>
+                          <small>{item.description}</small>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="admin-field-group">
+                <span>{t("roleOperation")}</span>
+                <div className="admin-operation-toggle">
+                  <button
+                    className={roleOperation === "grant" ? "active grant" : ""}
+                    onClick={() => setRoleOperation("grant")}
+                  >
+                    <BadgeCheck size={17} />
+                    {t("grantRole")}
+                  </button>
+                  <button
+                    className={roleOperation === "revoke" ? "active revoke" : ""}
+                    onClick={() => setRoleOperation("revoke")}
+                  >
+                    <XCircle size={17} />
+                    {t("revokeRole")}
+                  </button>
+                </div>
+              </div>
+              <label className="admin-field-group admin-address-field">
+                <span>{t("roleAddress")}</span>
+                <input
+                  value={roleAddress}
+                  onChange={(event) => setRoleAddress(event.target.value)}
+                  placeholder="0x..."
+                />
+              </label>
+              <button
+                className="admin-role-submit"
+                onClick={handleRoleUpdate}
+                disabled={!isAdmin || busyAction === "Role" || targetOperationBlocked}
+              >
                 {busyAction === "Role" ? <Loader2 className="spin" size={17} /> : <UserRoundCog size={17} />}
                 {busyAction === "Role" ? actionText("applyRoleChange") : t("applyRoleChange")}
               </button>
-            </div>
-          </article>
-          <article className="operation-panel panel">
-            <div className="panel-heading">
-              <h2>{t("adminStatus")}</h2>
-              <ShieldCheck size={16} />
-            </div>
-            <div className="role-status-grid">
-              <div>
-                <span>{t("currentWallet")}</span>
-                <strong>{shortHash(address)}</strong>
-                <small>{roleSummary.length ? roleSummary.join(" / ") : t("roleViewer")}</small>
+            </article>
+
+            <article className="admin-target-panel panel">
+              <div className="panel-heading">
+                <h2>{t("targetInspector")}</h2>
+                <ShieldCheck size={16} />
               </div>
-              <div>
-                <span>{t("roleAdmin")}</span>
-                <strong className={isAdmin ? "green-text" : "warn-text"}>
-                  {isAdmin ? t("activeRole") : t("inactiveRole")}
-                </strong>
-                <small>{shortHash(configuredAdminAddress || address)}</small>
-              </div>
-              <div>
-                <span>{t("roleOracle")}</span>
-                <strong className={isOracleOperator ? "green-text" : "warn-text"}>
-                  {isOracleOperator ? t("activeRole") : t("inactiveRole")}
-                </strong>
-                <small>{shortHash(address)}</small>
-              </div>
-              <div>
-                <span>{t("roleLoanOfficer")}</span>
-                <strong className={isLoanOfficer ? "green-text" : "warn-text"}>
-                  {isLoanOfficer ? t("activeRole") : t("inactiveRole")}
-                </strong>
-                <small>{shortHash(address)}</small>
-              </div>
-              <div>
-                <span>{t("selectedTargetRole")}</span>
-                <strong className={targetHasRole ? "green-text" : "warn-text"}>
-                  {isValidAddress(roleAddress)
-                    ? targetHasRole
-                      ? t("activeRole")
-                      : t("inactiveRole")
-                    : t("invalidRoleAddress")}
-                </strong>
-                <small>{isValidAddress(roleAddress) ? shortHash(roleAddress) : "-"}</small>
-              </div>
-            </div>
-          </article>
-        </section>
-        <section className="operation-panel panel">
-          <div className="panel-heading">
-            <h2>{t("roleAuditTrail")}</h2>
-            <UserRoundCog size={16} />
-          </div>
-          <div className="role-audit-table">
-            <div className="role-audit-head">
-              <span>{t("roleOperation")}</span>
-              <span>{t("roleTarget")}</span>
-              <span>{t("roleAddress")}</span>
-              <span>{t("contract")}</span>
-              <span>{t("latestBlock")}</span>
-              <span>{t("latestTx")}</span>
-            </div>
-            {roleAudit.rows.length === 0 ? (
-              <p className="helper-copy">{roleAudit.loading ? t("loading") : t("noRoleAudit")}</p>
-            ) : (
-              roleAudit.rows.map((row) => (
-                <div className="role-audit-row" key={row.id}>
-                  <strong>{row.action}</strong>
-                  <span>{row.role}</span>
-                  <span>{shortHash(row.account)}</span>
-                  <span>{row.contract}</span>
-                  <span>{row.blockNumber?.toString() || "-"}</span>
-                  <span>{shortHash(row.tx)}</span>
+              <dl className="admin-target-list">
+                <div>
+                  <dt>{t("roleAddress")}</dt>
+                  <dd className="admin-full-address">{isValidAddress(roleAddress) ? roleAddress : "-"}</dd>
                 </div>
-              ))
+                <div>
+                  <dt>{t("selectedTargetRole")}</dt>
+                  <dd>{currentTargetRoleLabel}</dd>
+                </div>
+                <div>
+                  <dt>{t("operationImpact")}</dt>
+                  <dd>{targetImpactLabel}</dd>
+                </div>
+                <div className={targetOperationBlocked ? "blocked" : "ready"}>
+                  <dt>{t("operationStatus")}</dt>
+                  <dd>{targetOperationStatus}</dd>
+                </div>
+              </dl>
+            </article>
+          </div>
+
+          <article className="admin-control-panel admin-role-history panel">
+            <div className="panel-heading">
+              <h2>{t("roleChangeRecords")}</h2>
+              <ListChecks size={16} />
+            </div>
+            <div className="role-audit-table admin-role-history-table">
+              <div className="role-audit-head">
+                <span>{t("roleOperation")}</span>
+                <span>{t("roleTarget")}</span>
+                <span>{t("roleAddress")}</span>
+              </div>
+              {roleChangeRows.length === 0 ? (
+                <p className="helper-copy">{roleAudit.loading ? t("loading") : t("noRoleAudit")}</p>
+              ) : (
+                visibleRoleAuditRows.map((row) => (
+                  <button
+                    className={`role-audit-row ${expandedRoleAuditId === row.id ? "active" : ""}`}
+                    key={row.id}
+                    onClick={() => setExpandedRoleAuditId((current) => (current === row.id ? "" : row.id))}
+                  >
+                    <strong>{row.action}</strong>
+                    <span>{row.role}</span>
+                    <span className="admin-full-address">{row.account}</span>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="ledger-pagination">
+              <span>{currentRoleAuditPage} / {roleAuditPageCount}</span>
+              <button
+                className="icon-only"
+                onClick={() => setRoleAuditPage((page) => Math.max(1, page - 1))}
+                disabled={currentRoleAuditPage <= 1}
+                aria-label={t("previousPage")}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                className="icon-only"
+                onClick={() => setRoleAuditPage((page) => Math.min(roleAuditPageCount, page + 1))}
+                disabled={currentRoleAuditPage >= roleAuditPageCount}
+                aria-label={t("nextPage")}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+            {expandedRoleAuditRow && (
+              <dl className="admin-role-change-detail">
+                <div>
+                  <dt>{t("roleAddress")}</dt>
+                  <dd>{expandedRoleAuditRow.account}</dd>
+                </div>
+                <div>
+                  <dt>{t("changedBy")}</dt>
+                  <dd>{expandedRoleAuditRow.sender}</dd>
+                </div>
+                <div>
+                  <dt>{t("contract")}</dt>
+                  <dd>{expandedRoleAuditRow.contract}</dd>
+                </div>
+                <div>
+                  <dt>{t("contractAddress")}</dt>
+                  <dd>{expandedRoleAuditRow.contractAddress}</dd>
+                </div>
+                <div>
+                  <dt>{t("latestBlock")}</dt>
+                  <dd>{expandedRoleAuditRow.blockNumber?.toString() || "-"}</dd>
+                </div>
+                <div>
+                  <dt>{t("latestTx")}</dt>
+                  <dd>{expandedRoleAuditRow.tx}</dd>
+                </div>
+              </dl>
             )}
+          </article>
+        </section>
+        )}
+
+        {section === "ops" && (
+        <section className="admin-section admin-ops-page admin-page-panel">
+          <div className="admin-ops-hero panel">
+            <div className="panel-heading admin-section-heading">
+              <h2>{t("systemMetricsOverview")}</h2>
+              <button className="icon-only" onClick={() => refreshAppState()} title={t("refresh")}>
+                {fetchingRecord ? <Loader2 className="spin" size={17} /> : <RefreshCw size={17} />}
+              </button>
+            </div>
+            <div className="admin-ops-grid">
+              {opsOverviewCards.map((card) => {
+                const CardIcon = card.icon;
+                return (
+                  <article className={`admin-ops-kpi ${card.tone}`} key={card.label}>
+                    <div>
+                      <span>{card.label}</span>
+                      <strong>{card.value}</strong>
+                      <small>{card.detail}</small>
+                    </div>
+                    <CardIcon size={18} />
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="panel-heading admin-section-heading admin-contract-matrix-heading">
+            <h2>{t("contractMatrix")}</h2>
+            <Cpu size={16} />
+          </div>
+          <div className="admin-contract-matrix">
+            {contractRows.map((row) => {
+              const ContractIcon = row.icon || Cpu;
+              return (
+                <article className={`admin-contract-card panel ${row.tone}`} key={row.name}>
+                  <div className="admin-contract-card-head">
+                    <ContractIcon size={18} />
+                    <div>
+                      <span>{row.type}</span>
+                      <strong>{row.name}</strong>
+                      <small>{row.description}</small>
+                    </div>
+                    <em className={statusClass[row.status] || "warn-text"}>{statusLabels[row.status] || row.status}</em>
+                  </div>
+                  <dl className="admin-contract-detail-grid">
+                    <div>
+                      <dt>{t("contractAddress")}</dt>
+                      <dd className="admin-full-address">{row.address}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("network")}</dt>
+                      <dd>{networkLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("latestBlock")}</dt>
+                      <dd>{row.block}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("latestTx")}</dt>
+                      <dd>{shortHash(row.tx)}</dd>
+                    </div>
+                  </dl>
+                </article>
+              );
+            })}
           </div>
         </section>
+        )}
+
+        {section === "audit" && (
+        <section className="admin-section admin-audit-page admin-page-panel">
+          <div className="panel-heading admin-section-heading">
+            <h2>{t("auditOverview")}</h2>
+            <Activity size={16} />
+          </div>
+          <div className="admin-audit-summary-grid">
+            {auditSummaryCards.map((card) => {
+              const CardIcon = card.icon;
+              return (
+                <article className={`admin-audit-summary-card panel ${card.tone}`} key={card.label}>
+                  <div>
+                    <span>{card.label}</span>
+                    <strong>{card.value}</strong>
+                    <small>{card.detail}</small>
+                  </div>
+                  <CardIcon size={18} />
+                </article>
+              );
+            })}
+          </div>
+          <div className="admin-audit-stack">
+            {renderLoanLedgerAudit({
+              rows: visibleLoanAuditRows,
+              selectedRow: selectedLoanAuditRow,
+              loading: loanPortfolio.loading,
+              page: currentLoanAuditPage,
+              pageCount: loanAuditPageCount,
+              totalCount: loanPortfolio.loans.length,
+              onPrevious: () => setLoanAuditPage((page) => Math.max(1, page - 1)),
+              onNext: () => setLoanAuditPage((page) => Math.min(loanAuditPageCount, page + 1))
+            })}
+            <article className="record-card panel admin-onchain-audit-panel">
+              <div className="panel-heading">
+                <h2>{t("onchainAuditTrail")}</h2>
+                <Activity size={16} />
+              </div>
+              <div className="chain-record-table admin-onchain-audit-table">
+                <div className="chain-record-head">
+                  <span>{t("eventType")}</span>
+                  <span>{t("eventAction")}</span>
+                  <span>{t("eventTarget")}</span>
+                </div>
+                {onchainAuditRows.length === 0 ? (
+                  <p className="helper-copy">{chainEventAudit.loading || roleAudit.loading ? t("loading") : t("noOnchainAudit")}</p>
+                ) : (
+                  visibleOnchainAuditRows.map((row) => (
+                    <button
+                      className={`chain-record-row ${selectedOnchainAuditRow?.id === row.id ? "active" : ""}`}
+                      key={row.id}
+                      onClick={() => setSelectedOnchainAuditId(row.id)}
+                    >
+                      <strong>
+                        <span className={`event-type-pill ${row.categoryTone || "blue"}`}>{row.category}</span>
+                      </strong>
+                      <span>{row.action}</span>
+                      <span className="event-target-value">{row.target}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="ledger-pagination">
+                <span>{currentOnchainAuditPage} / {onchainAuditPageCount}</span>
+                <button
+                  className="icon-only"
+                  onClick={() => setOnchainAuditPage((page) => Math.max(1, page - 1))}
+                  disabled={currentOnchainAuditPage <= 1}
+                  aria-label={t("previousPage")}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  className="icon-only"
+                  onClick={() => setOnchainAuditPage((page) => Math.min(onchainAuditPageCount, page + 1))}
+                  disabled={currentOnchainAuditPage >= onchainAuditPageCount}
+                  aria-label={t("nextPage")}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+              {renderOnchainAuditDetail(selectedOnchainAuditRow)}
+            </article>
+          </div>
+        </section>
+        )}
       </div>
     );
   }
@@ -2427,7 +4003,7 @@ function App() {
             </div>
             <div className="view-actions-row">
               <button
-                className="primary-action"
+                className="primary-action workflow-action"
                 onClick={handleVerification}
                 disabled={!canVerify || busyAction === "Verification"}
               >
@@ -2478,7 +4054,7 @@ function App() {
               <Cpu size={16} />
             </div>
             <div className="ops-address-grid">
-              {contractRows.slice(0, 3).map((row) => (
+              {contractRows.filter((row) => row.type === t("onChain")).map((row) => (
                 <div className="ops-address-row" key={row.name}>
                   <span>{row.name}</span>
                   <strong>{shortHash(row.address)}</strong>
@@ -2555,8 +4131,8 @@ function App() {
               </div>
               <div>
                 <span>{t("roleLoanOfficer")}</span>
-                <strong className={isLoanOfficer ? "green-text" : "warn-text"}>
-                  {isLoanOfficer ? t("activeRole") : t("inactiveRole")}
+                <strong className={roleLoanOfficerActive ? "green-text" : "warn-text"}>
+                  {roleLoanOfficerActive ? t("activeRole") : t("inactiveRole")}
                 </strong>
               </div>
               <div>
@@ -2578,14 +4154,16 @@ function App() {
   }
 
   function renderActiveView() {
-    if (activeView === "verification") return renderVerification();
-    if (activeView === "compliance") return renderCompliance();
-    if (activeView === "loan") return renderLoan();
-    if (activeView === "approvals") return renderApprovals();
-    if (activeView === "admin") return renderAdmin();
-    if (activeView === "operations") return renderOperations();
-    if (activeView === "settings") return renderSettings();
-    return renderOverview();
+    if (activeViewId === "verification") return renderVerification();
+    if (activeViewId === "compliance") return renderCompliance();
+    if (activeViewId === "loan") return renderLoan();
+    if (activeViewId === "approvals") return renderApprovals();
+    if (activeViewId === "admin-roles") return renderAdmin("roles");
+    if (activeViewId === "admin-ops") return renderAdmin("ops");
+    if (activeViewId === "admin-audit") return renderAdmin("audit");
+    if (activeViewId === "operations") return renderOperations();
+    if (activeViewId === "settings") return renderSettings();
+    return renderVerification();
   }
 
   if (!isConnected || !workspaceEntered) {
@@ -2612,7 +4190,7 @@ function App() {
   }
 
   return (
-    <main className={`dashboard-shell active-${activeView} ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
+    <main className={`dashboard-shell active-${activeViewId} ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
       <aside className="sidebar">
         <div className="sidebar-head">
           <div className="brand-lockup">
@@ -2635,7 +4213,7 @@ function App() {
             const Icon = item.icon;
             return (
               <button
-                className={`nav-item ${activeView === item.id ? "active" : ""}`}
+                className={`nav-item ${activeViewId === item.id ? "active" : ""}`}
                 key={item.id}
                 onClick={() => setActiveView(item.id)}
               >
@@ -2651,8 +4229,7 @@ function App() {
             <ShieldCheck size={17} />
             <strong>{t("workspaceStatus")}</strong>
           </div>
-          <p>{roleSummary.length ? roleSummary.join(" · ") : t("roleViewer")}</p>
-          <p>{isConnected ? walletLabel : t("connectWallet")}</p>
+          <p className="sidebar-role-label">{roleSummary.length ? roleSummary.join(" · ") : t("roleViewer")}</p>
           <div className="sidebar-readiness">
             <div className="sidebar-readiness-score">
               <div>
@@ -2798,6 +4375,50 @@ function App() {
                 )}
               </div>
               <button className="primary-action" onClick={() => setComplianceDialog(null)}>
+                {t("close")}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {roleDialog && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setRoleDialog(null)}>
+          <section
+            className={`result-dialog panel ${roleDialog.ok ? "success" : "fail"}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="role-result-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="result-dialog-icon">
+              {roleDialog.ok ? <Check size={28} /> : <XCircle size={28} />}
+            </div>
+            <div>
+              <h2 id="role-result-title">
+                {roleDialog.ok ? t("roleChangeSuccessTitle") : t("roleChangeFailedTitle")}
+              </h2>
+              <p>{roleDialog.message}</p>
+              <div className="result-dialog-meta">
+                <span>{t("roleOperation")}</span>
+                <strong>{roleDialog.operation}</strong>
+                <span>{t("roleTarget")}</span>
+                <strong>{roleDialog.role}</strong>
+                <span>{t("roleAddress")}</span>
+                <strong>{roleDialog.address || "-"}</strong>
+                {roleDialog.contractCount && (
+                  <>
+                    <span>{t("affectedContracts")}</span>
+                    <strong>{roleDialog.contractCount}</strong>
+                  </>
+                )}
+                {roleDialog.txHash && (
+                  <>
+                    <span>{t("latestTx")}</span>
+                    <strong>{shortHash(roleDialog.txHash)}</strong>
+                  </>
+                )}
+              </div>
+              <button className="primary-action" onClick={() => setRoleDialog(null)}>
                 {t("close")}
               </button>
             </div>

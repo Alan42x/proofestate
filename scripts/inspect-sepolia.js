@@ -23,6 +23,10 @@ const LENDING_ABI = [
   "function getLoan(uint256 loanId) view returns (tuple(address borrower,bytes32 propertyId,uint256 principalCommitment,uint256 interestRateBps,uint256 termDays,uint8 state,uint256 requestedAt,uint256 approvedAt,uint256 repaidAt))"
 ];
 
+const ROLE_ADMIN_MANAGER_ABI = [
+  "function hasProtocolAdmin(address account) view returns (bool managerAdmin,bool propertyAdmin,bool lendingAdmin,bool complete)"
+];
+
 function jsonReplacer(_key, value) {
   return typeof value === "bigint" ? value.toString() : value;
 }
@@ -52,12 +56,16 @@ async function main() {
     provider
   );
   const lending = new ethers.Contract(deployment.lending, LENDING_ABI, provider);
+  const roleAdminManager = deployment.roleAdminManager
+    ? new ethers.Contract(deployment.roleAdminManager, ROLE_ADMIN_MANAGER_ABI, provider)
+    : null;
 
   const contractAddresses = {
     propertyVerification: deployment.propertyVerification,
     ltvGroth16Verifier: deployment.ltvGroth16Verifier,
     complianceVerifier: deployment.complianceVerifier,
-    lending: deployment.lending
+    lending: deployment.lending,
+    roleAdminManager: deployment.roleAdminManager
   };
   const bytecodeChecks = {};
   for (const [name, address] of Object.entries(contractAddresses)) {
@@ -73,13 +81,29 @@ async function main() {
   const oracleRole = ethers.id("ORACLE_ROLE");
   const complianceRole = ethers.id("COMPLIANCE_ROLE");
   const loanOfficerRole = ethers.id("LOAN_OFFICER_ROLE");
-  const [adminHasVerificationAdmin, oracleHasRole, complianceVerifierHasRole, adminHasLendingAdmin, loanOfficerHasRole] =
+  const roleAdminManagerStatus = roleAdminManager
+    ? await roleAdminManager.hasProtocolAdmin(deployment.adminAddress)
+    : null;
+  const oldRoleAdminManager = deployment.previousRoleAdminManager;
+  const [adminHasVerificationAdmin, oracleHasRole, complianceVerifierHasRole, adminHasLendingAdmin, loanOfficerHasRole, managerHasVerificationAdmin, managerHasLendingAdmin, oldManagerHasVerificationAdmin, oldManagerHasLendingAdmin] =
     await Promise.all([
       propertyVerification.hasRole(defaultAdminRole, deployment.adminAddress),
       propertyVerification.hasRole(oracleRole, deployment.oracleAddress),
       propertyVerification.hasRole(complianceRole, deployment.complianceVerifier),
       lending.hasRole(defaultAdminRole, deployment.adminAddress),
-      lending.hasRole(loanOfficerRole, deployment.loanOfficerAddress)
+      lending.hasRole(loanOfficerRole, deployment.loanOfficerAddress),
+      deployment.roleAdminManager
+        ? propertyVerification.hasRole(defaultAdminRole, deployment.roleAdminManager)
+        : Promise.resolve(false),
+      deployment.roleAdminManager
+        ? lending.hasRole(defaultAdminRole, deployment.roleAdminManager)
+        : Promise.resolve(false),
+      oldRoleAdminManager
+        ? propertyVerification.hasRole(defaultAdminRole, oldRoleAdminManager)
+        : Promise.resolve(false),
+      oldRoleAdminManager
+        ? lending.hasRole(defaultAdminRole, oldRoleAdminManager)
+        : Promise.resolve(false)
     ]);
 
   const [owner, verified, compliant, record, nextLoanId, deployerBalance] = await Promise.all([
@@ -125,7 +149,14 @@ async function main() {
       oracleHasRole,
       complianceVerifierHasRole,
       adminHasLendingAdmin,
-      loanOfficerHasRole
+      loanOfficerHasRole,
+      roleAdminManager: deployment.roleAdminManager,
+      roleAdminManagerComplete: Boolean(roleAdminManagerStatus?.complete ?? roleAdminManagerStatus?.[3]),
+      managerHasVerificationAdmin,
+      managerHasLendingAdmin,
+      previousRoleAdminManager: oldRoleAdminManager || "",
+      previousManagerHasVerificationAdmin: oldManagerHasVerificationAdmin,
+      previousManagerHasLendingAdmin: oldManagerHasLendingAdmin
     },
     contracts: bytecodeChecks,
     propertyRecord: {

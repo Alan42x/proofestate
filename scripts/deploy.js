@@ -8,14 +8,23 @@ const LOCAL_DEMO_ACCOUNTS = {
   loanOfficer: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
 };
 
+function normalizeAddress(value) {
+  return hre.ethers.getAddress(value);
+}
+
+function sameAddress(left, right) {
+  return normalizeAddress(left) === normalizeAddress(right);
+}
+
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
+  const deployerAddress = normalizeAddress(deployer.address);
   const network = hre.network.name;
 
-  console.log(`Deploying to ${network} with ${deployer.address}`);
+  console.log(`Deploying to ${network} with ${deployerAddress}`);
 
   const PropertyVerification = await hre.ethers.getContractFactory("PropertyVerification");
-  const propertyVerification = await PropertyVerification.deploy(deployer.address);
+  const propertyVerification = await PropertyVerification.deploy(deployerAddress);
   await propertyVerification.waitForDeployment();
 
   const LtvGroth16Verifier = await hre.ethers.getContractFactory("LtvGroth16Verifier");
@@ -30,55 +39,66 @@ async function main() {
   await complianceVerifier.waitForDeployment();
 
   const Lending = await hre.ethers.getContractFactory("Lending");
-  const lending = await Lending.deploy(propertyVerification.target, deployer.address);
+  const lending = await Lending.deploy(propertyVerification.target, deployerAddress);
   await lending.waitForDeployment();
 
+  const RoleAdminManager = await hre.ethers.getContractFactory("RoleAdminManager");
+  const roleAdminManager = await RoleAdminManager.deploy(
+    propertyVerification.target,
+    lending.target,
+    deployerAddress
+  );
+  await roleAdminManager.waitForDeployment();
+
   const localDefaults = network === "localhost" || network === "hardhat";
-  const adminAddress = localDefaults
-    ? LOCAL_DEMO_ACCOUNTS.admin
-    : process.env.ADMIN_ADDRESS || deployer.address;
-  const oracleAddress = localDefaults
-    ? LOCAL_DEMO_ACCOUNTS.oracle
-    : process.env.ORACLE_ADDRESS || deployer.address;
-  const loanOfficerAddress = localDefaults
-    ? LOCAL_DEMO_ACCOUNTS.loanOfficer
-    : process.env.LOAN_OFFICER_ADDRESS || deployer.address;
+  const adminAddress = normalizeAddress(
+    localDefaults ? LOCAL_DEMO_ACCOUNTS.admin : process.env.ADMIN_ADDRESS || deployerAddress
+  );
+  const oracleAddress = normalizeAddress(
+    localDefaults ? LOCAL_DEMO_ACCOUNTS.oracle : process.env.ORACLE_ADDRESS || deployerAddress
+  );
+  const loanOfficerAddress = normalizeAddress(
+    localDefaults ? LOCAL_DEMO_ACCOUNTS.loanOfficer : process.env.LOAN_OFFICER_ADDRESS || deployerAddress
+  );
 
   const defaultAdminRole = await propertyVerification.DEFAULT_ADMIN_ROLE();
   const oracleRole = await propertyVerification.ORACLE_ROLE();
   const complianceRole = await propertyVerification.COMPLIANCE_ROLE();
   const loanOfficerRole = await lending.LOAN_OFFICER_ROLE();
 
-  if (adminAddress !== deployer.address) {
-    await (await propertyVerification.grantRole(defaultAdminRole, adminAddress)).wait();
-    await (await lending.grantRole(defaultAdminRole, adminAddress)).wait();
+  await (await propertyVerification.grantRole(defaultAdminRole, roleAdminManager.target)).wait();
+  await (await lending.grantRole(defaultAdminRole, roleAdminManager.target)).wait();
+  if (!sameAddress(adminAddress, deployerAddress)) {
+    await (await roleAdminManager.grantProtocolAdmin(adminAddress)).wait();
   }
-  if (oracleAddress !== deployer.address) {
+  if (!sameAddress(oracleAddress, deployerAddress)) {
     await (await propertyVerification.grantRole(oracleRole, oracleAddress)).wait();
   }
   await (await propertyVerification.grantRole(complianceRole, complianceVerifier.target)).wait();
-  if (loanOfficerAddress !== deployer.address) {
+  if (!sameAddress(loanOfficerAddress, deployerAddress)) {
     await (await lending.grantRole(loanOfficerRole, loanOfficerAddress)).wait();
   }
-  if (oracleAddress !== adminAddress) {
+  if (!sameAddress(oracleAddress, adminAddress)) {
     await (await propertyVerification.revokeRole(oracleRole, adminAddress)).wait();
   }
-  if (loanOfficerAddress !== adminAddress) {
+  if (!sameAddress(loanOfficerAddress, adminAddress)) {
     await (await lending.revokeRole(loanOfficerRole, adminAddress)).wait();
   }
-  if (adminAddress !== deployer.address) {
-    await (await propertyVerification.revokeRole(defaultAdminRole, deployer.address)).wait();
-    await (await lending.revokeRole(defaultAdminRole, deployer.address)).wait();
+  if (!sameAddress(adminAddress, deployerAddress)) {
+    await (await propertyVerification.revokeRole(defaultAdminRole, deployerAddress)).wait();
+    await (await lending.revokeRole(defaultAdminRole, deployerAddress)).wait();
+    await (await roleAdminManager.revokeRole(defaultAdminRole, deployerAddress)).wait();
   }
 
   const deployment = {
     network,
-    deployer: deployer.address,
+    deployer: deployerAddress,
     adminAddress,
     propertyVerification: propertyVerification.target,
     ltvGroth16Verifier: ltvGroth16Verifier.target,
     complianceVerifier: complianceVerifier.target,
     lending: lending.target,
+    roleAdminManager: roleAdminManager.target,
     oracleAddress,
     loanOfficerAddress,
     deployedAt: new Date().toISOString()

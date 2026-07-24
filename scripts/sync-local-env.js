@@ -43,8 +43,10 @@ function writeEnv(filePath, values) {
       "ORACLE_ADDRESS",
       "LOAN_OFFICER_ADDRESS",
       "PROPERTY_VERIFICATION_ADDRESS",
+      "LTV_GROTH16_VERIFIER_ADDRESS",
       "COMPLIANCE_VERIFIER_ADDRESS",
       "LENDING_ADDRESS",
+      "ROLE_ADMIN_MANAGER_ADDRESS",
       "SEPOLIA_RPC_URL",
       "VITE_ORACLE_API_URL",
       "VITE_LOCAL_RPC_URL",
@@ -53,8 +55,10 @@ function writeEnv(filePath, values) {
       "VITE_ORACLE_ADDRESS",
       "VITE_LOAN_OFFICER_ADDRESS",
       "VITE_PROPERTY_VERIFICATION_ADDRESS",
+      "VITE_LTV_GROTH16_VERIFIER_ADDRESS",
       "VITE_COMPLIANCE_VERIFIER_ADDRESS",
       "VITE_LENDING_ADDRESS",
+      "VITE_ROLE_ADMIN_MANAGER_ADDRESS",
       "VITE_DEFAULT_NETWORK"
     ];
     const aIndex = order.indexOf(a);
@@ -80,8 +84,10 @@ function main() {
   const shared = {
     LOCAL_RPC_URL: "http://127.0.0.1:8545",
     PROPERTY_VERIFICATION_ADDRESS: deployment.propertyVerification,
+    LTV_GROTH16_VERIFIER_ADDRESS: deployment.ltvGroth16Verifier || "",
     COMPLIANCE_VERIFIER_ADDRESS: deployment.complianceVerifier,
-    LENDING_ADDRESS: deployment.lending
+    LENDING_ADDRESS: deployment.lending,
+    ROLE_ADMIN_MANAGER_ADDRESS: deployment.roleAdminManager || ""
   };
   if (deployment.adminAddress) shared.ADMIN_ADDRESS = deployment.adminAddress;
   if (deployment.oracleAddress) shared.ORACLE_ADDRESS = deployment.oracleAddress;
@@ -102,8 +108,10 @@ function main() {
     VITE_ORACLE_ADDRESS: deployment.oracleAddress || "",
     VITE_LOAN_OFFICER_ADDRESS: deployment.loanOfficerAddress || "",
     VITE_PROPERTY_VERIFICATION_ADDRESS: deployment.propertyVerification,
+    VITE_LTV_GROTH16_VERIFIER_ADDRESS: deployment.ltvGroth16Verifier || "",
     VITE_COMPLIANCE_VERIFIER_ADDRESS: deployment.complianceVerifier,
     VITE_LENDING_ADDRESS: deployment.lending,
+    VITE_ROLE_ADMIN_MANAGER_ADDRESS: deployment.roleAdminManager || "",
     VITE_DEFAULT_NETWORK: "localhost"
   });
 

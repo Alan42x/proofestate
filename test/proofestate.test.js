@@ -254,6 +254,111 @@ describe("ProofEstate contracts", function () {
       expect(await adminLending.hasRole(loanOfficerRole, other.address)).to.equal(true);
       expect(await adminLending.hasRole(defaultAdminRole, deployer.address)).to.equal(false);
     });
+
+    it("manages protocol admin grants atomically through RoleAdminManager", async function () {
+      const { deployer, other, verification, lending } = await loadFixture(deployProtocolFixture);
+      const RoleAdminManager = await ethers.getContractFactory("RoleAdminManager");
+      const roleAdminManager = await RoleAdminManager.deploy(
+        verification.target,
+        lending.target,
+        deployer.address
+      );
+      const defaultAdminRole = await verification.DEFAULT_ADMIN_ROLE();
+
+      await verification.grantRole(defaultAdminRole, roleAdminManager.target);
+      await lending.grantRole(defaultAdminRole, roleAdminManager.target);
+
+      await expect(roleAdminManager.grantProtocolAdmin(other.address))
+        .to.emit(roleAdminManager, "ProtocolAdminGranted")
+        .withArgs(other.address, deployer.address);
+
+      expect(await roleAdminManager.hasRole(defaultAdminRole, other.address)).to.equal(true);
+      expect(await verification.hasRole(defaultAdminRole, other.address)).to.equal(true);
+      expect(await lending.hasRole(defaultAdminRole, other.address)).to.equal(true);
+
+      const status = await roleAdminManager.hasProtocolAdmin(other.address);
+      expect(status.managerAdmin).to.equal(true);
+      expect(status.propertyAdmin).to.equal(true);
+      expect(status.lendingAdmin).to.equal(true);
+      expect(status.complete).to.equal(true);
+
+      await expect(roleAdminManager.revokeProtocolAdmin(other.address))
+        .to.emit(roleAdminManager, "ProtocolAdminRevoked")
+        .withArgs(other.address, deployer.address);
+
+      expect(await roleAdminManager.hasRole(defaultAdminRole, other.address)).to.equal(false);
+      expect(await verification.hasRole(defaultAdminRole, other.address)).to.equal(false);
+      expect(await lending.hasRole(defaultAdminRole, other.address)).to.equal(false);
+    });
+
+    it("rolls back protocol admin grants if one managed contract rejects the manager", async function () {
+      const { deployer, other, verification, lending } = await loadFixture(deployProtocolFixture);
+      const RoleAdminManager = await ethers.getContractFactory("RoleAdminManager");
+      const roleAdminManager = await RoleAdminManager.deploy(
+        verification.target,
+        lending.target,
+        deployer.address
+      );
+      const defaultAdminRole = await verification.DEFAULT_ADMIN_ROLE();
+
+      await verification.grantRole(defaultAdminRole, roleAdminManager.target);
+
+      await expect(roleAdminManager.grantProtocolAdmin(other.address)).to.be.reverted;
+      expect(await roleAdminManager.hasRole(defaultAdminRole, other.address)).to.equal(false);
+      expect(await verification.hasRole(defaultAdminRole, other.address)).to.equal(false);
+      expect(await lending.hasRole(defaultAdminRole, other.address)).to.equal(false);
+    });
+
+    it("prevents removing the last RoleAdminManager admin through every revoke path", async function () {
+      const { deployer, other, verification, lending } = await loadFixture(deployProtocolFixture);
+      const RoleAdminManager = await ethers.getContractFactory("RoleAdminManager");
+      const roleAdminManager = await RoleAdminManager.deploy(
+        verification.target,
+        lending.target,
+        deployer.address
+      );
+      const defaultAdminRole = await verification.DEFAULT_ADMIN_ROLE();
+
+      await verification.grantRole(defaultAdminRole, roleAdminManager.target);
+      await lending.grantRole(defaultAdminRole, roleAdminManager.target);
+
+      await expect(roleAdminManager.revokeProtocolAdmin(deployer.address))
+        .to.be.revertedWithCustomError(roleAdminManager, "LastProtocolAdmin");
+      await expect(roleAdminManager.revokeRole(defaultAdminRole, deployer.address))
+        .to.be.revertedWithCustomError(roleAdminManager, "LastProtocolAdmin");
+      await expect(roleAdminManager.renounceRole(defaultAdminRole, deployer.address))
+        .to.be.revertedWithCustomError(roleAdminManager, "LastProtocolAdmin");
+
+      await roleAdminManager.grantProtocolAdmin(other.address);
+      await roleAdminManager.revokeProtocolAdmin(deployer.address);
+
+      expect(await roleAdminManager.protocolAdminCount()).to.equal(1n);
+      expect(await roleAdminManager.hasRole(defaultAdminRole, other.address)).to.equal(true);
+      expect(await roleAdminManager.hasRole(defaultAdminRole, deployer.address)).to.equal(false);
+    });
+
+    it("rejects zero address protocol admins through direct and inherited grant paths", async function () {
+      const { deployer, verification, lending } = await loadFixture(deployProtocolFixture);
+      const RoleAdminManager = await ethers.getContractFactory("RoleAdminManager");
+      const roleAdminManager = await RoleAdminManager.deploy(
+        verification.target,
+        lending.target,
+        deployer.address
+      );
+      const defaultAdminRole = await verification.DEFAULT_ADMIN_ROLE();
+
+      await verification.grantRole(defaultAdminRole, roleAdminManager.target);
+      await lending.grantRole(defaultAdminRole, roleAdminManager.target);
+
+      await expect(roleAdminManager.grantProtocolAdmin(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(roleAdminManager, "InvalidAccount");
+      await expect(roleAdminManager.grantRole(defaultAdminRole, ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(roleAdminManager, "InvalidAccount");
+
+      expect(await roleAdminManager.protocolAdminCount()).to.equal(1n);
+      await expect(roleAdminManager.revokeProtocolAdmin(deployer.address))
+        .to.be.revertedWithCustomError(roleAdminManager, "LastProtocolAdmin");
+    });
   });
 
   describe("PropertyVerification", function () {

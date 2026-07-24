@@ -562,6 +562,12 @@ h2 {
   line-height: 1.55;
 }
 
+.sidebar-role-label {
+  color: #f4f8ff !important;
+  font-size: 0.96rem !important;
+  font-weight: 880;
+}
+
 .sidebar-readiness {
   display: grid;
   gap: 10px;
@@ -873,6 +879,7 @@ h2 {
 .readiness-item span,
 .readiness-item small,
 .asset-select,
+.asset-identity-row span,
 .asset-meta span,
 .proof-copy span,
 .proof-copy small,
@@ -964,8 +971,8 @@ h2 {
   grid-template-columns: minmax(0, 1fr) minmax(360px, 0.82fr);
 }
 
-.loan-work-grid {
-  grid-template-columns: minmax(430px, 1fr) minmax(430px, 1fr);
+.view-grid.two-col.loan-work-grid {
+  grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
 }
 
 .view-grid.three-col {
@@ -1102,6 +1109,18 @@ h2 {
   font-size: clamp(1.25rem, 1.65vw, 1.65rem);
 }
 
+.asset-identity-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+  align-items: center;
+}
+
+.asset-identity-row div:last-child {
+  grid-column: 2 / -1;
+}
+
 .asset-select {
   display: grid;
   min-width: 170px;
@@ -1122,6 +1141,7 @@ h2 {
   gap: 10px;
 }
 
+.asset-identity-row div,
 .asset-meta div {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
@@ -1130,29 +1150,16 @@ h2 {
   min-width: 0;
 }
 
+.asset-identity-row svg,
 .asset-meta svg {
   grid-row: span 2;
   color: #88a5d4;
 }
 
+.asset-identity-row strong,
 .asset-meta strong {
   color: #f6f9ff;
   overflow-wrap: anywhere;
-}
-
-.asset-address {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  color: #96a5bd;
-  font-size: 0.86rem;
-  line-height: 1.4;
-}
-
-.asset-address svg {
-  flex: 0 0 auto;
-  color: #7fa4df;
 }
 
 .asset-status-row {
@@ -1191,6 +1198,17 @@ h2 {
   box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.14);
 }
 
+.status-chip.danger {
+  color: #ff7a86;
+  background: rgba(255, 104, 117, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 104, 117, 0.26);
+}
+
+.status-chip.amber {
+  background: rgba(255, 201, 68, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 201, 68, 0.24);
+}
+
 .status-chip.amber,
 .warn-text {
   color: #ffc944 !important;
@@ -1214,8 +1232,15 @@ h2 {
   min-width: 0;
 }
 
+.step-node > div:not(.step-orb) {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
 .step-node i {
   position: absolute;
+  z-index: 0;
   right: -28px;
   top: 31px;
   width: 44px;
@@ -1244,13 +1269,20 @@ h2 {
 .step-node small {
   display: block;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .step-node strong {
+  width: 100%;
+  max-width: 13ch;
   color: #f4f8ff;
   font-size: clamp(0.92rem, 1vw, 1.08rem);
   line-height: 1.18;
+}
+
+.step-node .step-title-loan {
+  max-width: 10ch;
 }
 
 .step-node span {
@@ -1338,6 +1370,8 @@ h2 {
 .metric-card,
 .record-card,
 .operation-panel,
+.admin-control-panel,
+.admin-contract-card,
 .address-card,
 .activity-feed-card,
 .loan-table-card,
@@ -1516,8 +1550,7 @@ h2 {
 .proof-risk-panel,
 .proof-metrics,
 .proof-input-row,
-.privacy-commitment-row,
-.proof-action-row {
+.privacy-commitment-row {
   border: 1px solid rgba(134, 158, 205, 0.12);
   border-radius: 8px;
   background: rgba(5, 8, 15, 0.35);
@@ -1617,12 +1650,45 @@ h2 {
   gap: 8px;
 }
 
+.proof-principal-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.proof-principal-header small {
+  color: #8ea0bb;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.proof-principal-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(95, 144, 255, 0.38);
+  border-radius: 8px;
+  background: rgba(6, 10, 18, 0.7);
+}
+
 .proof-principal-field input {
   min-height: 52px;
-  border-color: rgba(95, 144, 255, 0.38);
-  background: rgba(6, 10, 18, 0.7);
+  border: 0;
+  background: transparent;
   font-size: 1.15rem;
   font-weight: 820;
+}
+
+.proof-principal-control button {
+  min-width: 86px;
+  border-left: 1px solid rgba(95, 144, 255, 0.25);
+  background: rgba(44, 134, 255, 0.13);
+  color: #8db8ff;
+  font-weight: 900;
 }
 
 .proof-toggle {
@@ -1670,35 +1736,8 @@ h2 {
 
 .proof-action-row {
   display: grid;
-  grid-template-columns: minmax(210px, 0.42fr) minmax(0, 1fr);
-  align-items: center;
+  grid-template-columns: 1fr;
   gap: 12px;
-  padding: 12px;
-}
-
-.proof-action-row .primary-action {
-  width: 100%;
-  min-width: 0;
-  min-height: 48px;
-}
-
-.proof-action-note {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  border-left: 1px solid rgba(134, 158, 205, 0.18);
-  padding-left: 12px;
-}
-
-.proof-action-note strong {
-  color: #f4f8ff;
-  font-size: 0.88rem;
-}
-
-.proof-action-note span {
-  color: #96a5bd;
-  font-size: 0.82rem;
-  line-height: 1.45;
 }
 
 .compliance-meter {
@@ -1974,10 +2013,56 @@ h2 {
   gap: 7px;
 }
 
+.loan-record-card .record-section-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+.onchain-record-card .record-section-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+.view-grid.two-col.loan-work-grid {
+  grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
+}
+
+.loan-record-card .record-section {
+  height: 100%;
+}
+
+.onchain-record-card .record-section {
+  height: 100%;
+}
+
+.onchain-record-card .record-section-title {
+  align-items: flex-start;
+}
+
+.onchain-record-card .record-section-title strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.18;
+}
+
 .loan-record-card .record-list div {
-  grid-template-columns: minmax(138px, 0.42fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 5px;
+}
+
+.loan-record-card .commitment-section {
+  grid-column: auto;
+}
+
+.loan-record-card .commitment-section .record-list {
+  grid-template-columns: 1fr;
+}
+
+.loan-record-card .commitment-section .record-list div {
+  align-content: start;
+  min-height: 86px;
 }
 
 .toggle-row {
@@ -2027,6 +2112,15 @@ h2 {
 
 .primary-action {
   background: linear-gradient(180deg, #2c86ff, #1760e6);
+}
+
+.workflow-action {
+  width: 100%;
+  min-width: 190px;
+  max-width: none;
+  min-height: 46px;
+  padding: 0 16px;
+  font-size: 0.95rem;
 }
 
 .gold-action {
@@ -2113,6 +2207,984 @@ h2 {
   line-height: 1.25;
 }
 
+.admin-console-view {
+  gap: 18px;
+}
+
+.admin-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-section-heading {
+  margin-bottom: 0;
+}
+
+.admin-page-panel .activity-panel {
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-role-layout,
+.admin-audit-layout {
+  display: grid;
+  grid-template-columns: minmax(340px, 0.72fr) minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-control-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-control-panel .panel-heading {
+  margin-bottom: 0;
+}
+
+.admin-role-page {
+  gap: 14px;
+}
+
+.admin-role-directory-panel {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(22, 36, 61, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-role-directory-panel .panel-heading {
+  margin-bottom: 0;
+}
+
+.admin-role-directory-shell {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-role-directory-nav {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-role-directory-nav button {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  border-radius: 8px;
+  background: rgba(134, 158, 205, 0.06);
+  color: #dce7f8;
+  padding: 10px;
+  text-align: left;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.12);
+}
+
+.admin-role-directory-nav button svg {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: #88a5d4;
+  background: rgba(134, 158, 205, 0.08);
+  padding: 9px;
+}
+
+.admin-role-directory-nav button span {
+  min-width: 0;
+  color: #f6f9ff;
+  font-size: 1.02rem;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-role-directory-nav button strong {
+  border-radius: 999px;
+  background: rgba(134, 158, 205, 0.12);
+  color: #aebbd0;
+  padding: 4px 9px;
+  font-size: 0.78rem;
+}
+
+.admin-role-directory-nav button.active {
+  background:
+    linear-gradient(135deg, rgba(45, 130, 255, 0.2), rgba(49, 233, 155, 0.08)),
+    rgba(134, 158, 205, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(73, 148, 255, 0.52);
+}
+
+.admin-role-directory-nav button.active svg,
+.admin-role-directory-nav button.active strong {
+  color: #35eda1;
+}
+
+.admin-role-address-book {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-self: stretch;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  min-height: 214px;
+  min-width: 0;
+  border-radius: 8px;
+  background: rgba(5, 8, 15, 0.18);
+  padding: 10px 0 0;
+}
+
+.admin-target-list div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid rgba(134, 158, 205, 0.12);
+  border-radius: 8px;
+  background: rgba(134, 158, 205, 0.06);
+  padding: 11px;
+}
+
+.admin-field-group > span,
+.admin-target-list dt {
+  color: #96a5bd;
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.admin-target-list dd {
+  min-width: 0;
+  margin: 0;
+  color: #f6f9ff;
+  overflow-wrap: anywhere;
+}
+
+.admin-address-list {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 0;
+}
+
+.admin-address-row {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(134, 158, 205, 0.08), rgba(5, 8, 15, 0.2)),
+    rgba(134, 158, 205, 0.05);
+  padding: 10px 12px;
+  text-align: left;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.14);
+}
+
+.admin-address-row span {
+  color: #f6f9ff;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-size: clamp(0.72rem, 0.82vw, 0.86rem);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.admin-address-pagination {
+  justify-content: flex-end;
+  align-self: end;
+  margin-top: 4px;
+  border-top: 0;
+  padding-top: 4px;
+}
+
+.admin-address-list .helper-copy {
+  align-self: center;
+}
+
+.admin-role-main-grid {
+  display: grid;
+  grid-template-columns: minmax(420px, 0.58fr) minmax(360px, 0.42fr);
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-role-command,
+.admin-target-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-field-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-role-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-role-selector button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 5px 10px;
+  align-items: center;
+  min-height: 86px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(134, 158, 205, 0.08), rgba(5, 8, 15, 0.34)),
+    rgba(134, 158, 205, 0.06);
+  color: #dce7f8;
+  padding: 13px;
+  text-align: left;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.14);
+}
+
+.admin-role-selector button svg {
+  grid-row: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #88a5d4;
+  background: rgba(134, 158, 205, 0.08);
+  padding: 7px;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.12);
+}
+
+.admin-role-selector button div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.admin-role-selector button span,
+.admin-role-selector button strong,
+.admin-role-selector button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-role-selector button span {
+  color: #87b1ff;
+  font-size: 0.7rem;
+  font-weight: 880;
+  text-transform: uppercase;
+}
+
+.admin-role-selector button strong {
+  color: #f6f9ff;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.admin-role-selector button small {
+  color: #96a5bd;
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.admin-role-selector button.active {
+  background:
+    linear-gradient(135deg, rgba(45, 130, 255, 0.24), rgba(49, 233, 155, 0.1)),
+    rgba(134, 158, 205, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(73, 148, 255, 0.56);
+}
+
+.admin-role-selector button.active svg,
+.admin-role-selector button.active strong {
+  color: #87b1ff;
+}
+
+.admin-operation-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-operation-toggle button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border-radius: 8px;
+  background: rgba(134, 158, 205, 0.07);
+  color: #dce7f8;
+  font-weight: 860;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.14);
+}
+
+.admin-operation-toggle button.active.grant {
+  background: rgba(31, 177, 112, 0.18);
+  color: #35eda1;
+  box-shadow: inset 0 0 0 1px rgba(53, 237, 161, 0.38);
+}
+
+.admin-operation-toggle button.active.revoke {
+  background: rgba(255, 104, 117, 0.12);
+  color: #ffb9c0;
+  box-shadow: inset 0 0 0 1px rgba(255, 104, 117, 0.34);
+}
+
+.admin-address-field input {
+  min-height: 46px;
+}
+
+.admin-role-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2c86ff, #1760e6);
+  color: #f7fbff;
+  font-weight: 900;
+}
+
+.admin-role-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.admin-target-panel {
+  padding: 16px;
+}
+
+.admin-target-panel .panel-heading {
+  margin-bottom: 0;
+}
+
+.admin-target-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.admin-target-list div:last-child {
+  border-color: rgba(73, 148, 255, 0.22);
+  background: rgba(45, 130, 255, 0.08);
+}
+
+.admin-target-list div.ready {
+  border-color: rgba(53, 237, 161, 0.28);
+  background: rgba(38, 211, 132, 0.1);
+}
+
+.admin-target-list div.ready dd {
+  color: #35eda1;
+}
+
+.admin-target-list div.blocked {
+  border-color: rgba(255, 201, 68, 0.26);
+  background: rgba(255, 201, 68, 0.08);
+}
+
+.admin-target-list div.blocked dd {
+  color: #ffc944;
+}
+
+.admin-permission-matrix .role-status-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.admin-role-history {
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-role-history .panel-heading {
+  margin-bottom: 0;
+}
+
+.admin-role-history-table .role-audit-head,
+.admin-role-history-table .role-audit-row {
+  grid-template-columns: 116px 140px minmax(440px, 1fr);
+  min-width: 720px;
+}
+
+.admin-role-history-table .role-audit-row {
+  cursor: pointer;
+}
+
+.admin-role-history-table .role-audit-row.active {
+  background: rgba(45, 130, 255, 0.14);
+}
+
+.admin-full-address,
+.admin-role-history-table .role-audit-row .admin-full-address,
+.admin-role-change-detail dd {
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.admin-role-change-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+  border-top: 1px solid rgba(134, 158, 205, 0.12);
+  padding-top: 14px;
+}
+
+.admin-role-change-detail div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid rgba(134, 158, 205, 0.12);
+  border-radius: 8px;
+  background: rgba(134, 158, 205, 0.06);
+  padding: 11px;
+}
+
+.admin-role-change-detail dt {
+  color: #96a5bd;
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.admin-role-change-detail dd {
+  min-width: 0;
+  margin: 0;
+  color: #f6f9ff;
+  font-size: 0.82rem;
+}
+
+.admin-role-layout .settings-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-role-layout .settings-list .full-row {
+  grid-column: 1 / -1;
+}
+
+.admin-role-layout .role-status-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-role-layout .role-status-grid div:first-child {
+  grid-column: 1 / -1;
+}
+
+.admin-ops-page {
+  gap: 14px;
+}
+
+.admin-ops-hero {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  background:
+    linear-gradient(135deg, rgba(22, 36, 61, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-ops-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-ops-kpi {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px;
+  gap: 12px;
+  align-items: center;
+  min-height: 128px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(135, 177, 255, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(134, 158, 205, 0.08), rgba(5, 8, 15, 0.26)),
+    rgba(134, 158, 205, 0.06);
+  padding: 16px;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.12);
+}
+
+.admin-ops-kpi::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: rgba(134, 158, 205, 0.24);
+  content: "";
+}
+
+.admin-ops-kpi div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.admin-ops-kpi span,
+.admin-ops-kpi small {
+  min-width: 0;
+  color: #96a5bd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-ops-kpi small {
+  line-height: 1.36;
+  white-space: normal;
+}
+
+.admin-ops-kpi span {
+  font-size: 0.74rem;
+  font-weight: 860;
+  text-transform: uppercase;
+}
+
+.admin-ops-kpi strong {
+  min-width: 0;
+  color: #f6f9ff;
+  font-size: clamp(1.35rem, 1.8vw, 2rem);
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-ops-kpi svg {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  color: #88a5d4;
+  background: rgba(134, 158, 205, 0.08);
+  padding: 12px;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.12);
+}
+
+.admin-ops-kpi.green::before {
+  background: rgba(49, 233, 155, 0.68);
+}
+
+.admin-ops-kpi.blue::before {
+  background: rgba(135, 177, 255, 0.68);
+}
+
+.admin-ops-kpi.amber::before {
+  background: rgba(255, 201, 68, 0.68);
+}
+
+.admin-ops-kpi.green strong,
+.admin-ops-kpi.green svg {
+  color: #35eda1;
+}
+
+.admin-ops-kpi.blue strong,
+.admin-ops-kpi.blue svg {
+  color: #87b1ff;
+}
+
+.admin-ops-kpi.amber strong,
+.admin-ops-kpi.amber svg {
+  color: #ffc944;
+}
+
+.admin-contract-matrix-heading {
+  margin: 2px 0 -2px;
+}
+
+.admin-contract-matrix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-contract-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-contract-card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 214px;
+  min-width: 0;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-contract-card-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-contract-card-head > svg {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  color: #88a5d4;
+  background: rgba(134, 158, 205, 0.08);
+  padding: 10px;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.12);
+}
+
+.admin-contract-card.green .admin-contract-card-head > svg {
+  color: #35eda1;
+}
+
+.admin-contract-card.blue .admin-contract-card-head > svg {
+  color: #87b1ff;
+}
+
+.admin-contract-card.amber .admin-contract-card-head > svg {
+  color: #ffc944;
+}
+
+.admin-contract-card-head div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.admin-contract-card-head span,
+.admin-contract-card-head small,
+.admin-contract-card dt {
+  color: #8190aa;
+  font-size: 0.74rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.admin-contract-card-head strong {
+  color: #f6f9ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-contract-card-head small {
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.admin-contract-card-head em {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(134, 158, 205, 0.1);
+  padding: 5px 9px;
+  font-size: 0.74rem;
+  font-weight: 860;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.admin-contract-card dl {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.admin-contract-card dl div {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid rgba(134, 158, 205, 0.1);
+  padding-top: 9px;
+}
+
+.admin-contract-card dd {
+  min-width: 0;
+  margin: 0;
+  color: #f4f8ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-contract-detail-grid div:first-child {
+  grid-column: 1 / -1;
+}
+
+.admin-contract-detail-grid .admin-full-address {
+  font-size: 0.78rem;
+  white-space: normal;
+}
+
+.admin-ops-bottom .activity-panel {
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-audit-page {
+  gap: 14px;
+}
+
+.admin-audit-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-audit-summary-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px;
+  gap: 12px;
+  align-items: center;
+  min-height: 128px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(135, 177, 255, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-audit-summary-card::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: rgba(134, 158, 205, 0.24);
+  content: "";
+}
+
+.admin-audit-summary-card div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-audit-summary-card span,
+.admin-audit-summary-card small {
+  min-width: 0;
+  color: #96a5bd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-audit-summary-card small {
+  line-height: 1.36;
+  white-space: normal;
+}
+
+.admin-audit-summary-card span {
+  font-size: 0.74rem;
+  font-weight: 860;
+  text-transform: uppercase;
+}
+
+.admin-audit-summary-card strong {
+  min-width: 0;
+  color: #f6f9ff;
+  font-size: clamp(1.45rem, 2vw, 2.15rem);
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-audit-summary-card svg {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  color: #88a5d4;
+  background: rgba(134, 158, 205, 0.08);
+  padding: 12px;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.12);
+}
+
+.admin-audit-summary-card.green::before {
+  background: rgba(49, 233, 155, 0.68);
+}
+
+.admin-audit-summary-card.blue::before {
+  background: rgba(135, 177, 255, 0.68);
+}
+
+.admin-audit-summary-card.amber::before {
+  background: rgba(255, 201, 68, 0.68);
+}
+
+.admin-audit-summary-card.green strong,
+.admin-audit-summary-card.green svg {
+  color: #35eda1;
+}
+
+.admin-audit-summary-card.blue strong,
+.admin-audit-summary-card.blue svg {
+  color: #87b1ff;
+}
+
+.admin-audit-summary-card.amber strong,
+.admin-audit-summary-card.amber svg {
+  color: #ffc944;
+}
+
+.admin-audit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.admin-audit-stack {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-audit-loan-stack {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-audit-events,
+.admin-audit-detail,
+.admin-loan-audit-panel,
+.admin-chain-record-panel,
+.admin-onchain-audit-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.admin-audit-table .role-audit-head,
+.admin-audit-table .role-audit-row {
+  grid-template-columns: 116px 140px minmax(360px, 1fr);
+  min-width: 720px;
+}
+
+.admin-audit-events .role-audit-table {
+  border: 1px solid rgba(134, 158, 205, 0.12);
+  border-radius: 8px;
+  background: rgba(5, 8, 15, 0.24);
+  overflow-x: auto;
+}
+
+.admin-audit-events .role-audit-head,
+.admin-audit-events .role-audit-row {
+  padding: 0 14px;
+}
+
+.admin-audit-events .role-audit-head {
+  min-height: 42px;
+  align-items: center;
+}
+
+.admin-audit-table .role-audit-row {
+  cursor: pointer;
+  min-height: 50px;
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.admin-audit-table .role-audit-row:hover,
+.admin-audit-table .role-audit-row.active {
+  background: rgba(45, 130, 255, 0.13);
+  box-shadow: inset 3px 0 0 rgba(135, 177, 255, 0.72);
+}
+
+.admin-audit-events .ledger-pagination {
+  border-top: 1px solid rgba(134, 158, 205, 0.12);
+  padding-top: 12px;
+}
+
+.admin-audit-events .audit-detail-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-audit-detail {
+  position: sticky;
+  top: 14px;
+}
+
+.audit-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.audit-detail-grid div {
+  background: rgba(134, 158, 205, 0.055);
+}
+
+.audit-detail-grid .full-row {
+  grid-column: 1 / -1;
+}
+
+.audit-chain-detail {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-loan-audit-detail {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: start;
+  border-top: 1px solid rgba(134, 158, 205, 0.1);
+  padding-top: 14px;
+}
+
+.admin-loan-audit-detail .record-section {
+  height: 100%;
+}
+
+.admin-loan-audit-detail .record-list div {
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 5px;
+}
+
+.admin-audit-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 14px;
+  min-width: 0;
+}
+
 .chain-record-table,
 .role-audit-table {
   display: grid;
@@ -2130,8 +3202,26 @@ h2 {
 
 .chain-record-head,
 .chain-record-row {
-  grid-template-columns: 110px minmax(130px, 1fr) 92px 110px minmax(130px, 1fr) minmax(150px, 1fr);
-  min-width: 900px;
+  grid-template-columns: 120px minmax(220px, 1fr) 110px 120px minmax(180px, 1fr);
+  min-width: 760px;
+}
+
+.admin-onchain-audit-table .chain-record-head,
+.admin-onchain-audit-table .chain-record-row {
+  grid-template-columns: 132px minmax(220px, 0.58fr) minmax(360px, 1fr);
+  min-width: 760px;
+}
+
+.admin-loan-audit-table .chain-record-head,
+.admin-loan-audit-table .chain-record-row {
+  grid-template-columns: 84px minmax(120px, 0.9fr) minmax(190px, 1fr) 110px minmax(170px, 1fr);
+  min-width: 820px;
+}
+
+.admin-chain-record-panel .chain-record-row,
+.admin-loan-audit-panel .chain-record-row,
+.admin-onchain-audit-panel .chain-record-row {
+  cursor: pointer;
 }
 
 .role-audit-head,
@@ -2171,6 +3261,104 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chain-record-row strong .event-type-pill {
+  max-width: 100%;
+}
+
+.admin-onchain-audit-table .event-target-value {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.event-type-pill {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  min-height: 26px;
+  border-radius: 999px;
+  background: rgba(48, 132, 255, 0.13);
+  color: #87b1ff;
+  padding: 0 10px;
+  font-size: 0.74rem;
+  font-weight: 880;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-type-pill.green {
+  background: rgba(32, 224, 136, 0.13);
+  color: #31e99b;
+}
+
+.event-type-pill.amber {
+  background: rgba(255, 201, 68, 0.13);
+  color: #ffc944;
+}
+
+.event-type-pill.muted {
+  background: rgba(134, 158, 205, 0.11);
+  color: #a9b7ce;
+}
+
+.onchain-event-detail {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid rgba(134, 158, 205, 0.1);
+  padding-top: 14px;
+}
+
+.onchain-event-summary {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid rgba(134, 158, 205, 0.12);
+  border-radius: 8px;
+  background: rgba(5, 8, 15, 0.24);
+  padding: 12px;
+}
+
+.onchain-event-summary div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.onchain-event-summary strong,
+.onchain-event-summary small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onchain-event-summary strong {
+  color: #f6f9ff;
+  font-size: 1rem;
+}
+
+.onchain-event-summary small {
+  color: #96a5bd;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.onchain-event-fields div {
+  grid-template-columns: minmax(160px, 0.32fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.onchain-event-fields dt {
+  padding-top: 3px;
 }
 
 .activity-table {
@@ -2301,8 +3489,26 @@ h2 {
 .onchain-record-card .record-list div,
 .loan-record-card .record-list div {
   grid-template-columns: minmax(116px, 0.42fr) minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 10px;
+}
+
+.onchain-record-card .record-list dt,
+.loan-record-card .record-list dt {
+  padding-top: 3px;
+}
+
+.onchain-record-card .record-section .record-list div,
+.loan-record-card .record-section .record-list div,
+.admin-loan-audit-detail .record-list div {
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+
+.onchain-record-card .record-section .record-list dt,
+.loan-record-card .record-section .record-list dt,
+.admin-loan-audit-detail .record-list dt {
+  padding-top: 0;
 }
 
 .onchain-record-card .record-list div:last-child,
@@ -2371,8 +3577,7 @@ dd {
 }
 
 .loan-table-row.selectable,
-.property-row,
-.approval-row {
+.property-row {
   width: 100%;
   border: 0;
   text-align: left;
@@ -2453,8 +3658,7 @@ dd {
 .check-list,
 .settings-list,
 .command-list,
-.property-list,
-.approval-list {
+.property-list {
   display: grid;
   gap: 10px;
 }
@@ -2482,8 +3686,7 @@ dd {
   box-shadow: inset 0 0 0 1px rgba(51, 129, 255, 0.56);
 }
 
-.property-row,
-.approval-row {
+.property-row {
   display: grid;
   gap: 5px;
   border-radius: 8px;
@@ -2493,18 +3696,297 @@ dd {
   box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.14);
 }
 
-.property-row.active,
-.approval-row.active {
+.property-row.active {
   background: rgba(35, 109, 255, 0.2);
   box-shadow: inset 0 0 0 1px rgba(51, 129, 255, 0.52);
 }
 
 .property-row span,
-.property-row small,
-.approval-row span,
-.approval-row small {
+.property-row small {
   color: #96a5bd;
   overflow-wrap: anywhere;
+}
+
+.approval-view {
+  gap: 16px;
+}
+
+.approval-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.approval-overview-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 12px;
+  align-items: center;
+  min-height: 124px;
+  min-width: 0;
+  padding: 16px;
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.approval-overview-card div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.approval-overview-card span,
+.approval-overview-card small {
+  color: #96a5bd;
+}
+
+.approval-overview-card span {
+  font-size: 0.76rem;
+  font-weight: 860;
+  text-transform: uppercase;
+}
+
+.approval-overview-card strong {
+  color: #f6f9ff;
+  font-size: clamp(1.6rem, 2vw, 2.2rem);
+  line-height: 1;
+}
+
+.approval-overview-card small {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.8rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approval-overview-card svg {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(134, 158, 205, 0.09);
+  color: #91a8cc;
+  padding: 11px;
+  box-shadow: inset 0 0 0 1px rgba(134, 158, 205, 0.15);
+}
+
+.approval-overview-card.amber svg,
+.approval-overview-card.amber strong {
+  color: #ffc944;
+}
+
+.approval-overview-card.green svg,
+.approval-overview-card.green strong {
+  color: #31e99b;
+}
+
+.approval-overview-card.blue svg,
+.approval-overview-card.blue strong {
+  color: #3790ff;
+}
+
+.approval-ledger-shell {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.approval-ledger-shell > .panel-heading {
+  margin-bottom: 0;
+}
+
+.approval-ledger-shell .approval-tabs {
+  margin-bottom: 0;
+}
+
+.approval-ledger-shell .loan-table-card {
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.approval-ledger-shell .loan-table-row.selectable:hover,
+.approval-ledger-shell .loan-table-row.selectable.active {
+  background: rgba(45, 130, 255, 0.14);
+}
+
+.approval-decision-full {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  background:
+    linear-gradient(135deg, rgba(18, 27, 45, 0.96), rgba(6, 10, 18, 0.94)),
+    rgba(9, 13, 23, 0.92);
+}
+
+.approval-decision-full > .panel-heading {
+  margin-bottom: 0;
+}
+
+.approval-decision-layout {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.approval-detail-sections {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.approval-detail-sections .record-section {
+  background: rgba(5, 8, 15, 0.32);
+}
+
+.approval-detail-sections .record-list div {
+  grid-template-columns: minmax(124px, 0.34fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.approval-detail-sections .record-list dt {
+  padding-top: 3px;
+}
+
+.approval-detail-sections .record-list dd {
+  font-size: clamp(0.95rem, 1vw, 1.08rem);
+  line-height: 1.35;
+}
+
+.full-hash-value {
+  color: #f6f9ff;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  font-size: clamp(0.72rem, 0.82vw, 0.9rem) !important;
+  line-height: 1.5 !important;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.onchain-record-card .full-hash-value,
+.loan-record-card .full-hash-value,
+.admin-loan-audit-detail .full-hash-value {
+  display: block;
+  max-width: 100%;
+}
+
+.approval-decision-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  border-top: 1px solid rgba(134, 158, 205, 0.12);
+  padding-top: 16px;
+}
+
+.approval-warning,
+.approval-empty-state {
+  margin: 0;
+  border-radius: 8px;
+  padding: 11px 12px;
+  line-height: 1.5;
+}
+
+.approval-warning {
+  border: 1px solid rgba(255, 201, 68, 0.22);
+  background: rgba(255, 201, 68, 0.08);
+  color: #ffc944;
+}
+
+.approval-empty-state {
+  border: 1px solid rgba(134, 158, 205, 0.12);
+  background: rgba(134, 158, 205, 0.06);
+  color: #96a5bd;
+}
+
+.approval-approve-button,
+.approval-reject-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  min-width: 150px;
+  min-height: 46px;
+  overflow: hidden;
+  border-radius: 8px;
+  padding: 0 18px;
+  font-size: 0.94rem;
+  font-weight: 880;
+  white-space: nowrap;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.approval-approve-button svg,
+.approval-reject-button svg {
+  flex: 0 0 auto;
+}
+
+.approval-approve-button {
+  border: 1px solid rgba(49, 233, 155, 0.5);
+  background:
+    linear-gradient(180deg, rgba(43, 222, 145, 0.94), rgba(22, 142, 94, 0.92)),
+    rgba(15, 95, 66, 0.88);
+  color: #03130c;
+  box-shadow:
+    0 10px 24px rgba(27, 184, 116, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.approval-reject-button {
+  border: 1px solid rgba(255, 104, 117, 0.34);
+  background: rgba(10, 14, 24, 0.72);
+  color: #ffb9c0;
+  box-shadow: inset 0 0 0 1px rgba(255, 104, 117, 0.08);
+}
+
+.approval-approve-button:not(:disabled):hover,
+.approval-reject-button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.approval-approve-button:not(:disabled):hover {
+  border-color: rgba(79, 255, 179, 0.72);
+  background:
+    linear-gradient(180deg, rgba(61, 239, 163, 0.98), rgba(26, 159, 106, 0.95)),
+    rgba(15, 95, 66, 0.92);
+  box-shadow:
+    0 14px 30px rgba(27, 184, 116, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26);
+}
+
+.approval-reject-button:not(:disabled):hover {
+  border-color: rgba(255, 124, 136, 0.58);
+  background: rgba(54, 16, 25, 0.72);
+  color: #ffe4e7;
+}
+
+.approval-approve-button:focus-visible,
+.approval-reject-button:focus-visible {
+  outline: 2px solid rgba(135, 177, 255, 0.72);
+  outline-offset: 3px;
+}
+
+.approval-approve-button:disabled,
+.approval-reject-button:disabled {
+  cursor: not-allowed;
+  transform: none;
+  opacity: 0.46;
+  box-shadow: none;
 }
 
 .check-list div {
@@ -2538,15 +4020,17 @@ dd {
 }
 
 .view-actions-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 10px;
-  flex-wrap: wrap;
   margin-top: 14px;
 }
 
 .view-actions-row .primary-action,
 .view-actions-row .outline-action {
+  width: 100%;
   min-width: 180px;
+  max-width: none;
 }
 
 .ltv-meter {
@@ -2676,7 +4160,7 @@ dd {
   }
 
   .view-grid.two-col.loan-work-grid {
-    grid-template-columns: minmax(340px, 1fr) minmax(340px, 1fr);
+    grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
   }
 
   .overview-kpi-grid {
@@ -2783,6 +4267,36 @@ dd {
   .readiness-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .approval-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-ops-grid,
+  .admin-contract-matrix,
+  .admin-contract-grid,
+  .admin-audit-summary-grid,
+  .admin-audit-bottom-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-role-layout,
+  .admin-audit-layout,
+  .admin-audit-loan-stack,
+  .admin-loan-audit-detail,
+  .admin-audit-events .audit-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-audit-detail {
+    position: static;
+  }
+
+  .admin-role-main-grid,
+  .admin-role-directory-shell,
+  .admin-permission-matrix .role-status-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 780px) {
@@ -2815,6 +4329,7 @@ dd {
   .settings-summary-grid,
   .role-status-grid,
   .steps-panel,
+  .asset-identity-row,
   .asset-meta,
   .proof-studio-hero,
   .proof-studio-grid,
@@ -2829,6 +4344,31 @@ dd {
   .loan-command-strip,
   .loan-detail-meta,
   .loan-detail-console .detail-list,
+  .onchain-record-card .record-section-list,
+  .loan-record-card .record-section-list,
+  .loan-record-card .commitment-section .record-list,
+  .approval-overview-grid,
+  .admin-ops-grid,
+  .admin-contract-matrix,
+  .admin-contract-grid,
+  .admin-audit-summary-grid,
+  .admin-audit-bottom-grid,
+  .admin-role-layout,
+  .admin-audit-layout,
+  .admin-audit-loan-stack,
+  .admin-loan-audit-detail,
+  .admin-audit-events .audit-detail-grid,
+  .admin-role-main-grid,
+  .admin-role-directory-shell,
+  .admin-role-selector,
+  .admin-operation-toggle,
+  .admin-permission-matrix .role-status-grid,
+  .admin-role-layout .settings-list,
+  .admin-role-layout .role-status-grid,
+  .admin-role-change-detail,
+  .approval-decision-layout,
+  .approval-detail-sections,
+  .approval-decision-actions,
   .button-grid,
   .compact-actions,
   .view-grid.three-col,
@@ -2850,17 +4390,31 @@ dd {
     justify-self: start;
   }
 
-  .proof-action-note {
-    border-left: 0;
-    border-top: 1px solid rgba(134, 158, 205, 0.18);
-    padding-top: 10px;
-    padding-left: 0;
-  }
-
   .button-grid .wide,
   .compact-actions .wide,
   .toggle-row {
     grid-column: auto;
+  }
+
+  .asset-identity-row div:last-child {
+    grid-column: auto;
+    justify-self: stretch;
+    width: auto;
+  }
+
+  .admin-role-layout .settings-list .full-row,
+  .admin-role-layout .role-status-grid div:first-child {
+    grid-column: auto;
+  }
+
+  .approval-decision-actions {
+    justify-content: stretch;
+  }
+
+  .approval-approve-button,
+  .approval-reject-button {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .step-node i {
@@ -2886,7 +4440,9 @@ dd {
   .check-list div,
   .detail-list div,
   .onchain-record-card .record-list div,
-  .loan-record-card .record-list div {
+  .loan-record-card .record-list div,
+  .onchain-event-fields div,
+  .onchain-event-summary {
     grid-template-columns: 1fr;
   }
 }

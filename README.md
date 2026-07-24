@@ -69,14 +69,13 @@ The system is designed to demonstrate four core ideas:
   - Loan Officer approves or rejects loans.
   - Borrower requests, cancels, and repays loans.
 - Product-style React DApp:
-  - Overview;
-  - My Properties;
   - Property Verification;
   - Compliance Proof;
   - Loan Request;
   - Loan Approvals;
-  - Smart Contracts;
-  - Testnet Records;
+  - Admin Role Access;
+  - Admin Contract Ops;
+  - Admin Audit Logs;
   - Settings.
 
 ### Out of Scope
@@ -446,6 +445,12 @@ classDiagram
     verifyProof(a, b, c, publicSignals)
   }
 
+  class RoleAdminManager {
+    grantProtocolAdmin(account)
+    revokeProtocolAdmin(account)
+    hasProtocolAdmin(account)
+  }
+
   class Lending {
     LOAN_OFFICER_ROLE
     requestLoan(propertyId, principalCommitment)
@@ -458,6 +463,8 @@ classDiagram
   }
 
   ComplianceVerifier --> PropertyVerification : setCompliant / read valuation
+  RoleAdminManager --> PropertyVerification : grant / revoke DEFAULT_ADMIN_ROLE
+  RoleAdminManager --> Lending : grant / revoke DEFAULT_ADMIN_ROLE
   ComplianceVerifier --> LtvGroth16Verifier : verifyProof
   Lending --> PropertyVerification : ownerOf / isVerified / isCompliantFor
 ```
@@ -620,8 +627,8 @@ The frontend is an operational DApp workspace rather than a marketing page. It s
 
 - **Borrower:** view owned properties, run verification, generate compliance proofs, submit loans, cancel requests, and repay approved loans.
 - **Loan Officer:** inspect requested loans and approve or reject them.
-- **Admin:** check role configuration, contract addresses, and deployment status.
-- **Evaluator:** inspect on-chain records, proof latency, gas samples, and activity logs.
+- **Admin:** manage role access, inspect contract operations, and review audit logs.
+- **Evaluator:** inspect loan records, property records, role changes, on-chain events, proof latency, gas samples, and activity logs.
 
 The UI intentionally avoids fake historical metrics. Displayed gas usage and proof latency are collected from real actions in the current browser session.
 
@@ -804,14 +811,14 @@ Local demo commands automatically use `.env.local`. Sepolia deployment commands 
 
 1. Admin runs `pnpm demo:deploy`.
 2. Start the Oracle API with `pnpm oracle:api`.
-3. Connect a Borrower wallet, open My Properties, and select an owned property.
+3. Connect a Borrower wallet, open Property Verification, and select an owned property.
 4. Run Property Verification.
 5. Enter a loan principal, for example `750000`.
 6. Generate a Compliance Proof and write compliance on-chain.
 7. The Borrower submits a loan with the same `principalCommitment`.
 8. Switch to the Loan Officer wallet and approve or reject in Loan Approvals.
 9. The Borrower repays the approved loan.
-10. Admin can inspect roles and contract deployment status.
+10. Admin can use Role Access, Contract Ops, and Audit Logs.
 
 Command-line happy path:
 
@@ -922,6 +929,7 @@ The current demo deployment is:
 | LtvGroth16Verifier | `0x91f3Eada3Ff8C0C650d1AD3ae3474A223fC83b3c` | [Etherscan](https://sepolia.etherscan.io/address/0x91f3Eada3Ff8C0C650d1AD3ae3474A223fC83b3c) |
 | ComplianceVerifier | `0x6b7Bb127664f447b22DacD3CA55c0441a2eE9F6F` | [Etherscan](https://sepolia.etherscan.io/address/0x6b7Bb127664f447b22DacD3CA55c0441a2eE9F6F) |
 | Lending | `0xbb536E247e0f87118ab2f3F81e35C768087e3072` | [Etherscan](https://sepolia.etherscan.io/address/0xbb536E247e0f87118ab2f3F81e35C768087e3072) |
+| RoleAdminManager | `0x7764f00a74388afFE816bA154622f9b29a2bFc7d` | [Etherscan](https://sepolia.etherscan.io/address/0x7764f00a74388afFE816bA154622f9b29a2bFc7d) |
 
 If contracts are redeployed, update this table from `deployments/sepolia.json`.
 
@@ -1085,8 +1093,10 @@ ADMIN_ADDRESS=
 ORACLE_ADDRESS=
 LOAN_OFFICER_ADDRESS=
 PROPERTY_VERIFICATION_ADDRESS=
+LTV_GROTH16_VERIFIER_ADDRESS=
 COMPLIANCE_VERIFIER_ADDRESS=
 LENDING_ADDRESS=
+ROLE_ADMIN_MANAGER_ADDRESS=
 ```
 
 Sepolia `.env.sepolia`:
@@ -1099,8 +1109,10 @@ ORACLE_ADDRESS=
 LOAN_OFFICER_ADDRESS=
 PROPERTY_OWNER_OVERRIDE_ADDRESS=
 PROPERTY_VERIFICATION_ADDRESS=
+LTV_GROTH16_VERIFIER_ADDRESS=
 COMPLIANCE_VERIFIER_ADDRESS=
 LENDING_ADDRESS=
+ROLE_ADMIN_MANAGER_ADDRESS=
 ```
 
 Frontend `frontend/.env.local` or `frontend/.env.sepolia`:
@@ -1118,8 +1130,10 @@ VITE_LOAN_OFFICER_ADDRESS=
 
 # Deployed contract addresses. Local values are filled by `pnpm demo:sync`; Sepolia values are filled by `pnpm sepolia:sync`.
 VITE_PROPERTY_VERIFICATION_ADDRESS=
+VITE_LTV_GROTH16_VERIFIER_ADDRESS=
 VITE_COMPLIANCE_VERIFIER_ADDRESS=
 VITE_LENDING_ADDRESS=
+VITE_ROLE_ADMIN_MANAGER_ADDRESS=
 
 # Initial frontend network: localhost or sepolia
 VITE_DEFAULT_NETWORK=localhost

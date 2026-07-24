@@ -145,6 +145,82 @@ export const propertyVerificationAbi = [
   }
 ];
 
+export const complianceVerifierAbi = [
+  {
+    type: "event",
+    name: "ComplianceProofVerified",
+    inputs: [
+      { name: "propertyId", type: "bytes32", indexed: true },
+      { name: "proofHash", type: "bytes32", indexed: false },
+      { name: "valuationCommitment", type: "uint256", indexed: false },
+      { name: "principalCommitment", type: "uint256", indexed: false }
+    ]
+  }
+];
+
+export const roleAdminManagerAbi = [
+  {
+    type: "event",
+    name: "RoleGranted",
+    inputs: [
+      { name: "role", type: "bytes32", indexed: true },
+      { name: "account", type: "address", indexed: true },
+      { name: "sender", type: "address", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "RoleRevoked",
+    inputs: [
+      { name: "role", type: "bytes32", indexed: true },
+      { name: "account", type: "address", indexed: true },
+      { name: "sender", type: "address", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "ProtocolAdminGranted",
+    inputs: [
+      { name: "account", type: "address", indexed: true },
+      { name: "sender", type: "address", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "ProtocolAdminRevoked",
+    inputs: [
+      { name: "account", type: "address", indexed: true },
+      { name: "sender", type: "address", indexed: true }
+    ]
+  },
+  {
+    type: "function",
+    name: "grantProtocolAdmin",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "revokeProtocolAdmin",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "hasProtocolAdmin",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [
+      { name: "managerAdmin", type: "bool" },
+      { name: "propertyAdmin", type: "bool" },
+      { name: "lendingAdmin", type: "bool" },
+      { name: "complete", type: "bool" }
+    ]
+  }
+];
+
 export const lendingAbi = [
   {
     type: "event",
@@ -229,7 +305,7 @@ export const lendingAbi = [
     inputs: [
       { name: "loanId", type: "uint256", indexed: true },
       { name: "propertyId", type: "bytes32", indexed: true },
-      { name: "borrower", type: "address", indexed: false }
+      { name: "borrower", type: "address", indexed: true }
     ]
   },
   {

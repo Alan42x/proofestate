@@ -38,8 +38,10 @@ function writeEnv(filePath, values) {
     "LOAN_OFFICER_ADDRESS",
     "PROPERTY_OWNER_OVERRIDE_ADDRESS",
     "PROPERTY_VERIFICATION_ADDRESS",
+    "LTV_GROTH16_VERIFIER_ADDRESS",
     "COMPLIANCE_VERIFIER_ADDRESS",
     "LENDING_ADDRESS",
+    "ROLE_ADMIN_MANAGER_ADDRESS",
     "VITE_ORACLE_API_URL",
     "VITE_LOCAL_RPC_URL",
     "VITE_SEPOLIA_RPC_URL",
@@ -47,8 +49,10 @@ function writeEnv(filePath, values) {
     "VITE_ORACLE_ADDRESS",
     "VITE_LOAN_OFFICER_ADDRESS",
     "VITE_PROPERTY_VERIFICATION_ADDRESS",
+    "VITE_LTV_GROTH16_VERIFIER_ADDRESS",
     "VITE_COMPLIANCE_VERIFIER_ADDRESS",
     "VITE_LENDING_ADDRESS",
+    "VITE_ROLE_ADMIN_MANAGER_ADDRESS",
     "VITE_DEFAULT_NETWORK"
   ];
   const orderedKeys = Object.keys(merged).sort((a, b) => {
@@ -78,8 +82,10 @@ function main() {
     ORACLE_ADDRESS: deployment.oracleAddress || deployment.deployer,
     LOAN_OFFICER_ADDRESS: deployment.loanOfficerAddress || deployment.deployer,
     PROPERTY_VERIFICATION_ADDRESS: deployment.propertyVerification,
+    LTV_GROTH16_VERIFIER_ADDRESS: deployment.ltvGroth16Verifier || "",
     COMPLIANCE_VERIFIER_ADDRESS: deployment.complianceVerifier,
-    LENDING_ADDRESS: deployment.lending
+    LENDING_ADDRESS: deployment.lending,
+    ROLE_ADMIN_MANAGER_ADDRESS: deployment.roleAdminManager || ""
   };
 
   writeEnv(rootEnvPath, shared);
@@ -93,8 +99,10 @@ function main() {
     VITE_ORACLE_ADDRESS: shared.ORACLE_ADDRESS,
     VITE_LOAN_OFFICER_ADDRESS: shared.LOAN_OFFICER_ADDRESS,
     VITE_PROPERTY_VERIFICATION_ADDRESS: shared.PROPERTY_VERIFICATION_ADDRESS,
+    VITE_LTV_GROTH16_VERIFIER_ADDRESS: shared.LTV_GROTH16_VERIFIER_ADDRESS,
     VITE_COMPLIANCE_VERIFIER_ADDRESS: shared.COMPLIANCE_VERIFIER_ADDRESS,
     VITE_LENDING_ADDRESS: shared.LENDING_ADDRESS,
+    VITE_ROLE_ADMIN_MANAGER_ADDRESS: shared.ROLE_ADMIN_MANAGER_ADDRESS,
     VITE_DEFAULT_NETWORK: "sepolia"
   });
 
