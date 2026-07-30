@@ -58,58 +58,63 @@ async function main() {
 
   const rpcUrl = process.env.LOCAL_RPC_URL || "http://127.0.0.1:8545";
   const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const borrowerWallet = new ethers.Wallet(
-    process.env.BORROWER_PRIVATE_KEY || DEFAULT_BORROWER_PRIVATE_KEY,
-    provider
-  );
-  const loanOfficerWallet = new ethers.Wallet(
-    process.env.LOAN_OFFICER_PRIVATE_KEY || DEFAULT_LOAN_OFFICER_PRIVATE_KEY,
-    provider
-  );
-  const borrowerLending = new ethers.Contract(deployment.lending, LENDING_ABI, borrowerWallet);
-  const loanOfficerLending = new ethers.Contract(deployment.lending, LENDING_ABI, loanOfficerWallet);
-  const borrowerNonce = await provider.getTransactionCount(borrowerWallet.address, "pending");
-  const officerNonce = await provider.getTransactionCount(loanOfficerWallet.address, "pending");
-  let nextBorrowerNonce = borrowerNonce;
-  let nextOfficerNonce = officerNonce;
-  const borrowerOptions = () => ({ nonce: nextBorrowerNonce++ });
-  const officerOptions = () => ({ nonce: nextOfficerNonce++ });
-  const loanId = await borrowerLending.nextLoanId();
-  const key = propertyKey(propertyId);
+  try {
+    const borrowerWallet = new ethers.Wallet(
+      process.env.BORROWER_PRIVATE_KEY || DEFAULT_BORROWER_PRIVATE_KEY,
+      provider
+    );
+    const loanOfficerWallet = new ethers.Wallet(
+      process.env.LOAN_OFFICER_PRIVATE_KEY || DEFAULT_LOAN_OFFICER_PRIVATE_KEY,
+      provider
+    );
+    const borrowerLending = new ethers.Contract(deployment.lending, LENDING_ABI, borrowerWallet);
+    const loanOfficerLending = new ethers.Contract(deployment.lending, LENDING_ABI, loanOfficerWallet);
+    const borrowerNonce = await provider.getTransactionCount(borrowerWallet.address, "pending");
+    const officerNonce = await provider.getTransactionCount(loanOfficerWallet.address, "pending");
+    let nextBorrowerNonce = borrowerNonce;
+    let nextOfficerNonce = officerNonce;
+    const borrowerOptions = () => ({ nonce: nextBorrowerNonce++ });
+    const officerOptions = () => ({ nonce: nextOfficerNonce++ });
+    const loanId = await borrowerLending.nextLoanId();
+    const key = propertyKey(propertyId);
 
-  const principalCommitment = BigInt(oracleResult.compliance.principalCommitment);
+    const principalCommitment = BigInt(oracleResult.compliance.principalCommitment);
 
-  await timedStep(`Loan request ${loanId.toString()}`, async () => {
-    logStep(`Principal commitment: ${principalCommitment.toString()}`);
-    await (await borrowerLending.requestLoan(key, principalCommitment, borrowerOptions())).wait();
-  });
+    await timedStep(`Loan request ${loanId.toString()}`, async () => {
+      logStep(`Principal commitment: ${principalCommitment.toString()}`);
+      await (await borrowerLending.requestLoan(key, principalCommitment, borrowerOptions())).wait();
+    });
 
-  await timedStep(`Loan approval ${loanId.toString()}`, async () => {
-    await (await loanOfficerLending.approveLoan(loanId, officerOptions())).wait();
-  });
+    await timedStep(`Loan approval ${loanId.toString()}`, async () => {
+      await (await loanOfficerLending.approveLoan(loanId, officerOptions())).wait();
+    });
 
-  await timedStep(`Loan repayment ${loanId.toString()}`, async () => {
-    await (await borrowerLending.repay(loanId, borrowerOptions())).wait();
-  });
+    await timedStep(`Loan repayment ${loanId.toString()}`, async () => {
+      await (await borrowerLending.repay(loanId, borrowerOptions())).wait();
+    });
 
-  const loan = await borrowerLending.getLoan(loanId);
-  logStep(`Flow completed in ${formatDuration(flowStartedAt)}`);
-  console.log(
-    JSON.stringify(
-      {
-        loanId: loanId.toString(),
-        borrower: loan.borrower,
-        principalCommitment: loan.principalCommitment.toString(),
-        state: Number(loan.state),
-        stateLabel: ["Requested", "Approved", "Repaid", "Rejected", "Cancelled"][Number(loan.state)]
-      },
-      null,
-      2
-    )
-  );
+    const loan = await borrowerLending.getLoan(loanId);
+    logStep(`Flow completed in ${formatDuration(flowStartedAt)}`);
+    console.log(
+      JSON.stringify(
+        {
+          loanId: loanId.toString(),
+          borrower: loan.borrower,
+          principalCommitment: loan.principalCommitment.toString(),
+          state: Number(loan.state),
+          stateLabel: ["Requested", "Approved", "Repaid", "Rejected", "Cancelled"][Number(loan.state)]
+        },
+        null,
+        2
+      )
+    );
+  } finally {
+    provider.destroy();
+  }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

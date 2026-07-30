@@ -1,0 +1,69 @@
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Arial", "fontSize": "16px", "primaryColor": "#f8fafc", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "clusterBkg": "#f1f5f9", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart TB
+  subgraph Users["User and Role Layer"]
+    direction LR
+    Borrower["Borrower wallet"]
+    Officer["Loan officer wallet"]
+    Admin["Admin wallet"]
+  end
+
+  subgraph DApp["React DApp"]
+    direction LR
+    WalletGate["Wallet and network checks"]
+    Workspace["Workflow workspace"]
+    AdminViews["Admin and audit views"]
+  end
+
+  subgraph OracleLayer["Oracle and ZK Layer"]
+    direction LR
+    API["Express API"]
+    RegistryRules["Registry rules"]
+    Prover["Groth16 proof generation"]
+  end
+
+  subgraph Sources["Off-chain Sources"]
+    direction LR
+    Dataset["Mock registry JSON"]
+    Circuit["LTV circuit"]
+    Artifacts["WASM and proving key"]
+  end
+
+  subgraph Chain["On-chain Contracts"]
+    direction LR
+    PV["PropertyVerification"]
+    CV["ComplianceVerifier"]
+    GV["LtvGroth16Verifier"]
+    Lending["Lending"]
+    RAM["RoleAdminManager"]
+  end
+
+  Borrower --> WalletGate
+  Officer --> WalletGate
+  Admin --> AdminViews
+  WalletGate --> Workspace
+  Workspace --> API
+  AdminViews --> RAM
+  API --> RegistryRules
+  RegistryRules --> Dataset
+  API --> Prover
+  Prover --> Circuit
+  Prover --> Artifacts
+  API -->|verification write| PV
+  API -->|proof submission| CV
+  CV -->|verify proof| GV
+  CV -->|compliance write| PV
+  Workspace -->|loan actions| Lending
+  Lending -->|read verification and compliance| PV
+  RAM -->|admin grants| PV
+  RAM -->|admin grants| Lending
+
+  classDef actor fill:#ffffff,stroke:#334155,stroke-width:1.4px,color:#111827;
+  classDef app fill:#eff6ff,stroke:#2563eb,stroke-width:1.2px,color:#111827;
+  classDef oracle fill:#f8fafc,stroke:#475569,stroke-width:1.2px,color:#111827;
+  classDef source fill:#f9fafb,stroke:#6b7280,stroke-width:1.2px,color:#111827;
+  classDef contract fill:#ecfeff,stroke:#0891b2,stroke-width:1.2px,color:#111827;
+  class Borrower,Officer,Admin actor;
+  class WalletGate,Workspace,AdminViews app;
+  class API,RegistryRules,Prover oracle;
+  class Dataset,Circuit,Artifacts source;
+  class PV,CV,GV,Lending,RAM contract;

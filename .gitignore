@@ -15,3 +15,7 @@ frontend/.env.sepolia
 dist/
 frontend/dist/
 *.log
+
+# Local planning / handoff notes
+handoff.md
+plan.md

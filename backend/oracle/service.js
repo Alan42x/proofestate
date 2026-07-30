@@ -15,20 +15,24 @@ async function verifyProperty(propertyId, { write = false, network = "localhost"
 
   if (!write) return result;
 
-  const { propertyVerification } = connectContracts({ network, write: true });
-  const tx = await propertyVerification.setVerified(
-    result.propertyKey,
-    result.verified,
-    result.evidenceHash,
-    BigInt(result.valuationCommitment),
-    result.ownerAddress
-  );
-  const receipt = await tx.wait();
+  const { provider, propertyVerification } = connectContracts({ network, write: true });
+  try {
+    const tx = await propertyVerification.setVerified(
+      result.propertyKey,
+      result.verified,
+      result.evidenceHash,
+      BigInt(result.valuationCommitment),
+      result.ownerAddress
+    );
+    const receipt = await tx.wait();
 
-  return {
-    ...result,
-    txHash: receipt.hash
-  };
+    return {
+      ...result,
+      txHash: receipt.hash
+    };
+  } finally {
+    provider.destroy();
+  }
 }
 
 async function checkCompliance(
@@ -49,25 +53,29 @@ async function checkCompliance(
 
   if (!write) return proofResult;
 
-  const { complianceVerifier } = connectContracts({ network, write: true });
-  if (!complianceVerifier) {
-    throw new Error("Missing COMPLIANCE_VERIFIER_ADDRESS or deployment file");
+  const { provider, complianceVerifier } = connectContracts({ network, write: true });
+  try {
+    if (!complianceVerifier) {
+      throw new Error("Missing COMPLIANCE_VERIFIER_ADDRESS or deployment file");
+    }
+
+    const tx = await complianceVerifier.verifyProofAndSetCompliance(
+      proofResult.propertyKey,
+      BigInt(proofResult.principalCommitment),
+      proofResult.solidity.a,
+      proofResult.solidity.b,
+      proofResult.solidity.c,
+      proofResult.solidity.publicSignals
+    );
+    const receipt = await tx.wait();
+
+    return {
+      ...proofResult,
+      txHash: receipt.hash
+    };
+  } finally {
+    provider.destroy();
   }
-
-  const tx = await complianceVerifier.verifyProofAndSetCompliance(
-    proofResult.propertyKey,
-    BigInt(proofResult.principalCommitment),
-    proofResult.solidity.a,
-    proofResult.solidity.b,
-    proofResult.solidity.c,
-    proofResult.solidity.publicSignals
-  );
-  const receipt = await tx.wait();
-
-  return {
-    ...proofResult,
-    txHash: receipt.hash
-  };
 }
 
 async function runVerificationAndCompliance(

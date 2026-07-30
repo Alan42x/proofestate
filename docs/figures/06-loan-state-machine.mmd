@@ -1,0 +1,27 @@
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Arial", "fontSize": "16px", "primaryColor": "#f8fafc", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart LR
+  Start(("Start")) --> Requested["Requested"]
+  Requested -->|approveLoan valid| Approved["Approved"]
+  Requested -->|rejectLoan| Rejected["Rejected"]
+  Requested -->|approveLoan invalid| Rejected
+  Requested -->|borrower cancelLoan| Cancelled["Cancelled"]
+  Approved -->|borrower repay| Repaid["Repaid"]
+  Repaid --> End(("End"))
+  Rejected --> End
+  Cancelled --> End
+
+  Held["Active property lock held"]
+  Released["Active property lock released"]
+
+  Requested -.-> Held
+  Approved -.-> Held
+  Repaid -.-> Released
+  Rejected -.-> Released
+  Cancelled -.-> Released
+
+  classDef state fill:#ffffff,stroke:#334155,stroke-width:1.4px,color:#111827;
+  classDef terminal fill:#f1f5f9,stroke:#64748b,stroke-width:1.2px,color:#111827;
+  classDef note fill:#eff6ff,stroke:#2563eb,stroke-width:1.1px,color:#111827;
+  class Requested,Approved,Rejected,Cancelled,Repaid state;
+  class Start,End terminal;
+  class Held,Released note;

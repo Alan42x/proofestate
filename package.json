@@ -23,6 +23,7 @@
     "demo:check": "PROOFESTATE_ENV_FILE=.env.local node scripts/local-demo-check.js",
     "demo:ready": "PROOFESTATE_ENV_FILE=.env.local node scripts/local-demo-check.js --strict",
     "demo:flow": "PROOFESTATE_ENV_FILE=.env.local node scripts/local-wallet-flow.js",
+    "benchmark:local": "PROOFESTATE_ENV_FILE=.env.local node scripts/benchmark-local.mjs",
     "layout:check": "node scripts/verify-layout.mjs",
     "e2e": "node scripts/e2e/wallet-gate-smoke.mjs",
     "test:all": "pnpm compile && pnpm test && pnpm test:oracle && pnpm frontend:test && pnpm frontend:build",

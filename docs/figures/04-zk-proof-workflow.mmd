@@ -1,0 +1,52 @@
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Arial", "fontSize": "16px", "primaryColor": "#f8fafc", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart LR
+  subgraph Inputs["Private and Public Inputs"]
+    direction LR
+    Property["propertyId"]
+    PrivateValues["Private values\npropertyValue\nloanPrincipal"]
+    Salts["Private salts\nvaluationSalt\nprincipalSalt"]
+    Max["Public policy\nmaxLtvBps = 8000"]
+  end
+
+  subgraph Circuit["Circom LTV Circuit"]
+    direction LR
+    Field["propertyKeyField\nbytes32 mod SNARK field"]
+    Commitments["MiMC commitments\nvaluationCommitment\nprincipalCommitment"]
+    Constraint["Range checks and LTV inequality\nloanPrincipal * 10000 <= propertyValue * maxLtvBps"]
+  end
+
+  subgraph ProofSystem["Groth16 Output"]
+    direction LR
+    Signals["Public signals\npropertyKeyField\nvaluationCommitment\nprincipalCommitment\nmaxLtvBps"]
+    Proof["Proof calldata"]
+  end
+
+  subgraph OnChain["On-chain Verification"]
+    direction LR
+    Binding["ComplianceVerifier\npublic signal binding"]
+    Verifier["LtvGroth16Verifier\nverifyProof"]
+    State["PropertyVerification\nsetCompliant"]
+  end
+
+  Property --> Field
+  PrivateValues --> Commitments
+  Salts --> Commitments
+  Field --> Commitments
+  PrivateValues --> Constraint
+  Max --> Constraint
+  Field --> Signals
+  Commitments --> Signals
+  Max --> Signals
+  Constraint --> Proof
+  Signals --> Binding
+  Proof --> Binding
+  Binding --> Verifier --> State
+
+  classDef private fill:#ffffff,stroke:#334155,stroke-width:1.2px,color:#111827;
+  classDef public fill:#eff6ff,stroke:#2563eb,stroke-width:1.2px,color:#111827;
+  classDef proof fill:#f1f5f9,stroke:#64748b,stroke-width:1.2px,color:#111827;
+  classDef chain fill:#ecfeff,stroke:#0891b2,stroke-width:1.2px,color:#111827;
+  class PrivateValues,Salts private;
+  class Property,Max,Field,Commitments,Signals public;
+  class Constraint,Proof proof;
+  class Binding,Verifier,State chain;

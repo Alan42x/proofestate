@@ -1,0 +1,26 @@
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Arial", "fontSize": "16px", "primaryColor": "#f8fafc", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "actorBkg": "#f8fafc", "actorBorder": "#64748b", "actorTextColor": "#111827", "activationBkgColor": "#e2e8f0", "activationBorderColor": "#475569", "sequenceNumberColor": "#111827"}}}%%
+sequenceDiagram
+  autonumber
+  participant Borrower
+  participant DApp
+  participant Oracle
+  participant Registry as Mock Registry
+  participant Prover as Groth16 Prover
+  participant PV
+  participant CV
+  participant L
+  participant Officer as Loan Officer
+
+  Borrower->>DApp: Select property and principal
+  DApp->>Oracle: POST /verify
+  Oracle->>Registry: Load record
+  Oracle->>PV: setVerified(...)
+  DApp->>Oracle: POST /compliance
+  Oracle->>Prover: Generate proof
+  Oracle->>CV: verifyProofAndSetCompliance(...)
+  CV->>PV: Read verification and commitment
+  CV->>PV: setCompliant(...)
+  Borrower->>L: requestLoan(...)
+  Officer->>L: approveLoan(loanId)
+  L->>PV: isVerified + isCompliantFor
+  Borrower->>L: repay(loanId)
