@@ -76,6 +76,8 @@ These are public Hardhat demo accounts only. Never fund them on a public network
 
 ## Failure Scenarios
 
+The DApp clamps or blocks principals above the calculated maximum borrow amount. For live failure evidence, use the CLI/API path below to show that above-limit principals and invalid registry records fail explicitly.
+
 Above-limit LTV:
 
 ```bash
@@ -93,6 +95,28 @@ Expected:
 - bad inputs fail explicitly;
 - proof generation is skipped when the property or LTV rule fails;
 - contract approval cannot proceed without matching compliance.
+
+## Screenshot Evidence
+
+Fallback screenshots are stored in:
+
+```text
+docs/demo/screenshots/
+```
+
+Required local DApp evidence:
+
+| File | Evidence shown |
+| --- | --- |
+| `screenshots/01-wallet-readiness.png` | Runtime readiness and connected localhost wallet |
+| `screenshots/02-property-verified-onchain-record.png` | Property verification completed and recorded on-chain |
+| `screenshots/03-compliance-proof-success.png` | ZK compliance proof completed and matched to the principal commitment |
+| `screenshots/04-loan-requested.png` | Borrower loan request submitted and collateral locked |
+| `screenshots/05-loan-officer-approval.png` | Loan officer approval completed |
+| `screenshots/06-repayment-repaid.png` | Loan repaid and collateral lock released |
+| `screenshots/07-admin-role-access-management.png` | Admin role management and role-change records |
+| `screenshots/08-contract-readiness-settings.png` | Contract/network readiness and service metrics |
+| `screenshots/09-event-audit-log.png` | Audit log and final loan event evidence |
 
 ## Fallback Order
 

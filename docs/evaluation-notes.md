@@ -1,10 +1,10 @@
 # ProofEstate Evaluation Notes
 
-Updated: 2026-07-30 15:37 +08
+Updated: 2026-08-03 22:49 +08
 
 ## Environment
 
-This evidence snapshot was regenerated under the project-supported Node 20 runtime.
+This evidence snapshot was revalidated under the project-supported Node 20 runtime.
 
 | Item | Value |
 | --- | --- |
@@ -15,7 +15,7 @@ This evidence snapshot was regenerated under the project-supported Node 20 runti
 | Hardhat | 2.28.6 |
 | snarkjs | 0.7.6 |
 | circom CLI | 2.2.3 at `$HOME/.cargo/bin/circom`; not on default PATH |
-| Git commit | `afe725b8635ce1e6b2068a419a214ca4cdea648e` |
+| Git commit | `4f2acc59d660c7d3666b9f55861b58f13995431c` |
 
 `snarkjs r1cs info zk/build/ltv.r1cs` reports:
 
@@ -28,7 +28,7 @@ This evidence snapshot was regenerated under the project-supported Node 20 runti
 
 ## Verification Status
 
-Commands run on 2026-07-30:
+Baseline commands run on 2026-07-30:
 
 ```bash
 pnpm compile
@@ -52,6 +52,24 @@ Results:
 - `pnpm demo:ready`: passing for local RPC, Oracle API, deployment, and frontend env.
 - `pnpm demo:flow PROP-001 750000`: passing, final loan state `Repaid`.
 
+Revalidation commands run on 2026-08-03 under Node v20.20.2:
+
+```bash
+pnpm test:all
+pnpm test:gas
+```
+
+Revalidation results:
+
+- `pnpm test:all`: passing.
+- Contract tests: 28 passing.
+- Oracle API tests: 12 passing.
+- Frontend tests: 6 passing.
+- Frontend production build: passing.
+- `pnpm test:gas`: passing.
+- README local Markdown links/images: passing.
+- README `pnpm` script references: passing.
+
 Notes:
 
 - Oracle API tests and gas reporter require local port access; they were run outside the filesystem sandbox after sandboxed runs failed with local networking `EPERM`.
@@ -68,7 +86,7 @@ REPORT_GAS=true hardhat test
 
 | Contract | Method | Min gas | Max gas | Avg gas | Calls |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| ComplianceVerifier | verifyProofAndSetCompliance | 310409 | 310433 | 310413 | 11 |
+| ComplianceVerifier | verifyProofAndSetCompliance | 310409 | 310421 | 310411 | 11 |
 | Lending | approveLoan | 58252 | 93881 | 81464 | 12 |
 | Lending | cancelLoan | - | - | 52694 | 2 |
 | Lending | grantRole | 51152 | 51524 | 51245 | 4 |
@@ -121,10 +139,10 @@ Latest production build output:
 
 | Asset | Size | Gzip |
 | --- | ---: | ---: |
-| `dist/index.html` | 0.40 kB | 0.27 kB |
+| `dist/index.html` | 0.40 kB | 0.26 kB |
 | `dist/assets/index-BFtmxQu3.css` | 64.46 kB | 12.05 kB |
-| `dist/assets/ccip-FjsgKrcH.js` | 3.04 kB | 1.39 kB |
-| `dist/assets/index-X42ujOvf.js` | 631.18 kB | 189.69 kB |
+| `dist/assets/ccip-B5I7aiLd.js` | 3.04 kB | 1.39 kB |
+| `dist/assets/index-DrKouoma.js` | 631.18 kB | 189.69 kB |
 
 `du -sh frontend/dist` reports `2.5M`.
 
@@ -134,7 +152,7 @@ The current formal local benchmark is recorded in:
 
 ```text
 docs/benchmarks/final-benchmarks.md
-docs/benchmarks/raw/local-2026-07-30T07-37-28-929Z.json
+docs/benchmarks/raw/local-2026-08-03T14-49-27-759Z.json
 ```
 
 It uses 5 warm-up iterations and 30 measured iterations for `PROP-001` with principal `750000`.

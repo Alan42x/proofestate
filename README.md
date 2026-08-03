@@ -14,7 +14,7 @@ ProofEstate is a dissertation prototype, not a production lending protocol. Real
 
 ## Current Evidence Snapshot
 
-Latest verified local evidence was collected on Node `v20.20.2`.
+Latest local test and gas evidence was revalidated on 2026-08-03 with Node `v20.20.2`.
 
 | Evidence | Status |
 | --- | --- |
@@ -26,7 +26,7 @@ Latest verified local evidence was collected on Node `v20.20.2`.
 | ZK compile | Passing with circom `2.2.3` |
 | Local readiness check | Passing |
 | Local CLI happy path | Passing, final state `Repaid` |
-| Formal local benchmark | 5 warm-up + 30 measured runs |
+| Formal local benchmark | 5 warm-up + 30 measured runs, regenerated on 2026-08-03 |
 
 See:
 
@@ -238,18 +238,18 @@ pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=75000
 Raw data:
 
 ```text
-docs/benchmarks/raw/local-2026-07-30T07-37-28-929Z.json
+docs/benchmarks/raw/local-2026-08-03T14-49-27-759Z.json
 ```
 
 Summary:
 
 | Metric | Median | Mean | P95 |
 | --- | ---: | ---: | ---: |
-| Build verification input | 2.75 ms | 3.16 ms | 6.45 ms |
-| Build compliance inputs | 3.82 ms | 3.90 ms | 5.41 ms |
-| Generate Groth16 proof | 383.80 ms | 385.63 ms | 407.33 ms |
-| Oracle `/verify` latency | 6.06 ms | 6.35 ms | 10.12 ms |
-| Oracle `/compliance` latency | 389.39 ms | 392.52 ms | 429.94 ms |
+| Build verification input | 3.65 ms | 3.73 ms | 4.79 ms |
+| Build compliance inputs | 5.02 ms | 5.35 ms | 7.10 ms |
+| Generate Groth16 proof | 547.53 ms | 573.10 ms | 682.98 ms |
+| Oracle `/verify` latency | 7.70 ms | 8.11 ms | 10.04 ms |
+| Oracle `/compliance` latency | 555.20 ms | 583.46 ms | 702.65 ms |
 
 Proof generation dominates local latency. See [docs/benchmarks/final-benchmarks.md](docs/benchmarks/final-benchmarks.md) for methodology, raw-data reference, gas snapshot, circuit size, and frontend bundle size.
 
@@ -309,10 +309,14 @@ Do not mix Sepolia latency with local benchmark tables. See [docs/demo/sepolia-d
 | [docs/zk-proof-design.md](docs/zk-proof-design.md) | ZK statement, signals, circuit behavior, replay/freshness boundaries |
 | [docs/smart-contract-interface-spec.md](docs/smart-contract-interface-spec.md) | Contract interface and revert/event specification |
 | [docs/security-evaluation-report.md](docs/security-evaluation-report.md) | Threat model, mitigations, assumptions, residual risks |
+| [docs/architecture-comparison.md](docs/architecture-comparison.md) | Comparison against plaintext, off-chain, alternative ZK, and Oracle designs |
 | [docs/design-decisions.md](docs/design-decisions.md) | Architectural rationale and trade-offs |
 | [docs/limitations-and-extensions.md](docs/limitations-and-extensions.md) | Prototype boundaries and future work |
+| [docs/generalization.md](docs/generalization.md) | How the architecture can generalize to other privacy-preserving compliance applications |
 | [docs/deployment-guide.md](docs/deployment-guide.md) | Local and Sepolia reproduction guide |
 | [docs/demo/demo-checklist.md](docs/demo/demo-checklist.md) | Defense demo checklist |
+| [thesis/final-thesis.md](thesis/final-thesis.md) | Final Markdown thesis text using the final benchmark evidence |
+| [slides/defense-presentation-outline.md](slides/defense-presentation-outline.md) | Defense presentation structure and demo story |
 
 ## Environment Files
 
