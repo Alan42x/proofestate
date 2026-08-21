@@ -1,5 +1,7 @@
 @startuml
-title Figure 2. ProofEstate Business Workflow
+
+skinparam nodesep 45
+skinparam ranksep 55
 
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontName Arial
@@ -20,53 +22,82 @@ skinparam PartitionFontColor #111827
 start
 
 partition "1. Property Verification" {
+
   :Select property;
-  if (Wallet owns property?) then ([owns property])
+
+  if (<color:#eff6ff>................</color>Wallet owns property?<color:#eff6ff>................</color>) then ([owns property])
+
     :Read Mock Registry record;
     :Validate registry data;
-    if (Registry rules pass?) then ([registry valid])
+
+    if (<color:#eff6ff>................</color>Registry rules pass?<color:#eff6ff>................</color>) then ([registry valid])
+
       :setVerified();
+
     else ([registry invalid])
+
       :Verification Failed;
       stop
+
     endif
+
   else ([does not own property])
+
     :Verification Failed;
     stop
+
   endif
 }
+
 
 partition "2. ZK Compliance" {
+
   :Enter principal;
-  if (loanPrincipal * 10000 <= propertyValue * maxLtvBps?) then ([LTV compliant])
+
+  if (<color:#eff6ff>............</color>loanPrincipal * 10000 <= propertyValue * maxLtvBps?<color:#eff6ff>............</color>) then ([LTV compliant])
+
     :Generate Groth16 proof;
     :verifyProofAndSetCompliance();
+
   else ([LTV non-compliant])
+
     :Compliance Failed;
     stop
+
   endif
 }
 
+
 partition "3. Loan Processing" {
+
   :requestLoan();
   :Hold active property lock;
-  if (Requested-state event?) then ([borrower cancels])
+
+  if (<color:#eff6ff>................</color>Requested-state event?<color:#eff6ff>................</color>) then ([borrower cancels])
+
     :cancelLoan();
     :Release property lock;
     stop
+
   else ([loan officer reviews])
+
     :Review loan request;
-    if (Loan officer decision?) then ([approved])
+
+    if (<color:#eff6ff>................</color>Loan officer decision?<color:#eff6ff>................</color>) then ([approved])
+
       :Approve loan;
       :approveLoan();
       :repay();
       :Release property lock;
       stop
+
     else ([rejected])
+
       :Reject loan;
       :rejectLoan();
       :Release property lock;
       stop
+
     endif
   endif
 }

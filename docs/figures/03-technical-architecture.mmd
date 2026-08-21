@@ -34,7 +34,7 @@ flowchart TB
     BuildA["Build dependency"] -.-> BuildB["Tool or artifact"]
     RuntimeA["Runtime communication"] --> RuntimeB["Runtime endpoint"]
     CallA["Smart contract call"] ==> CallB["Contract"]
-    AccessA["AccessControl dependency"] --o AccessB["Inherited base"]
+    AccessA["Inheritance"] --> AccessB["Base contract"]
   end
 
   PNPM -.->|workspace scripts| Hardhat
@@ -66,9 +66,9 @@ flowchart TB
   RoleAdminManager ==>|"grantRole(); revokeRole()"| PropertyVerification
   RoleAdminManager ==>|"grantRole(); revokeRole()"| Lending
 
-  RoleAdminManager --o AccessControl
-  Lending --o AccessControl
-  PropertyVerification --o AccessControl
+  RoleAdminManager -->|inherits| AccessControl
+  Lending -->|inherits| AccessControl
+  PropertyVerification -->|inherits| AccessControl
 
   classDef legend fill:#ffffff,stroke:#94a3b8,stroke-width:1.1px,color:#111827;
   classDef tool fill:#ffffff,stroke:#334155,stroke-width:1.2px,color:#111827;
