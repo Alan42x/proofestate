@@ -1,26 +1,117 @@
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Arial", "fontSize": "16px", "primaryColor": "#f8fafc", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "actorBkg": "#f8fafc", "actorBorder": "#64748b", "actorTextColor": "#111827", "activationBkgColor": "#e2e8f0", "activationBorderColor": "#475569", "sequenceNumberColor": "#111827"}}}%%
+%%{init: {"theme": "base", "sequence": {"mirrorActors": false, "actorMargin": 58, "messageMargin": 46, "boxMargin": 10, "boxTextMargin": 6}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "primaryColor": "#ffffff", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "actorBkg": "#ffffff", "actorBorder": "#334155", "actorTextColor": "#111827", "activationBkgColor": "#e2e8f0", "activationBorderColor": "#475569", "sequenceNumberColor": "#111827"}}}%%
 sequenceDiagram
-  autonumber
-  participant Borrower
-  participant DApp
-  participant Oracle
-  participant Registry as Mock Registry
-  participant Prover as Groth16 Prover
-  participant PV
-  participant CV
-  participant L
-  participant Officer as Loan Officer
+  actor Borrower
+  box Off-chain services
+    participant DApp
+    participant Oracle
+    participant MockRegistry as Mock Registry
+    participant Groth16Prover as Groth16 Prover
+  end
+  box On-chain contracts
+    participant ComplianceVerifier
+    participant PropertyVerification
+    participant Lending
+  end
+  actor LoanOfficer as Loan Officer
 
+  Borrower->>DApp: Connect wallet
+  DApp->>Oracle: GET /properties?owner=wallet
+  activate Oracle
+  Oracle->>MockRegistry: Load records
+  activate MockRegistry
+  MockRegistry-->>Oracle: Owner-scoped records
+  deactivate MockRegistry
+  Oracle-->>DApp: Property list
+  deactivate Oracle
   Borrower->>DApp: Select property and principal
+
   DApp->>Oracle: POST /verify
-  Oracle->>Registry: Load record
-  Oracle->>PV: setVerified(...)
+  activate Oracle
+  Oracle->>MockRegistry: Load registry record
+  activate MockRegistry
+  MockRegistry-->>Oracle: Registry record
+  deactivate MockRegistry
+  alt registry valid
+    Oracle->>PropertyVerification: setVerified(...)
+    activate PropertyVerification
+    PropertyVerification-->>Oracle: Transaction receipt
+    deactivate PropertyVerification
+    Oracle-->>DApp: Verification result
+  else verification failed
+    Oracle-->>DApp: Verification failed
+  end
+  deactivate Oracle
+
   DApp->>Oracle: POST /compliance
-  Oracle->>Prover: Generate proof
-  Oracle->>CV: verifyProofAndSetCompliance(...)
-  CV->>PV: Read verification and commitment
-  CV->>PV: setCompliant(...)
-  Borrower->>L: requestLoan(...)
-  Officer->>L: approveLoan(loanId)
-  L->>PV: isVerified + isCompliantFor
-  Borrower->>L: repay(loanId)
+  activate Oracle
+  alt LTV compliant
+    Oracle->>Groth16Prover: Generate Groth16 proof
+    activate Groth16Prover
+    Groth16Prover-->>Oracle: Proof and public signals
+    deactivate Groth16Prover
+    Oracle->>ComplianceVerifier: verifyProofAndSetCompliance(...)
+    activate ComplianceVerifier
+    ComplianceVerifier->>PropertyVerification: isVerified(...), valuationCommitmentOf(...)
+    activate PropertyVerification
+    PropertyVerification-->>ComplianceVerifier: Verification and valuation commitment
+    deactivate PropertyVerification
+    ComplianceVerifier->>PropertyVerification: setCompliant(...)
+    activate PropertyVerification
+    PropertyVerification-->>ComplianceVerifier: Compliance state written
+    deactivate PropertyVerification
+    ComplianceVerifier-->>Oracle: true
+    deactivate ComplianceVerifier
+    Oracle-->>DApp: Compliance proof result
+  else LTV non-compliant
+    Oracle-->>DApp: Compliance failed
+  end
+  deactivate Oracle
+
+  Borrower->>DApp: Submit loan request
+  DApp->>Lending: requestLoan(...)
+  activate Lending
+  Lending->>PropertyVerification: ownerOf(propertyId)
+  activate PropertyVerification
+  PropertyVerification-->>Lending: Property owner
+  deactivate PropertyVerification
+  Lending->>Lending: Hold active property lock
+  Lending-->>DApp: loanId
+  deactivate Lending
+
+  alt borrower cancels while Requested
+    Borrower->>DApp: Cancel loan
+    DApp->>Lending: cancelLoan(loanId)
+    activate Lending
+    Lending-->>DApp: LoanCancelled
+    deactivate Lending
+  else loan officer reviews Requested loan
+    LoanOfficer->>DApp: Review loan request
+    alt approved
+      LoanOfficer->>DApp: Approve loan
+      DApp->>Lending: approveLoan(loanId)
+      activate Lending
+      Lending->>PropertyVerification: isVerified(...), isCompliantFor(...)
+      activate PropertyVerification
+      PropertyVerification-->>Lending: Verification and compliance status
+      deactivate PropertyVerification
+      alt valid verification and matching proof
+        Lending-->>DApp: LoanApproved
+      else invalid verification or proof mismatch
+        Lending-->>DApp: LoanRejected
+      end
+      deactivate Lending
+      opt approved loan
+        Borrower->>DApp: Repay loan
+        DApp->>Lending: repay(loanId)
+        activate Lending
+        Lending-->>DApp: LoanRepaid
+        deactivate Lending
+      end
+    else rejected
+      LoanOfficer->>DApp: Reject loan
+      DApp->>Lending: rejectLoan(loanId)
+      activate Lending
+      Lending-->>DApp: LoanRejected
+      deactivate Lending
+    end
+  end

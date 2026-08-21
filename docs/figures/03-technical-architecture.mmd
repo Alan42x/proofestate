@@ -1,7 +1,7 @@
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Arial", "fontSize": "16px", "primaryColor": "#f8fafc", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
-flowchart LR
+%%{init: {"theme": "base", "flowchart": {"defaultRenderer": "elk", "curve": "linear", "nodeSpacing": 54, "rankSpacing": 78, "wrappingWidth": 165, "diagramPadding": 18}, "elk": {"mergeEdges": false, "nodePlacementStrategy": "NETWORK_SIMPLEX", "nodePlacementAlignment": "BALANCED"}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "primaryColor": "#ffffff", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart TB
   subgraph Tooling["Build and Test Tooling"]
-    direction TB
+    direction LR
     PNPM["pnpm workspace"]
     Hardhat["Hardhat"]
     Vite["Vite"]
@@ -10,43 +10,71 @@ flowchart LR
   end
 
   subgraph Runtime["Runtime"]
-    direction TB
-    Node["Node.js >=20 <23"]
-    Browser["Browser + injected wallet"]
-    Oracle["Node.js Express API"]
-    RPC["Hardhat localhost or Sepolia RPC"]
+    direction LR
+    NodeRuntime["Node.js >=20 <23"]
+    ExpressAPI["Node.js Express API"]
+    BrowserWallet["Browser + Injected Wallet"]
+    HardhatRPC["Hardhat Localhost"]
+    SepoliaRPC["Sepolia RPC"]
+    ContractAccess["Contract Access"]
   end
 
   subgraph Solidity["Solidity 0.8.24"]
-    direction TB
-    OZ["OpenZeppelin AccessControl"]
-    PV["PropertyVerification"]
-    CV["ComplianceVerifier"]
-    Verifier["LtvGroth16Verifier"]
+    direction LR
+    AccessControl["OpenZeppelin AccessControl"]
+    RoleAdminManager["RoleAdminManager"]
     Lending["Lending"]
-    Roles["RoleAdminManager"]
+    PropertyVerification["PropertyVerification"]
+    ComplianceVerifier["ComplianceVerifier"]
+    LtvGroth16Verifier["LtvGroth16Verifier"]
   end
 
-  PNPM --> Hardhat
-  PNPM --> Vite
-  PNPM --> Vitest
-  PNPM --> Snarkjs
-  Node --> Oracle
-  Browser --> RPC
-  Oracle --> RPC
-  Hardhat --> Solidity
-  OZ --> PV
-  OZ --> Lending
-  OZ --> Roles
-  CV --> Verifier
-  CV --> PV
-  Lending --> PV
-  Roles --> PV
-  Roles --> Lending
+  subgraph Legend["Relationship Legend"]
+    direction LR
+    BuildA["Build dependency"] -.-> BuildB["Tool or artifact"]
+    RuntimeA["Runtime communication"] --> RuntimeB["Runtime endpoint"]
+    CallA["Smart contract call"] ==> CallB["Contract"]
+    AccessA["AccessControl dependency"] --o AccessB["Inherited base"]
+  end
 
+  PNPM -.->|workspace scripts| Hardhat
+  PNPM -.->|frontend dev and build| Vite
+  PNPM -.->|frontend tests| Vitest
+  PNPM -.->|proof build and calldata| Snarkjs
+  Hardhat -.->|compile, test, deploy| Solidity
+  Snarkjs -.->|generated verifier artifact| LtvGroth16Verifier
+  Vite -.->|serves DApp bundle| BrowserWallet
+  Vitest -.->|executes UI tests| BrowserWallet
+
+  NodeRuntime --> ExpressAPI
+  BrowserWallet -->|"HTTP: /verify; /compliance"| ExpressAPI
+  BrowserWallet -->|wallet JSON-RPC| HardhatRPC
+  BrowserWallet -->|wallet JSON-RPC| SepoliaRPC
+  ExpressAPI -->|ethers JSON-RPC| HardhatRPC
+  ExpressAPI -->|ethers JSON-RPC| SepoliaRPC
+  HardhatRPC --> ContractAccess
+  SepoliaRPC --> ContractAccess
+
+  ContractAccess ==>|transactions and calls| RoleAdminManager
+  ContractAccess ==>|transactions and calls| Lending
+  ContractAccess ==>|transactions and calls| PropertyVerification
+  ContractAccess ==>|transactions and calls| ComplianceVerifier
+
+  ComplianceVerifier ==>|"verifyProof()"| LtvGroth16Verifier
+  ComplianceVerifier ==>|"setCompliant(); read valuation"| PropertyVerification
+  Lending ==>|"ownerOf(); isVerified(); isCompliantFor()"| PropertyVerification
+  RoleAdminManager ==>|"grantRole(); revokeRole()"| PropertyVerification
+  RoleAdminManager ==>|"grantRole(); revokeRole()"| Lending
+
+  RoleAdminManager --o AccessControl
+  Lending --o AccessControl
+  PropertyVerification --o AccessControl
+
+  classDef legend fill:#ffffff,stroke:#94a3b8,stroke-width:1.1px,color:#111827;
   classDef tool fill:#ffffff,stroke:#334155,stroke-width:1.2px,color:#111827;
   classDef runtime fill:#eff6ff,stroke:#2563eb,stroke-width:1.2px,color:#111827;
   classDef contract fill:#ecfeff,stroke:#0891b2,stroke-width:1.2px,color:#111827;
+  class BuildA,BuildB,RuntimeA,RuntimeB,CallA,CallB,AccessA,AccessB legend;
   class PNPM,Hardhat,Vite,Vitest,Snarkjs tool;
-  class Node,Browser,Oracle,RPC runtime;
-  class OZ,PV,CV,Verifier,Lending,Roles contract;
+  class NodeRuntime,ExpressAPI,BrowserWallet,HardhatRPC,SepoliaRPC,ContractAccess runtime;
+  class AccessControl,RoleAdminManager,Lending,PropertyVerification,ComplianceVerifier,LtvGroth16Verifier contract;

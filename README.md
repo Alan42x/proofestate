@@ -55,13 +55,11 @@ See:
 
 ![End-to-end data flow](docs/figures/05-end-to-end-data-flow.png)
 
-In this sequence figure, `PV`, `CV`, and `L` refer to `PropertyVerification`, `ComplianceVerifier`, and `Lending`.
-
 ### Loan State Machine
 
 ![Loan state machine](docs/figures/06-loan-state-machine.png)
 
-The Mermaid source files live in [docs/figures](docs/figures/).
+The Mermaid and PlantUML source files live in [docs/figures](docs/figures/).
 
 ## Repository Structure
 

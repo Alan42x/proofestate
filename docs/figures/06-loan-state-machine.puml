@@ -1,0 +1,93 @@
+@startuml
+
+scale 3
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 13
+skinparam defaultTextAlignment center
+skinparam shadowing false
+skinparam linetype ortho
+skinparam stateDiagramEdgeLabelStyle node
+skinparam roundcorner 4
+skinparam padding 4
+skinparam nodesep 140
+skinparam ranksep 58
+skinparam ArrowColor #374151
+skinparam ArrowThickness 1.1
+skinparam ArrowFontColor #111827
+skinparam ArrowFontSize 11
+skinparam StateBorderColor #334155
+skinparam StateBackgroundColor #FFFFFF
+skinparam StateFontColor #111827
+skinparam StateFontSize 13
+skinparam StateFontStyle bold
+skinparam StateAttributeFontSize 11
+skinparam StateAttributeFontStyle plain
+skinparam StateAttributeFontColor #475569
+skinparam StateStartColor #111827
+skinparam StateEndColor #111827
+skinparam StateMessageAlignment left
+skinparam NoteBorderColor #94a3b8
+skinparam NoteBackgroundColor #FFFFFF
+skinparam NoteFontColor #374151
+skinparam NoteFontSize 8
+skinparam NoteFontStyle plain
+skinparam state {
+  BackgroundColor #FFFFFF
+  BorderColor #334155
+  FontColor #111827
+  FontSize 13
+  FontStyle bold
+  AttributeFontSize 11
+  AttributeFontStyle plain
+  AttributeFontColor #475569
+  RoundCorner 4
+}
+
+top to bottom direction
+
+state Final <<end>>
+
+state Requested
+Requested : Lock: Held
+
+state Approved
+Approved : Lock: Held
+
+state Repaid
+Repaid : Lock: Released
+
+state Rejected
+Rejected : Lock: Released
+
+state Cancelled
+Cancelled : Lock: Released
+
+[*] -down-> Requested : requestLoan()\n/ hold lock
+
+Requested -down-> Approved : approveLoan()\n[checks pass]
+Approved -down-> Repaid : repay()\n/ release lock
+Repaid -down-> Final
+
+Requested -down-> Rejected : <back:#FFFFFF>approveLoan()</back>\n<back:#FFFFFF>[checks fail]</back>\n<back:#FFFFFF>/ release lock</back>
+Requested -down-> Rejected : <back:#FFFFFF>rejectLoan()</back>\n<back:#FFFFFF>/ release lock</back>
+Requested -down-> Cancelled : cancelLoan()\n/ release lock
+
+Rejected -down-> Final
+Cancelled -down-> Final
+
+Requested -[hidden]down-> Approved
+Approved -[hidden]down-> Repaid
+Repaid -[hidden]down-> Final
+Rejected -[hidden]right-> Approved
+Approved -[hidden]right-> Cancelled
+
+' Guard definitions:
+' checks pass = isVerified && isCompliantFor
+' checks fail = !isVerified || !isCompliantFor
+'
+' Global constraint:
+' Invalid-state and unauthorized calls revert without creating new LoanState values.
+
+@enduml

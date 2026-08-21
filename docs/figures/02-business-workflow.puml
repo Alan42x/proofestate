@@ -1,0 +1,74 @@
+@startuml
+title Figure 2. ProofEstate Business Workflow
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam defaultFontSize 15
+skinparam shadowing false
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.2
+skinparam ActivityBorderColor #334155
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #2563eb
+skinparam ActivityDiamondBackgroundColor #eff6ff
+skinparam ActivityStartColor #111827
+skinparam ActivityEndColor #111827
+skinparam PartitionBorderColor #94a3b8
+skinparam PartitionBackgroundColor #f8fafc
+skinparam PartitionFontColor #111827
+
+start
+
+partition "1. Property Verification" {
+  :Select property;
+  if (Wallet owns property?) then ([owns property])
+    :Read Mock Registry record;
+    :Validate registry data;
+    if (Registry rules pass?) then ([registry valid])
+      :setVerified();
+    else ([registry invalid])
+      :Verification Failed;
+      stop
+    endif
+  else ([does not own property])
+    :Verification Failed;
+    stop
+  endif
+}
+
+partition "2. ZK Compliance" {
+  :Enter principal;
+  if (loanPrincipal * 10000 <= propertyValue * maxLtvBps?) then ([LTV compliant])
+    :Generate Groth16 proof;
+    :verifyProofAndSetCompliance();
+  else ([LTV non-compliant])
+    :Compliance Failed;
+    stop
+  endif
+}
+
+partition "3. Loan Processing" {
+  :requestLoan();
+  :Hold active property lock;
+  if (Requested-state event?) then ([borrower cancels])
+    :cancelLoan();
+    :Release property lock;
+    stop
+  else ([loan officer reviews])
+    :Review loan request;
+    if (Loan officer decision?) then ([approved])
+      :Approve loan;
+      :approveLoan();
+      :repay();
+      :Release property lock;
+      stop
+    else ([rejected])
+      :Reject loan;
+      :rejectLoan();
+      :Release property lock;
+      stop
+    endif
+  endif
+}
+
+@enduml

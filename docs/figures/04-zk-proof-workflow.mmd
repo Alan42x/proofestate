@@ -1,52 +1,74 @@
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Arial", "fontSize": "16px", "primaryColor": "#f8fafc", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
-flowchart LR
-  subgraph Inputs["Private and Public Inputs"]
+%%{init: {"theme": "base", "flowchart": {"defaultRenderer": "elk", "curve": "linear", "nodeSpacing": 56, "rankSpacing": 78, "wrappingWidth": 190, "diagramPadding": 18}, "elk": {"mergeEdges": false, "nodePlacementStrategy": "NETWORK_SIMPLEX", "nodePlacementAlignment": "BALANCED"}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "primaryColor": "#ffffff", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart TB
+  subgraph Inputs["Input Boundary"]
     direction LR
-    Property["propertyId"]
-    PrivateValues["Private values\npropertyValue\nloanPrincipal"]
-    Salts["Private salts\nvaluationSalt\nprincipalSalt"]
-    Max["Public policy\nmaxLtvBps = 8000"]
+    subgraph PublicData["Public Data"]
+      direction TB
+      PublicInputs[/Public Inputs<br/>propertyId<br/>maxLtvBps = 8000/]
+    end
+
+    subgraph PrivacyBoundary["Private Witness Boundary"]
+      direction TB
+      PrivateWitness[/Private Witness<br/>propertyValue<br/>loanPrincipal<br/>valuationSalt<br/>principalSalt/]
+      WitnessNote["Used only during witness generation"]
+    end
   end
 
-  subgraph Circuit["Circom LTV Circuit"]
-    direction LR
-    Field["propertyKeyField\nbytes32 mod SNARK field"]
-    Commitments["MiMC commitments\nvaluationCommitment\nprincipalCommitment"]
-    Constraint["Range checks and LTV inequality\nloanPrincipal * 10000 <= propertyValue * maxLtvBps"]
+  subgraph OffChainCircuit["Off-chain Circom LTV Circuit"]
+    direction TB
+    FieldMap["propertyId / bytes32<br/>to SNARK Field"]
+    WitnessGen["Witness Generation"]
+    subgraph Constraints["Circuit Constraints"]
+      direction LR
+      Commitments["MiMC Commitments<br/>valuationCommitment<br/>principalCommitment"]
+      RangeChecks["Range Checks<br/>64-bit values; 14-bit maxLtvBps"]
+      LtvConstraint["LTV Constraint<br/>loanPrincipal * 10000 <= propertyValue * maxLtvBps"]
+    end
+    SignalAssembly["Public Signal Assembly"]
   end
 
-  subgraph ProofSystem["Groth16 Output"]
+  subgraph Output["Groth16 Output"]
     direction LR
-    Signals["Public signals\npropertyKeyField\nvaluationCommitment\nprincipalCommitment\nmaxLtvBps"]
-    Proof["Proof calldata"]
+    PublicSignals[/Public Signals<br/>propertyKeyField<br/>valuationCommitment<br/>principalCommitment<br/>maxLtvBps/]
+    ProofCalldata[/Proof Calldata<br/>a, b, c/]
   end
 
   subgraph OnChain["On-chain Verification"]
     direction LR
-    Binding["ComplianceVerifier\npublic signal binding"]
-    Verifier["LtvGroth16Verifier\nverifyProof"]
-    State["PropertyVerification\nsetCompliant"]
+    ComplianceVerifier["ComplianceVerifier"]
+    LtvGroth16Verifier["LtvGroth16Verifier"]
+    PropertyVerification["PropertyVerification"]
   end
 
-  Property --> Field
-  PrivateValues --> Commitments
-  Salts --> Commitments
-  Field --> Commitments
-  PrivateValues --> Constraint
-  Max --> Constraint
-  Field --> Signals
-  Commitments --> Signals
-  Max --> Signals
-  Constraint --> Proof
-  Signals --> Binding
-  Proof --> Binding
-  Binding --> Verifier --> State
+  PublicInputs --> FieldMap
+  PublicInputs --> WitnessGen
+  PrivateWitness -.->|private witness only| WitnessGen
+  PrivateWitness -.->|private witness only| Commitments
+  PrivateWitness -.->|private witness only| RangeChecks
+  WitnessNote -.-> PrivateWitness
 
-  classDef private fill:#ffffff,stroke:#334155,stroke-width:1.2px,color:#111827;
-  classDef public fill:#eff6ff,stroke:#2563eb,stroke-width:1.2px,color:#111827;
-  classDef proof fill:#f1f5f9,stroke:#64748b,stroke-width:1.2px,color:#111827;
+  FieldMap --> WitnessGen
+  WitnessGen --> Commitments
+  WitnessGen --> RangeChecks
+  RangeChecks --> LtvConstraint
+  Commitments --> SignalAssembly
+  LtvConstraint --> SignalAssembly
+  SignalAssembly --> PublicSignals
+  SignalAssembly --> ProofCalldata
+
+  PublicSignals -->|submitted on-chain| ComplianceVerifier
+  ProofCalldata -->|submitted on-chain| ComplianceVerifier
+  ComplianceVerifier -->|"verifyProof()"| LtvGroth16Verifier
+  ComplianceVerifier -->|read verification and valuation| PropertyVerification
+  ComplianceVerifier -->|"setCompliant()"| PropertyVerification
+
+  classDef publicData fill:#eff6ff,stroke:#2563eb,stroke-width:1.2px,color:#111827;
+  classDef privateData fill:#ffffff,stroke:#334155,stroke-width:1.2px,color:#111827;
+  classDef process fill:#ffffff,stroke:#475569,stroke-width:1.2px,color:#111827;
+  classDef output fill:#f8fafc,stroke:#64748b,stroke-width:1.2px,color:#111827;
   classDef chain fill:#ecfeff,stroke:#0891b2,stroke-width:1.2px,color:#111827;
-  class PrivateValues,Salts private;
-  class Property,Max,Field,Commitments,Signals public;
-  class Constraint,Proof proof;
-  class Binding,Verifier,State chain;
+  class PublicInputs publicData;
+  class PrivateWitness,WitnessNote privateData;
+  class FieldMap,WitnessGen,Commitments,RangeChecks,LtvConstraint,SignalAssembly process;
+  class PublicSignals,ProofCalldata output;
+  class ComplianceVerifier,LtvGroth16Verifier,PropertyVerification chain;
