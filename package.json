@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Ethereum testnet application for property verification, compliance proof, and lending.",
+  "packageManager": "pnpm@10.9.0",
   "engines": {
     "node": ">=20 <23"
   },
