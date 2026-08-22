@@ -278,6 +278,7 @@ Output directory: dist
 ```
 
 Set `VITE_ORACLE_API_URL` to the hosted Oracle API URL, not `http://localhost:8787`.
+Set `FRONTEND_URL` on the hosted Oracle API to the deployed DApp URL so the Oracle landing page links back to the public frontend.
 
 ## Frontend
 

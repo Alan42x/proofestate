@@ -11,12 +11,23 @@ const {
 
 const app = express();
 const port = Number(process.env.PORT || process.env.ORACLE_PORT || 8787);
+const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173/";
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
 app.use(cors());
 app.use(express.json({ limit: "16kb" }));
 app.set("json replacer", (_key, value) => (typeof value === "bigint" ? value.toString() : value));
 
 app.get("/", (_req, res) => {
+  const dappUrl = escapeHtml(frontendUrl);
   res.type("html").send(`
 <!doctype html>
 <html lang="en">
@@ -69,7 +80,7 @@ app.get("/", (_req, res) => {
   <body>
     <main>
       <h1>ProofEstate Oracle API</h1>
-      <p>This port is the backend oracle service. Open the DApp at <a href="http://localhost:5173/">http://localhost:5173/</a>.</p>
+      <p>This port is the backend oracle service. Open the DApp at <a href="${dappUrl}">${dappUrl}</a>.</p>
       <div class="panel">
         <strong>Useful endpoints</strong>
         <ul>
