@@ -2,7 +2,7 @@
 
 ProofEstate is an Ethereum prototype for privacy-preserving real-estate lending. It combines a mock property registry, an Oracle service, Groth16 zero-knowledge proof generation, role-gated Solidity contracts, and a React DApp.
 
-The project proves one lending rule:
+The prototype demonstrates one core lending rule:
 
 ```text
 loanPrincipal * 10000 <= propertyValue * 8000
@@ -11,6 +11,50 @@ loanPrincipal * 10000 <= propertyValue * 8000
 This is equivalent to proving `loanPrincipal <= 80% of propertyValue` without publishing the plaintext property valuation or loan principal on-chain. The chain stores commitments, proof hashes, ownership, verification/compliance state, and loan lifecycle state.
 
 ProofEstate is a dissertation prototype, not a production lending protocol. Real disbursement, KYC/AML, liquidation, production registry integration, monitoring, and decentralized Oracle governance are intentionally out of scope.
+
+## Contents
+
+- [What It Demonstrates](#what-it-demonstrates)
+- [Current Evidence Snapshot](#current-evidence-snapshot)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Local Demo](#local-demo)
+- [Sepolia Validation](#sepolia-validation)
+- [Frontend](#frontend)
+- [Testing](#testing)
+- [Benchmark Summary](#benchmark-summary)
+- [Core Contracts](#core-contracts)
+- [ZK Design](#zk-design)
+- [Repository Structure](#repository-structure)
+- [Environment Files](#environment-files)
+- [Security Notes](#security-notes)
+- [Documentation Index](#documentation-index)
+- [Limitations](#limitations)
+
+## What It Demonstrates
+
+ProofEstate models a lending workflow with four operational roles:
+
+| Role | Responsibility |
+| --- | --- |
+| Protocol admin | Manages privileged protocol roles |
+| Oracle operator | Writes property verification and proof-related data to chain |
+| Borrower | Requests a loan against a verified owned property |
+| Loan officer | Approves or rejects loan requests |
+
+The end-to-end workflow is:
+
+```text
+Property registry data
+  -> Oracle verification write
+  -> ZK LTV proof generation
+  -> On-chain proof verification and compliance write
+  -> Borrower loan request
+  -> Loan officer approval
+  -> Borrower repayment
+```
+
+The important boundary is that the browser never receives private Oracle credentials. In both local and Sepolia modes, the frontend calls the Oracle API, and the Oracle API signs privileged writes with its configured private key.
 
 ## Current Evidence Snapshot
 
@@ -61,53 +105,6 @@ See:
 
 The Mermaid and PlantUML source files live in [docs/figures](docs/figures/).
 
-## Repository Structure
-
-```text
-contracts/
-  PropertyVerification.sol
-  ComplianceVerifier.sol
-  Lending.sol
-  RoleAdminManager.sol
-  generated/LtvGroth16Verifier.sol
-
-backend/oracle/
-  properties.js
-  service.js
-  contracts.js
-  server.js
-  cli.js
-
-circuits/
-  ltv.circom
-
-zk/
-  ltvCircuit.js
-  prover.js
-  build/
-  artifacts/
-
-frontend/
-  src/
-
-scripts/
-  deploy.js
-  sync-local-env.js
-  sync-sepolia-env.js
-  local-demo-check.js
-  local-wallet-flow.js
-  benchmark-local.mjs
-  zk-build.mjs
-
-test/
-  proofestate.test.js
-
-docs/
-  figures/
-  benchmarks/
-  demo/
-```
-
 ## Quick Start
 
 Use Node 20 from `.nvmrc`:
@@ -126,24 +123,20 @@ pnpm compile
 Optional ZK rebuild:
 
 ```bash
-pnpm zk:compile
-pnpm zk:setup
-pnpm zk:prove
-```
-
-or:
-
-```bash
 pnpm zk:build
 ```
 
-The project script auto-detects `$HOME/.cargo/bin/circom` when present. If needed, set:
+The ZK build script auto-detects `$HOME/.cargo/bin/circom` when present. If needed, set:
 
 ```bash
 export CIRCOM_BIN="$HOME/.cargo/bin/circom"
 ```
 
+For a step-by-step local reproduction, continue with [Local Demo](#local-demo). For public testnet validation, see [Sepolia Validation](#sepolia-validation).
+
 ## Local Demo
+
+The local demo is the canonical reproducible path for testing, benchmarking, and defense preparation. It runs a Hardhat chain, deploys contracts locally, starts the Oracle API, and executes the full loan lifecycle.
 
 Terminal 1:
 
@@ -177,18 +170,134 @@ For a defense-ready walkthrough, see:
 - [docs/demo/local-demo-script.md](docs/demo/local-demo-script.md)
 - [docs/demo/fallback-plan.md](docs/demo/fallback-plan.md)
 
+## Sepolia Validation
+
+Sepolia is optional public validation, not the primary evidence path. Use it to show that the same contracts and Oracle workflow run on a public Ethereum testnet. Do not mix Sepolia latency with local benchmark tables.
+
+### Required Files
+
+Sepolia uses two ignored runtime env files:
+
+| File | Used by | Contains |
+| --- | --- | --- |
+| `.env.sepolia` | Hardhat scripts and Oracle API | RPC URL, private signers, role addresses, deployed contract addresses |
+| `frontend/.env.sepolia` | Vite DApp | Public RPC URL, public role addresses, deployed contract addresses, Oracle API URL |
+
+Never commit private keys or RPC secrets.
+
+### Signers
+
+Use separate keys for protocol maintenance and Oracle writes:
+
+```env
+DEPLOYER_PRIVATE_KEY=0x...
+ORACLE_PRIVATE_KEY=0x...
+```
+
+`DEPLOYER_PRIVATE_KEY` is the deployment or maintenance signer. `ORACLE_PRIVATE_KEY` is the signer used by the Oracle API when it writes Sepolia transactions. The address derived from `ORACLE_PRIVATE_KEY` must match `ORACLE_ADDRESS` and must have `ORACLE_ROLE` on-chain.
+
+### Deploy Or Inspect
+
+Deploy or inspect the Sepolia contracts:
+
+```bash
+pnpm deploy:sepolia
+pnpm sepolia:inspect
+```
+
+If contracts are already deployed, prefer `pnpm sepolia:inspect` before sending new transactions. It checks contract bytecode, roles, selected property state, and recent loan state.
+
+### Run Locally Against Sepolia
+
+Terminal 1:
+
+```bash
+pnpm oracle:api:sepolia
+```
+
+Terminal 2:
+
+```bash
+pnpm frontend:dev:sepolia
+```
+
+Open the local frontend, connect a Sepolia wallet, keep `Oracle writes chain` enabled, and run property verification before generating the compliance proof.
+
+For `PROP-011`, use the borrower wallet configured in `data/properties.sepolia.json`. Its valuation is `850000`, so a test principal such as `600000` is inside the 80% LTV rule.
+
+### Expected Sepolia Flow
+
+```text
+1. Start Oracle API with pnpm oracle:api:sepolia
+2. Start frontend with pnpm frontend:dev:sepolia
+3. Connect borrower wallet on Sepolia
+4. Select PROP-011
+5. Run property verification
+6. Generate compliance proof with principal 600000
+7. Request loan as borrower
+8. Switch to loan officer wallet
+9. Approve loan
+10. Optionally switch back to borrower and repay
+```
+
+Sepolia transactions consume Sepolia test ETH. The Oracle pays gas for verification and compliance writes; the borrower pays gas for loan requests and repayment; the loan officer pays gas for approval or rejection.
+
+### Sepolia Troubleshooting
+
+If the frontend shows `RPC` or `Contracts` as not ready, it usually means the frontend RPC cannot read the latest block or contract bytecode. It does not necessarily mean the contracts are missing.
+
+Common causes:
+
+- RPC rate limiting, especially `429 Too Many Requests`;
+- unstable public Sepolia RPC endpoint;
+- Vite dev server was started without `--mode sepolia`;
+- wallet is connected to the wrong chain;
+- frontend env changed but the dev server was not restarted.
+
+Property verification and compliance writes wait for Sepolia transaction receipts. A wait of 15-120 seconds can be normal on testnet; longer waits usually point to RPC throttling, a pending transaction, or insufficient test ETH.
+
+Recommended setup:
+
+```text
+.env.sepolia              -> stable backend RPC for Oracle writes
+frontend/.env.sepolia     -> separate stable frontend RPC for browser reads
+```
+
+After changing either env file, restart both services.
+
+### Frontend Deployment Note
+
+The frontend can be deployed to Vercel or another static host, but the Oracle API must be hosted separately behind a public HTTPS URL. Do not put `DEPLOYER_PRIVATE_KEY` or `ORACLE_PRIVATE_KEY` in frontend hosting environment variables.
+
+For hosted frontend builds:
+
+```text
+Root directory: frontend
+Build command: pnpm build --mode sepolia
+Output directory: dist
+```
+
+Set `VITE_ORACLE_API_URL` to the hosted Oracle API URL, not `http://localhost:8787`.
+
 ## Frontend
 
-Run the local DApp:
+Run the local DApp against the local Hardhat deployment:
 
 ```bash
 pnpm frontend:dev:local
 ```
 
-Build:
+Run the local DApp against Sepolia:
+
+```bash
+pnpm frontend:dev:sepolia
+```
+
+Build commands:
 
 ```bash
 pnpm frontend:build:local
+pnpm frontend:build:sepolia
 ```
 
 The local DApp expects:
@@ -196,6 +305,12 @@ The local DApp expects:
 - Hardhat RPC at `http://127.0.0.1:8545`;
 - Oracle API at `http://localhost:8787`;
 - deployment addresses in `frontend/.env.local`.
+
+The Sepolia DApp expects:
+
+- Sepolia RPC in `frontend/.env.sepolia`;
+- Oracle API at `VITE_ORACLE_API_URL`;
+- Sepolia contract addresses in `frontend/.env.sepolia`.
 
 ## Testing
 
@@ -283,20 +398,88 @@ The circuit uses `MiMCSponge(3, 220, 1)` with `k = 0`, 64-bit range checks for v
 
 Detailed proof design is documented in [docs/zk-proof-design.md](docs/zk-proof-design.md).
 
-## Sepolia
+## Repository Structure
 
-Sepolia is optional public validation, not the primary evidence path.
+```text
+contracts/
+  PropertyVerification.sol
+  ComplianceVerifier.sol
+  Lending.sol
+  RoleAdminManager.sol
+  generated/LtvGroth16Verifier.sol
 
-Useful commands:
+backend/oracle/
+  properties.js
+  service.js
+  contracts.js
+  server.js
+  cli.js
 
-```bash
-pnpm deploy:sepolia
-pnpm sepolia:inspect
-pnpm oracle:api:sepolia
-pnpm frontend:build:sepolia
+circuits/
+  ltv.circom
+
+zk/
+  ltvCircuit.js
+  prover.js
+  build/
+  artifacts/
+
+frontend/
+  src/
+
+scripts/
+  deploy.js
+  sync-local-env.js
+  sync-sepolia-env.js
+  local-demo-check.js
+  local-wallet-flow.js
+  benchmark-local.mjs
+  zk-build.mjs
+
+test/
+  proofestate.test.js
+
+docs/
+  figures/
+  benchmarks/
+  demo/
 ```
 
-Do not mix Sepolia latency with local benchmark tables. See [docs/demo/sepolia-demo-notes.md](docs/demo/sepolia-demo-notes.md) and [docs/deployment-guide.md](docs/deployment-guide.md).
+## Environment Files
+
+Ignored runtime files:
+
+```text
+.env.local
+.env.sepolia
+frontend/.env.local
+frontend/.env.sepolia
+```
+
+`deployments/localhost.json` and `deployments/sepolia.json` are public address manifests used by the frontend build. They should not contain private keys.
+
+Generated build/runtime folders:
+
+```text
+artifacts/
+cache/
+frontend/dist/
+zk/build/
+zk/artifacts/
+```
+
+Do not commit private keys, RPC secrets, or ignored deployment state.
+
+## Security Notes
+
+- The Oracle is centralized and trusted in this prototype.
+- The browser never needs private keys beyond the user's connected wallet.
+- `ORACLE_PRIVATE_KEY` must remain server-side only.
+- Hardhat default accounts are public and must not be funded on public networks.
+- Sepolia is useful for public transaction evidence, but it is not a benchmark environment.
+- RPC endpoints used in frontend env files are public to browser users.
+
+For deeper analysis, see [docs/security-evaluation-report.md](docs/security-evaluation-report.md).
 
 ## Documentation Index
 
@@ -315,30 +498,6 @@ Do not mix Sepolia latency with local benchmark tables. See [docs/demo/sepolia-d
 | [docs/demo/demo-checklist.md](docs/demo/demo-checklist.md) | Defense demo checklist |
 | [thesis/final-thesis.md](thesis/final-thesis.md) | Final Markdown thesis text using the final benchmark evidence |
 | [slides/defense-presentation-outline.md](slides/defense-presentation-outline.md) | Defense presentation structure and demo story |
-
-## Environment Files
-
-Ignored runtime files:
-
-```text
-.env.local
-.env.sepolia
-frontend/.env.local
-frontend/.env.sepolia
-deployments/*.json
-```
-
-Generated build/runtime folders:
-
-```text
-artifacts/
-cache/
-frontend/dist/
-zk/build/
-zk/artifacts/
-```
-
-Do not commit private keys, RPC secrets, or ignored deployment state.
 
 ## Limitations
 

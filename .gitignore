@@ -16,6 +16,16 @@ dist/
 frontend/dist/
 *.log
 
+# Public demo deployment addresses are imported by the frontend build.
+!deployments/
+!deployments/localhost.json
+!deployments/sepolia.json
+
+# Oracle proof generation needs this proving key in hosted environments.
+!zk/artifacts/
+zk/artifacts/*
+!zk/artifacts/ltv_final.zkey
+
 # Local planning / handoff notes
 handoff.md
 plan.md

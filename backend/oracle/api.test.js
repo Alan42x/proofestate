@@ -54,9 +54,10 @@ test("GET /properties allows privileged registry access for demo roles", async (
 });
 
 test("GET /properties scopes assets by network", async () => {
-  const owner = "0x90F79bf6EB2c4f870365E785982E1f101E93b906";
-  const localhost = await request(`/properties?network=localhost&owner=${encodeURIComponent(owner)}`);
-  const sepolia = await request(`/properties?network=sepolia&owner=${encodeURIComponent(owner)}`);
+  const localhostOwner = "0x90F79bf6EB2c4f870365E785982E1f101E93b906";
+  const sepoliaOwner = "0x82b8C1c43E3310E1f46fbcd00582Aedf1CEe81a4";
+  const localhost = await request(`/properties?network=localhost&owner=${encodeURIComponent(localhostOwner)}`);
+  const sepolia = await request(`/properties?network=sepolia&owner=${encodeURIComponent(sepoliaOwner)}`);
   const localhostIds = localhost.body.map((property) => property.propertyId);
   const sepoliaIds = sepolia.body.map((property) => property.propertyId);
 
