@@ -135,7 +135,7 @@ Fresh local deployment:
 
 ## Frontend Build Size
 
-Latest production build output:
+Final benchmark checkout production build output:
 
 | Asset | Size | Gzip |
 | --- | ---: | ---: |
@@ -159,18 +159,17 @@ It uses 5 warm-up iterations and 30 measured iterations for `PROP-001` with prin
 
 ## Sensitive and Runtime File Check
 
-The following are ignored by `.gitignore` and are not tracked by git:
+The following local runtime files are ignored by `.gitignore` and are not tracked by git:
 
 - `.env.local`
 - `.env.sepolia`
 - `frontend/.env.local`
 - `frontend/.env.sepolia`
-- `deployments/*.json`
 - `frontend/dist/`
 - `artifacts/`
 - `cache/`
 
-The localhost and Sepolia deployment JSON files exist locally but are treated as ignored runtime state, not public source-of-truth documentation.
+The checked-in deployment manifests `deployments/localhost.json` and `deployments/sepolia.json` contain public addresses used by the frontend build. They are not secret-bearing runtime files and should be updated only after inspection.
 
 ## Re-entrancy Assessment
 

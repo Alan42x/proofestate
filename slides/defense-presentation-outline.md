@@ -125,9 +125,9 @@ Show:
 Fallback evidence:
 
 ```text
-docs/demo/screenshots/
-docs/demo/local-demo-script.md
-docs/demo/fallback-plan.md
+docs/screenshots/
+README.md
+docs/deployment-guide.md
 ```
 
 ## Slide 9: Testing Evidence
@@ -248,4 +248,3 @@ Before the defense:
 - confirm screenshots are available;
 - prepare CLI fallback;
 - avoid relying on Sepolia unless already captured.
-

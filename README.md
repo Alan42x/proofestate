@@ -29,6 +29,7 @@ ProofEstate is a dissertation prototype, not a production lending protocol. Real
 - [Environment Files](#environment-files)
 - [Security Notes](#security-notes)
 - [Documentation Index](#documentation-index)
+- [License](#license)
 - [Limitations](#limitations)
 
 ## What It Demonstrates
@@ -136,7 +137,7 @@ For a step-by-step local reproduction, continue with [Local Demo](#local-demo). 
 
 ## Local Demo
 
-The local demo is the canonical reproducible path for testing, benchmarking, and defense preparation. It runs a Hardhat chain, deploys contracts locally, starts the Oracle API, and executes the full loan lifecycle.
+The local demo is the canonical reproducible path for testing, benchmarking, and project evaluation. It runs a Hardhat chain, deploys contracts locally, starts the Oracle API, and executes the full loan lifecycle.
 
 Terminal 1:
 
@@ -164,37 +165,13 @@ Expected final state:
 Repaid
 ```
 
-For a defense-ready walkthrough, see:
-
-- [docs/demo/demo-checklist.md](docs/demo/demo-checklist.md)
-- [docs/demo/local-demo-script.md](docs/demo/local-demo-script.md)
-- [docs/demo/fallback-plan.md](docs/demo/fallback-plan.md)
+Screenshot evidence for the browser workflow is indexed in [docs/screenshots/README.md](docs/screenshots/README.md).
 
 ## Sepolia Validation
 
 Sepolia is optional public validation, not the primary evidence path. Use it to show that the same contracts and Oracle workflow run on a public Ethereum testnet. Do not mix Sepolia latency with local benchmark tables.
 
-### Required Files
-
-Sepolia uses two ignored runtime env files:
-
-| File | Used by | Contains |
-| --- | --- | --- |
-| `.env.sepolia` | Hardhat scripts and Oracle API | RPC URL, private signers, role addresses, deployed contract addresses |
-| `frontend/.env.sepolia` | Vite DApp | Public RPC URL, public role addresses, deployed contract addresses, Oracle API URL |
-
-Never commit private keys or RPC secrets.
-
-### Signers
-
-Use separate keys for protocol maintenance and Oracle writes:
-
-```env
-DEPLOYER_PRIVATE_KEY=0x...
-ORACLE_PRIVATE_KEY=0x...
-```
-
-`DEPLOYER_PRIVATE_KEY` is the deployment or maintenance signer. `ORACLE_PRIVATE_KEY` is the signer used by the Oracle API when it writes Sepolia transactions. The address derived from `ORACLE_PRIVATE_KEY` must match `ORACLE_ADDRESS` and must have `ORACLE_ROLE` on-chain.
+The detailed Sepolia, Vercel, and deployment instructions live in [docs/deployment-guide.md](docs/deployment-guide.md). Never commit private keys or RPC secrets.
 
 ### Deploy Or Inspect
 
@@ -207,25 +184,7 @@ pnpm sepolia:inspect
 
 If contracts are already deployed, prefer `pnpm sepolia:inspect` before sending new transactions. It checks contract bytecode, roles, selected property state, and recent loan state.
 
-### Run Locally Against Sepolia
-
-Terminal 1:
-
-```bash
-pnpm oracle:api:sepolia
-```
-
-Terminal 2:
-
-```bash
-pnpm frontend:dev:sepolia
-```
-
-Open the local frontend, connect a Sepolia wallet, keep `Oracle writes chain` enabled, and run property verification before generating the compliance proof.
-
-For `PROP-011`, use the borrower wallet configured in `data/properties.sepolia.json`. Its valuation is `850000`, so a test principal such as `600000` is inside the 80% LTV rule.
-
-### Expected Sepolia Flow
+### Sepolia Validation Flow
 
 ```text
 1. Start Oracle API with pnpm oracle:api:sepolia
@@ -242,43 +201,7 @@ For `PROP-011`, use the borrower wallet configured in `data/properties.sepolia.j
 
 Sepolia transactions consume Sepolia test ETH. The Oracle pays gas for verification and compliance writes; the borrower pays gas for loan requests and repayment; the loan officer pays gas for approval or rejection.
 
-### Sepolia Troubleshooting
-
-If the frontend shows `RPC` or `Contracts` as not ready, it usually means the frontend RPC cannot read the latest block or contract bytecode. It does not necessarily mean the contracts are missing.
-
-Common causes:
-
-- RPC rate limiting, especially `429 Too Many Requests`;
-- unstable public Sepolia RPC endpoint;
-- Vite dev server was started without `--mode sepolia`;
-- wallet is connected to the wrong chain;
-- frontend env changed but the dev server was not restarted.
-
-Property verification and compliance writes wait for Sepolia transaction receipts. A wait of 15-120 seconds can be normal on testnet; longer waits usually point to RPC throttling, a pending transaction, or insufficient test ETH.
-
-Recommended setup:
-
-```text
-.env.sepolia              -> stable backend RPC for Oracle writes
-frontend/.env.sepolia     -> separate stable frontend RPC for browser reads
-```
-
-After changing either env file, restart both services.
-
-### Frontend Deployment Note
-
-The frontend can be deployed to Vercel or another static host, but the Oracle API must be hosted separately behind a public HTTPS URL. Do not put `DEPLOYER_PRIVATE_KEY` or `ORACLE_PRIVATE_KEY` in frontend hosting environment variables.
-
-For hosted frontend builds:
-
-```text
-Root directory: frontend
-Build command: pnpm build --mode sepolia
-Output directory: dist
-```
-
-Set `VITE_ORACLE_API_URL` to the hosted Oracle API URL, not `http://localhost:8787`.
-Set `FRONTEND_URL` on the hosted Oracle API to the deployed DApp URL so the Oracle landing page links back to the public frontend.
+For the current public deployment table, hosted Oracle URL, Vercel settings, and troubleshooting rules, see [docs/deployment-guide.md](docs/deployment-guide.md).
 
 ## Frontend
 
@@ -443,7 +366,7 @@ test/
 docs/
   figures/
   benchmarks/
-  demo/
+  screenshots/
 ```
 
 ## Environment Files
@@ -486,7 +409,7 @@ For deeper analysis, see [docs/security-evaluation-report.md](docs/security-eval
 
 | Document | Purpose |
 | --- | --- |
-| [docs/evaluation-notes.md](docs/evaluation-notes.md) | Latest Node 20 evidence snapshot |
+| [docs/evaluation-notes.md](docs/evaluation-notes.md) | Final functional, environment, and gas evidence |
 | [docs/benchmarks/final-benchmarks.md](docs/benchmarks/final-benchmarks.md) | Formal local benchmark results |
 | [docs/zk-proof-design.md](docs/zk-proof-design.md) | ZK statement, signals, circuit behavior, replay/freshness boundaries |
 | [docs/smart-contract-interface-spec.md](docs/smart-contract-interface-spec.md) | Contract interface and revert/event specification |
@@ -496,9 +419,15 @@ For deeper analysis, see [docs/security-evaluation-report.md](docs/security-eval
 | [docs/limitations-and-extensions.md](docs/limitations-and-extensions.md) | Prototype boundaries and future work |
 | [docs/generalization.md](docs/generalization.md) | How the architecture can generalize to other privacy-preserving compliance applications |
 | [docs/deployment-guide.md](docs/deployment-guide.md) | Local and Sepolia reproduction guide |
-| [docs/demo/demo-checklist.md](docs/demo/demo-checklist.md) | Defense demo checklist |
-| [thesis/final-thesis.md](thesis/final-thesis.md) | Final Markdown thesis text using the final benchmark evidence |
+| [docs/screenshots/README.md](docs/screenshots/README.md) | Local DApp screenshot evidence index |
+| [thesis/thesis.md](thesis/thesis.md) | Final Markdown thesis text using the final benchmark evidence |
 | [slides/defense-presentation-outline.md](slides/defense-presentation-outline.md) | Defense presentation structure and demo story |
+
+## License
+
+This repository does not currently include an open-source license. Except for viewing and forking as permitted by GitHub's platform functionality and Terms of Service, no permission is granted to copy, modify, distribute, sublicense, or use this work commercially without explicit permission from the author.
+
+For public use, redistribution, or commercial use, contact the author first and add an explicit `LICENSE` file.
 
 ## Limitations
 

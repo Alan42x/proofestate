@@ -1,6 +1,6 @@
-# Demo Screenshot Index
+# DApp Screenshot Evidence
 
-These screenshots are the local DApp fallback evidence pack for the ProofEstate defense demo. They were captured against the local Hardhat and Oracle workflow.
+These screenshots are the local DApp visual evidence pack for ProofEstate. They were captured against the local Hardhat and Oracle workflow and complement the CLI, test, benchmark, and gas evidence.
 
 | File | Evidence shown |
 | --- | --- |
@@ -14,4 +14,4 @@ These screenshots are the local DApp fallback evidence pack for the ProofEstate 
 | `08-contract-readiness-settings.png` | Contract and network operations view with service metrics, contract coverage `5/5`, RPC ready, and Oracle service ready |
 | `09-event-audit-log.png` | Audit log with loan ledger, on-chain event log, proof/asset coverage, permission changes, and final `Repaid` state |
 
-The DApp prevents borrowers from submitting a principal above the calculated maximum borrow amount. Above-limit LTV remains covered by the CLI/API failure path in the demo checklist rather than by a DApp screenshot.
+The DApp prevents borrowers from submitting a principal above the calculated maximum borrow amount. Above-limit LTV remains covered by the CLI/API failure path and contract/oracle tests rather than by a DApp screenshot.

@@ -118,7 +118,7 @@ Deployment gas:
 
 ## Frontend Bundle
 
-Latest production build snapshot from `docs/evaluation-notes.md`:
+Final benchmark checkout production build snapshot from `docs/evaluation-notes.md`:
 
 | Asset | Size | Gzip |
 | --- | ---: | ---: |
@@ -129,7 +129,7 @@ Latest production build snapshot from `docs/evaluation-notes.md`:
 
 ## Local E2E Demo Duration
 
-Latest local CLI flow from `docs/evaluation-notes.md`:
+Final benchmark checkout local CLI flow from `docs/evaluation-notes.md`:
 
 | Scenario | Command | Duration | Final state |
 | --- | --- | ---: | --- |

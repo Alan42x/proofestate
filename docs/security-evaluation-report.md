@@ -24,6 +24,7 @@ This is not a production security claim. The MVP does not implement production i
 | Active loan lock | Prevent duplicate active borrowing against one property |
 | Role permissions | Restrict Oracle, compliance, loan officer, and admin actions |
 | Oracle private key | Prevent unauthorized verification writes |
+| Hosted Oracle API gas budget | Prevent unintended public testnet transactions or prover workload |
 | RPC and deployment secrets | Prevent unauthorized public network actions |
 
 ## Trust Assumptions
@@ -50,6 +51,7 @@ The attacker may:
 - attempt to request more than one active loan for a property;
 - act from a wallet without the required role;
 - act as a malicious or mistaken loan officer;
+- call a hosted Oracle API with write-enabled requests to consume prover resources or testnet gas;
 - obtain stale frontend configuration.
 
 The attacker is not assumed to:
@@ -79,6 +81,14 @@ The attacker is not assumed to:
 | Last admin removal | `RoleAdminManager` prevents removing final admin | Contract tests |
 | Malformed property/principal input | Oracle validates network, property ID, and principal types/ranges | Oracle API tests |
 | Unsupported network access | Dataset access is restricted to `localhost` and `sepolia` | Oracle API tests |
+
+## Hosted Oracle API Exposure
+
+The hosted Oracle API is a demo/testnet service, not a production public transaction gateway. The current Express API accepts cross-origin requests and does not implement application-level authentication, rate limiting, request signing, or per-origin transaction policy.
+
+When `write=true` is enabled, a public caller could ask the Oracle service to submit Sepolia verification or compliance transactions from the configured Oracle signer, subject to on-chain role checks and account balance. This does not bypass contract authorization, but it can consume Oracle gas, API resources, and proof-generation time.
+
+For the dissertation prototype this risk is acceptable only because Sepolia is optional public validation and no real assets move. A production deployment should add API authentication, origin allowlisting, rate limiting, transaction allowlists, request quotas, monitoring, and explicit operator approval for privileged writes.
 
 ## Privacy Evaluation
 
@@ -139,6 +149,7 @@ The main administrative risk is operator mistake. `RoleAdminManager` prevents re
 - The trusted setup is prototype-grade.
 - Proof freshness is not enforced.
 - No production key management is implemented.
+- The hosted Oracle API has no production authentication, rate limiting, or transaction policy.
 - No real disbursement or repayment transfer logic exists.
 - No liquidation, delinquency, or credit risk logic exists.
 - No production monitoring, indexing, alerting, or incident response exists.
@@ -151,6 +162,7 @@ The main administrative risk is operator mistake. `RoleAdminManager` prevents re
 - Proof expiry, nonce, registry version, or loan-specific challenge.
 - Multisig and timelock governance.
 - Emergency pause for production operations.
+- API authentication, rate limiting, request signing, and transaction policy for hosted Oracle writes.
 - Formal verification or property-based testing for contract invariants.
 - Dedicated security review before any real asset movement.
 - Stronger privacy model for Oracle-observed plaintext values.
