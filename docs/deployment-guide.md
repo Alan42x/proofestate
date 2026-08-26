@@ -168,6 +168,23 @@ Inspect:
 pnpm sepolia:inspect
 ```
 
+Current public Sepolia deployment:
+
+| Field | Address | Sepolia explorer |
+| --- | --- | --- |
+| Hosted Oracle API | `https://proofestate.onrender.com` | [Render endpoint](https://proofestate.onrender.com) |
+| Admin / deployer | `0xfba672257e178Beaf9169e46889f155A1B682048` | [Etherscan](https://sepolia.etherscan.io/address/0xfba672257e178Beaf9169e46889f155A1B682048) |
+| Oracle | `0xDc5DE2Dbc61179b5cA9Dec58E6f9396D406123B1` | [Etherscan](https://sepolia.etherscan.io/address/0xDc5DE2Dbc61179b5cA9Dec58E6f9396D406123B1) |
+| Loan officer | `0x95AD85f77B3301373B9aC91192678C5B34E1325D` | [Etherscan](https://sepolia.etherscan.io/address/0x95AD85f77B3301373B9aC91192678C5B34E1325D) |
+| Borrower / `PROP-011` owner | `0x82b8C1c43E3310E1f46fbcd00582Aedf1CEe81a4` | [Etherscan](https://sepolia.etherscan.io/address/0x82b8C1c43E3310E1f46fbcd00582Aedf1CEe81a4) |
+| PropertyVerification | `0xd83Ae403f486e426F788731F81d4D9b4Ad2B014C` | [Etherscan](https://sepolia.etherscan.io/address/0xd83Ae403f486e426F788731F81d4D9b4Ad2B014C) |
+| LtvGroth16Verifier | `0x19fC17237BEe1d3f7cc3ac0bFF48eB6CC460eeCf` | [Etherscan](https://sepolia.etherscan.io/address/0x19fC17237BEe1d3f7cc3ac0bFF48eB6CC460eeCf) |
+| ComplianceVerifier | `0x3eaf3b87d7Ff602E4a6855ba80369ed763a1e2Cc` | [Etherscan](https://sepolia.etherscan.io/address/0x3eaf3b87d7Ff602E4a6855ba80369ed763a1e2Cc) |
+| Lending | `0x5D7bcf02E3969B3e7cDD021407812710D96599DC` | [Etherscan](https://sepolia.etherscan.io/address/0x5D7bcf02E3969B3e7cDD021407812710D96599DC) |
+| RoleAdminManager | `0xd3E9331b10DF04Cf84d128f9b5e499dd5D8d88Db` | [Etherscan](https://sepolia.etherscan.io/address/0xd3E9331b10DF04Cf84d128f9b5e499dd5D8d88Db) |
+
+This deployment was generated on `2026-08-26T07:52:02.900Z`. Only public addresses and public service URLs are documented here; private keys and RPC secrets must remain in ignored environment files.
+
 Run Oracle API against Sepolia:
 
 ```bash

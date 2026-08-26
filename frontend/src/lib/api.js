@@ -1,4 +1,13 @@
-const API_URL = import.meta.env.VITE_ORACLE_API_URL || "http://localhost:8787";
+export const ORACLE_API_URL = import.meta.env.VITE_ORACLE_API_URL || "http://localhost:8787";
+
+export function oracleApiDisplayUrl() {
+  try {
+    const url = new URL(ORACLE_API_URL);
+    return url.host;
+  } catch (_error) {
+    return ORACLE_API_URL;
+  }
+}
 
 function propertyQuery({ ownerAddress, network, role } = {}) {
   const params = new URLSearchParams();
@@ -12,7 +21,7 @@ function propertyQuery({ ownerAddress, network, role } = {}) {
 export async function getPropertiesForRole(network = "localhost", role) {
   if (role !== "admin" && role !== "loanOfficer") return [];
   try {
-    const response = await fetch(`${API_URL}/properties${propertyQuery({ network, role })}`);
+    const response = await fetch(`${ORACLE_API_URL}/properties${propertyQuery({ network, role })}`);
     if (!response.ok) throw new Error("Oracle API unavailable");
     return await response.json();
   } catch (_error) {
@@ -23,7 +32,7 @@ export async function getPropertiesForRole(network = "localhost", role) {
 export async function getPropertiesByOwner(ownerAddress, network = "localhost") {
   if (!ownerAddress) return [];
   try {
-    const response = await fetch(`${API_URL}/properties${propertyQuery({ ownerAddress, network })}`);
+    const response = await fetch(`${ORACLE_API_URL}/properties${propertyQuery({ ownerAddress, network })}`);
     if (!response.ok) throw new Error("Oracle API unavailable");
     return await response.json();
   } catch (_error) {
@@ -32,7 +41,7 @@ export async function getPropertiesByOwner(ownerAddress, network = "localhost") 
 }
 
 export async function getOracleHealth() {
-  const response = await fetch(`${API_URL}/health`);
+  const response = await fetch(`${ORACLE_API_URL}/health`);
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(body.error || "Oracle API unavailable");
@@ -41,7 +50,7 @@ export async function getOracleHealth() {
 }
 
 export async function postOracle(path, payload) {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${ORACLE_API_URL}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"

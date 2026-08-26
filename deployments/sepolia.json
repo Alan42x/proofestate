@@ -1,20 +1,13 @@
 {
   "network": "sepolia",
-  "deployer": "0xDc5DE2Dbc61179b5cA9Dec58E6f9396D406123B1",
+  "deployer": "0xfba672257e178Beaf9169e46889f155A1B682048",
   "adminAddress": "0xfba672257e178Beaf9169e46889f155A1B682048",
-  "propertyVerification": "0x71aee2f627a2f6e9dCf98BFF05fb93d585a6cAC0",
-  "ltvGroth16Verifier": "0x91f3Eada3Ff8C0C650d1AD3ae3474A223fC83b3c",
-  "complianceVerifier": "0x6b7Bb127664f447b22DacD3CA55c0441a2eE9F6F",
-  "lending": "0xbb536E247e0f87118ab2f3F81e35C768087e3072",
+  "propertyVerification": "0xd83Ae403f486e426F788731F81d4D9b4Ad2B014C",
+  "ltvGroth16Verifier": "0x19fC17237BEe1d3f7cc3ac0bFF48eB6CC460eeCf",
+  "complianceVerifier": "0x3eaf3b87d7Ff602E4a6855ba80369ed763a1e2Cc",
+  "lending": "0x5D7bcf02E3969B3e7cDD021407812710D96599DC",
+  "roleAdminManager": "0xd3E9331b10DF04Cf84d128f9b5e499dd5D8d88Db",
   "oracleAddress": "0xDc5DE2Dbc61179b5cA9Dec58E6f9396D406123B1",
   "loanOfficerAddress": "0x95AD85f77B3301373B9aC91192678C5B34E1325D",
-  "deployedAt": "2026-06-19T09:39:27.081Z",
-  "roleAdminManager": "0x7764f00a74388afFE816bA154622f9b29a2bFc7d",
-  "roleAdminManagerDeployedAt": "2026-07-24T14:04:16.486Z",
-  "previousRoleAdminManager": "0xc7558aF1E0183a90AD1f68926695f701b611387d",
-  "roleAdminManagerRotatedAt": "2026-07-24T14:04:16.486Z",
-  "previousRoleAdminManagers": [
-    "0xFE2c142d0ea809F5Fa250fE2D282Ad94dC7bc095",
-    "0xc7558aF1E0183a90AD1f68926695f701b611387d"
-  ]
+  "deployedAt": "2026-08-26T07:52:02.900Z"
 }

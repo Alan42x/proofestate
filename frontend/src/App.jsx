@@ -40,7 +40,14 @@ import { hardhat, sepolia } from "wagmi/chains";
 import localhostDeployment from "../../deployments/localhost.json";
 import sepoliaDeployment from "../../deployments/sepolia.json";
 import { complianceVerifierAbi, lendingAbi, propertyVerificationAbi, roleAdminManagerAbi } from "./contracts/abis";
-import { getOracleHealth, getPropertiesByOwner, getPropertiesForRole, postOracle } from "./lib/api";
+import {
+  ORACLE_API_URL,
+  getOracleHealth,
+  getPropertiesByOwner,
+  getPropertiesForRole,
+  oracleApiDisplayUrl,
+  postOracle
+} from "./lib/api";
 import { formatRecord, propertyKey, roleKey, shortField, shortHash } from "./lib/chain";
 import { detectInitialLanguage, LANG_STORAGE_KEY, translations } from "./lib/i18n";
 import { LanguageToggle, NetworkSelector, WalletButton } from "./components/common/Controls";
@@ -1212,13 +1219,14 @@ function App() {
   const deployedContractCount = coreContractKeys.filter(
     (key) => contractHealth[key]?.deployed
   ).length;
+  const oracleApiDetail = oracleHealth.checked ? oracleApiDisplayUrl() : "...";
   const readinessItems = [
     {
       label: t("rpcReady"),
       ready: rpcReady,
       detail: chainHealth.blockNumber !== null ? `block ${chainHealth.blockNumber.toString()}` : networkLabel
     },
-    { label: t("oracleReady"), ready: oracleHealth.ok, detail: oracleHealth.checked ? "8787" : "..." },
+    { label: t("oracleReady"), ready: oracleHealth.ok, detail: oracleApiDetail },
     {
       label: t("contractsReadyLabel"),
       ready: fullContractsReady,
@@ -1642,7 +1650,7 @@ function App() {
       icon: Network,
       tone: "blue",
       status: oracleHealth.ok ? "deployed" : oracleHealth.checked ? "unreachable" : "missing",
-      address: import.meta.env.VITE_ORACLE_API_URL || "http://localhost:8787",
+      address: ORACLE_API_URL,
       block: latestOracleActivity?.time || "-",
       tx: latestOracleActivity?.hash || "-"
     }
@@ -3285,7 +3293,7 @@ function App() {
       {
         label: t("oracleService"),
         value: oracleHealth.ok ? t("readyStatus") : oracleHealth.checked ? t("unreachableStatus") : t("missingStatus"),
-        detail: import.meta.env.VITE_ORACLE_API_URL || "http://localhost:8787",
+        detail: ORACLE_API_URL,
         icon: Database,
         tone: oracleHealth.ok ? "green" : "amber"
       },

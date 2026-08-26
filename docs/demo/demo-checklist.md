@@ -74,6 +74,19 @@ Expected sequence:
 
 These are public Hardhat demo accounts only. Never fund them on a public network.
 
+## Sepolia Public Accounts
+
+Sepolia is optional public validation. Use these public addresses only after confirming the current deployment with `pnpm sepolia:inspect`.
+
+| Role | Address |
+| --- | --- |
+| Admin / deployer | `0xfba672257e178Beaf9169e46889f155A1B682048` |
+| Oracle | `0xDc5DE2Dbc61179b5cA9Dec58E6f9396D406123B1` |
+| Loan officer | `0x95AD85f77B3301373B9aC91192678C5B34E1325D` |
+| Borrower for `PROP-011` | `0x82b8C1c43E3310E1f46fbcd00582Aedf1CEe81a4` |
+
+Current Sepolia contract addresses and explorer links are recorded in `docs/deployment-guide.md` and `docs/demo/sepolia-demo-notes.md`.
+
 ## Failure Scenarios
 
 The DApp clamps or blocks principals above the calculated maximum borrow amount. For live failure evidence, use the CLI/API path below to show that above-limit principals and invalid registry records fail explicitly.
