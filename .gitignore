@@ -15,6 +15,10 @@ frontend/.env.sepolia
 dist/
 frontend/dist/
 *.log
+outputs/
+~$*.docx
+~$*.pptx
+~$*.xlsx
 
 # Public demo deployment addresses are imported by the frontend build.
 !deployments/

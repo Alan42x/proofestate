@@ -29,8 +29,8 @@ ProofEstate is a dissertation prototype, not a production lending protocol. Real
 - [Environment Files](#environment-files)
 - [Security Notes](#security-notes)
 - [Documentation Index](#documentation-index)
-- [License](#license)
 - [Limitations](#limitations)
+- [License](#license)
 
 ## What It Demonstrates
 
@@ -59,7 +59,7 @@ The important boundary is that the browser never receives private Oracle credent
 
 ## Current Evidence Snapshot
 
-Latest local test and gas evidence was revalidated on 2026-08-03 with Node `v20.20.2`.
+Latest local functional and benchmark evidence was revalidated on 2026-09-25 with Node `v20.20.2`. The gas snapshot remains the Node 20 Hardhat gas-reporter baseline recorded in [docs/evaluation-notes.md](docs/evaluation-notes.md).
 
 | Evidence | Status |
 | --- | --- |
@@ -67,11 +67,12 @@ Latest local test and gas evidence was revalidated on 2026-08-03 with Node `v20.
 | Oracle API tests | 12 passing |
 | Frontend tests | 6 passing |
 | Frontend production build | Passing |
-| Gas snapshot | Passing |
+| Security and adversarial testing | Covered by contract, Oracle API, frontend, and benchmark-matrix evidence |
+| Gas snapshot | Passing Node 20 baseline |
 | ZK compile | Passing with circom `2.2.3` |
 | Local readiness check | Passing |
 | Local CLI happy path | Passing, final state `Repaid` |
-| Formal local benchmark | 5 warm-up + 30 measured runs, regenerated on 2026-08-03 |
+| Formal local benchmark | 2026-09-25 matrix: 5 warm-up + 30 measured runs per correctness case, plus 10/30/50 stability runs |
 
 See:
 
@@ -266,27 +267,38 @@ The main contract suite covers:
 
 ## Benchmark Summary
 
-Formal local benchmark command:
+Formal local benchmark command for the primary compliant path:
 
 ```bash
 pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
 ```
 
-Raw data:
+Primary raw data:
 
 ```text
-docs/benchmarks/raw/local-2026-08-03T14-49-27-759Z.json
+docs/benchmarks/raw/local-2026-09-25T08-40-22-730Z.json
 ```
 
-Summary:
+The final benchmark set also includes 30-run boundary, non-compliant, and invalid-registry cases, plus 10/30/50 repeated-run stability snapshots. See [docs/benchmarks/final-benchmarks.md](docs/benchmarks/final-benchmarks.md) for the complete raw-data matrix.
+
+Primary compliant-path summary:
 
 | Metric | Median | Mean | P95 |
 | --- | ---: | ---: | ---: |
-| Build verification input | 3.65 ms | 3.73 ms | 4.79 ms |
-| Build compliance inputs | 5.02 ms | 5.35 ms | 7.10 ms |
-| Generate Groth16 proof | 547.53 ms | 573.10 ms | 682.98 ms |
-| Oracle `/verify` latency | 7.70 ms | 8.11 ms | 10.04 ms |
-| Oracle `/compliance` latency | 555.20 ms | 583.46 ms | 702.65 ms |
+| Build verification input | 3.05 ms | 3.22 ms | 4.77 ms |
+| Build compliance inputs | 3.73 ms | 4.01 ms | 5.31 ms |
+| Generate Groth16 proof | 399.53 ms | 407.55 ms | 469.53 ms |
+| Oracle `/verify` latency | 5.98 ms | 6.78 ms | 11.45 ms |
+| Oracle `/compliance` latency | 409.16 ms | 413.27 ms | 480.30 ms |
+
+Correctness matrix summary:
+
+| Case | Property | Principal | Result |
+| --- | --- | ---: | --- |
+| Compliant | `PROP-001` | 750000 | Pass, proof generated |
+| Boundary | `PROP-001` | 784000 | Pass at exactly 80% LTV, proof generated |
+| Non-compliant | `PROP-001` | 784001 | Reject, proof skipped |
+| Invalid registry | `PROP-004` | 100000 | Reject, proof skipped |
 
 Proof generation dominates local latency. See [docs/benchmarks/final-benchmarks.md](docs/benchmarks/final-benchmarks.md) for methodology, raw-data reference, gas snapshot, circuit size, and frontend bundle size.
 
@@ -421,13 +433,7 @@ For deeper analysis, see [docs/security-evaluation-report.md](docs/security-eval
 | [docs/deployment-guide.md](docs/deployment-guide.md) | Local and Sepolia reproduction guide |
 | [docs/screenshots/README.md](docs/screenshots/README.md) | Local DApp screenshot evidence index |
 | [thesis/thesis.md](thesis/thesis.md) | Final Markdown thesis text using the final benchmark evidence |
-| [slides/defense-presentation-outline.md](slides/defense-presentation-outline.md) | Defense presentation structure and demo story |
-
-## License
-
-This repository does not currently include an open-source license. Except for viewing and forking as permitted by GitHub's platform functionality and Terms of Service, no permission is granted to copy, modify, distribute, sublicense, or use this work commercially without explicit permission from the author.
-
-For public use, redistribution, or commercial use, contact the author first and add an explicit `LICENSE` file.
+| [slides/proofestate-nus-defense-presentation.pptx](slides/proofestate-nus-defense-presentation.pptx) | Defense presentation deck and demo story |
 
 ## Limitations
 
@@ -441,3 +447,9 @@ For public use, redistribution, or commercial use, contact the author first and 
 - Sepolia support is testnet validation only.
 
 See [docs/limitations-and-extensions.md](docs/limitations-and-extensions.md) for the full limitations and future-work discussion.
+
+## License
+
+This repository does not currently include an open-source license. Except for viewing and forking as permitted by GitHub's platform functionality and Terms of Service, no permission is granted to copy, modify, distribute, sublicense, or use this work commercially without explicit permission from the author.
+
+For public use, redistribution, or commercial use, contact the author first and add an explicit `LICENSE` file.

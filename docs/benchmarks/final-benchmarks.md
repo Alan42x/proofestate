@@ -1,19 +1,29 @@
 # Final Benchmarks
 
-This document records the final dissertation local benchmark snapshot for ProofEstate.
+This document records the final local benchmark snapshot for ProofEstate after adding a correctness matrix and bounded repeated-run stability evaluation.
 
 ## Evidence Status
 
 | Evidence type | Status |
 | --- | --- |
 | Node 20 test/gas snapshot | Available in `docs/evaluation-notes.md` |
-| Local 30-run benchmark | Collected on 2026-08-03 |
-| Raw benchmark file | `docs/benchmarks/raw/local-2026-08-03T14-49-27-759Z.json` |
+| Primary compliant 30-run benchmark | Collected on 2026-09-25 |
+| Correctness matrix benchmarks | Collected on 2026-09-25 |
+| Bounded 10/30/50 repeated-run stability benchmarks | Collected on 2026-09-25 |
 | Sepolia benchmark | Out of final benchmark scope |
 
-The file listed above is the final local benchmark run used by the dissertation.
+Raw benchmark files:
 
-The raw file is a schema-version-2 run. It includes raw per-sample `ok` values, summary failure counts, a top-level `failures` list, and clean git worktree metadata for the benchmark checkout.
+| Role | Raw file |
+| --- | --- |
+| Primary compliant path, 30 measured runs | `docs/benchmarks/raw/local-2026-09-25T08-40-22-730Z.json` |
+| Boundary path, 30 measured runs | `docs/benchmarks/raw/local-2026-09-25T08-38-18-654Z.json` |
+| Non-compliant path, 30 measured runs | `docs/benchmarks/raw/local-2026-09-25T08-38-46-670Z.json` |
+| Invalid-registry path, 30 measured runs | `docs/benchmarks/raw/local-2026-09-25T08-40-41-666Z.json` |
+| Stability path, 10 measured runs | `docs/benchmarks/raw/local-2026-09-25T08-33-01-512Z.json` |
+| Stability path, 50 measured runs | `docs/benchmarks/raw/local-2026-09-25T08-33-59-578Z.json` |
+
+The raw files are schema-version-2 benchmark runs. They include per-sample `ok` values, top-level failure lists, summary statistics, and git metadata. The September 2026 runs were collected while the worktree was intentionally dirty because manuscript, DOCX, and benchmark documentation updates were in progress. The results are therefore final experiment-matrix evidence, not a clean-release tag.
 
 ## Environment
 
@@ -26,30 +36,35 @@ The raw file is a schema-version-2 run. It includes raw per-sample `ok` values, 
 | Hardhat | 2.28.6 |
 | snarkjs | 0.7.6 |
 | circom | 2.2.3 at `$HOME/.cargo/bin/circom` |
-| Git commit | `4f2acc59d660c7d3666b9f55861b58f13995431c` |
-| Generated at | 2026-08-03 22:49 +08 |
+| Git commit | `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` |
+| Generated at | 2026-09-25 |
 | Network label | `localhost` |
 
 ## Benchmark Protocol
 
-Command:
+The primary compliant-path benchmark command was:
 
 ```bash
 pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
 ```
 
-Configuration:
+Correctness-matrix commands were:
 
-| Parameter | Value |
-| --- | --- |
-| Warm-up runs | 5 |
-| Measured runs | 30 |
-| Property | `PROP-001` |
-| Principal | `750000` |
-| Oracle API | `http://127.0.0.1:8787` |
-| Result type | Local latency, not Sepolia latency |
+```bash
+pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=784000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=784001 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-004 --principal=100000 --api=http://127.0.0.1:8787
+```
 
-The first five iterations were excluded from the summary statistics. All summary rows below use only the 30 measured iterations.
+Bounded repeated-run stability commands were:
+
+```bash
+pnpm benchmark:local --warmups=5 --runs=10 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=50 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
+```
+
+All tables report measured runs only; warm-up iterations are excluded.
 
 ## Workload
 
@@ -59,23 +74,57 @@ The first five iterations were excluded from the summary statistics. All summary
 980000 * 8000 / 10000 = 784000
 ```
 
-The benchmark principal `750000` is therefore compliant. This run measures the successful proof-generation path.
+The primary principal `750000` is compliant. The boundary principal `784000` is exactly at the policy limit and should pass. The principal `784001` is one unit above the limit and should fail without proof generation. `PROP-004` fails registry verification because it is encumbered and should also fail without proof generation.
 
-## Local Latency Results
+## Correctness Matrix
+
+| Case | Property | Principal | Expected result | Observed result | Proof generation |
+| --- | --- | ---: | --- | --- | --- |
+| Compliant | `PROP-001` | 750000 | Pass | Pass, 0 failures across 30 measured runs | Generated |
+| Boundary | `PROP-001` | 784000 | Pass at exactly 80% LTV | Pass, 0 failures across 30 measured runs | Generated |
+| Non-compliant | `PROP-001` | 784001 | Reject above 80% LTV | Reject, 0 failures across 30 measured runs | Skipped, `NON_COMPLIANT_OR_MISSING_PROOF_INPUTS` |
+| Invalid registry | `PROP-004` | 100000 | Reject failed registry verification | Reject, 0 failures across 30 measured runs | Skipped, `NO_ENCUMBRANCE` |
+
+The matrix separates correctness from throughput. Passing cases generate Groth16 proofs. Rejected cases return compliance failure without invoking proof generation, which is the intended behavior because there is no valid proof statement to submit on chain.
+
+## Primary Local Latency Results
+
+Primary compliant path: `PROP-001`, principal `750000`, 5 warm-up runs and 30 measured runs.
 
 | Metric | Runs | Failures | Min ms | Median ms | Mean ms | P95 ms | Max ms | Std dev |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Build verification input | 30 | 0 | 2.88 | 3.65 | 3.73 | 4.79 | 4.92 | 0.50 |
-| Build compliance inputs | 30 | 0 | 4.48 | 5.02 | 5.35 | 7.10 | 7.87 | 0.72 |
-| Generate Groth16 proof | 30 | 0 | 532.51 | 547.53 | 573.10 | 682.98 | 691.24 | 49.14 |
-| Oracle `/verify` latency | 30 | 0 | 6.58 | 7.70 | 8.11 | 10.04 | 14.49 | 1.45 |
-| Oracle `/compliance` latency | 30 | 0 | 539.48 | 555.20 | 583.46 | 702.65 | 721.27 | 51.27 |
+| Build verification input | 30 | 0 | 1.91 | 3.05 | 3.22 | 4.77 | 7.94 | 1.09 |
+| Build compliance inputs | 30 | 0 | 3.19 | 3.73 | 4.01 | 5.31 | 6.72 | 0.79 |
+| Generate Groth16 proof | 30 | 0 | 372.42 | 399.53 | 407.55 | 469.53 | 481.21 | 24.66 |
+| Oracle `/verify` latency | 30 | 0 | 5.02 | 5.98 | 6.78 | 11.45 | 12.54 | 1.91 |
+| Oracle `/compliance` latency | 30 | 0 | 377.61 | 409.16 | 413.27 | 480.30 | 487.67 | 22.65 |
 
-Interpretation:
+Proof generation remains the dominant local latency component. Median proof generation is 399.53 ms and median `/compliance` latency is 409.16 ms, indicating that API overhead is small relative to proving time.
 
-- Proof generation dominates local latency.
-- Oracle `/verify` is fast because it only evaluates registry rules and computes commitments.
-- Oracle `/compliance` is close to proof generation time because it includes proof generation inside the API request.
+## Boundary and Failure-Case Latency Results
+
+| Case | Metric | Runs | Failures | Median ms | Mean ms | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Boundary | Generate Groth16 proof | 30 | 0 | 437.08 | 471.37 | Proof generated at exactly 80% LTV |
+| Boundary | Oracle `/compliance` latency | 30 | 0 | 432.62 | 451.57 | Includes proof generation |
+| Non-compliant | Build compliance inputs | 30 | 0 | 3.24 | 3.37 | Rejects above 80% LTV |
+| Non-compliant | Oracle `/compliance` latency | 30 | 0 | 5.38 | 5.54 | Proof generation skipped |
+| Invalid registry | Build compliance inputs | 30 | 0 | 0.19 | 0.19 | Fails registry validation |
+| Invalid registry | Oracle `/compliance` latency | 30 | 0 | 1.56 | 1.66 | Proof generation skipped |
+
+Rejected paths are faster because the oracle does not invoke Groth16 proof generation when the LTV predicate or registry validation fails.
+
+## Bounded Repeated-Run Stability
+
+All stability runs use `PROP-001` with principal `750000` and the same local Oracle API. This is a repeated local workload, not a public-chain throughput or concurrent-user benchmark.
+
+| Measured runs | Failures | Median proof ms | Mean proof ms | P95 proof ms | Median `/compliance` ms | P95 `/compliance` ms |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 0 | 441.43 | 455.58 | n/a | 428.45 | n/a |
+| 30 | 0 | 399.53 | 407.55 | 469.53 | 409.16 | 480.30 |
+| 50 | 0 | 406.01 | 413.36 | 440.06 | 408.36 | 475.02 |
+
+The 10/30/50-run results show zero failures and similar median proof-generation latency. The evaluation is intentionally bounded to repeated local proof-generation workloads; it does not claim production scalability, public-chain throughput, or concurrent-traffic capacity.
 
 ## Gas Snapshot
 
@@ -122,10 +171,10 @@ Final benchmark checkout production build snapshot from `docs/evaluation-notes.m
 
 | Asset | Size | Gzip |
 | --- | ---: | ---: |
-| `dist/index.html` | 0.40 kB | 0.26 kB |
+| `dist/index.html` | 0.40 kB | 0.27 kB |
 | `dist/assets/index-BFtmxQu3.css` | 64.46 kB | 12.05 kB |
-| `dist/assets/ccip-B5I7aiLd.js` | 3.04 kB | 1.39 kB |
-| `dist/assets/index-DrKouoma.js` | 631.18 kB | 189.69 kB |
+| `dist/assets/ccip-DAv_GoVX.js` | 3.04 kB | 1.39 kB |
+| `dist/assets/index-B72wscIt.js` | 636.26 kB | 189.62 kB |
 
 ## Local E2E Demo Duration
 
@@ -140,17 +189,9 @@ This duration includes Oracle verification, compliance proof generation, on-chai
 ## Reporting Rules
 
 - These results are local results, not Sepolia results.
-- Testnet latency should not be mixed into this table.
-- Earlier smoke benchmark files are not cited as final results.
-- Median is p50; it is not reported as a separate metric.
+- Testnet latency should not be mixed into local performance tables.
+- Warm-up runs are excluded from all summary statistics.
+- Median is p50.
 - Raw data is preserved for reproducibility.
-- The final raw benchmark records git commit `4f2acc59d660c7d3666b9f55861b58f13995431c` with `dirty: false`.
-
-## Benchmark Scope and Future Extensions
-
-The final benchmark covers the compliant path for `PROP-001` and principal `750000`. This is the canonical successful proof-generation path for the dissertation evaluation. Future benchmark extensions could add:
-
-- exact-boundary case: `PROP-001`, `784000`;
-- non-compliant case: `PROP-001`, `784001`;
-- invalid registry case: `PROP-004`, `100000`;
-- optional Sepolia transaction latency if RPC and funds are stable.
+- The September 2026 benchmark metadata records git commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true` because manuscript and documentation updates were in progress.
+- The bounded scalability table reports repeated local proof-generation stability, not concurrent production throughput.

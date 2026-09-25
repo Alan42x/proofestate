@@ -82,6 +82,32 @@ The attacker is not assumed to:
 | Malformed property/principal input | Oracle validates network, property ID, and principal types/ranges | Oracle API tests |
 | Unsupported network access | Dataset access is restricted to `localhost` and `sepolia` | Oracle API tests |
 
+## Code Review and Adversarial Testing Matrix
+
+The security review was performed as a bounded prototype review rather than a production audit. The review checked role boundaries, proof public-signal binding, state-transition invariants, Oracle API input validation, hosted-API exposure, and runtime-secret handling. The review did not include a third-party audit, fuzzing campaign, formal verification, or production key-management review.
+
+| Category | Adversarial scenario | Expected behavior | Evidence |
+| --- | --- | --- | --- |
+| Role boundary | Non-oracle account attempts to write property verification | Transaction reverts | Contract tests |
+| Role boundary | Direct compliance write bypasses `ComplianceVerifier` | Transaction reverts | Contract tests |
+| Role boundary | Non-loan-officer attempts approval or rejection | Transaction reverts | Contract tests |
+| Admin safety | Final protocol admin is removed | Transaction reverts | Contract tests |
+| Proof binding | Proof public signal uses a different property identifier | Compliance update reverts | Contract tests |
+| Proof binding | Proof public signal uses a stale valuation commitment | Compliance update reverts or stale state is cleared on refresh | Contract tests |
+| Proof binding | Proof public signal uses a different principal commitment | Compliance update or loan approval is rejected | Contract tests |
+| Policy binding | Public signal changes the LTV threshold | Compliance update reverts | Contract tests |
+| Proof integrity | Groth16 proof calldata is tampered with | Generated verifier rejects the proof | Contract tests |
+| Boundary correctness | Principal is exactly `784000` for `PROP-001` | Accepted at exactly 80% LTV | Benchmark correctness matrix |
+| Boundary correctness | Principal is `784001` for `PROP-001` | Rejected without proof generation | Benchmark correctness matrix |
+| Registry failure | `PROP-004` fails registry validation | Rejected without proof generation | Oracle API tests; benchmark correctness matrix |
+| Lifecycle state | Property verification is refreshed after compliance | Prior compliance and principal binding are cleared | Contract tests |
+| Lifecycle state | Same property is reused while an active loan exists | Second active loan is rejected | Contract tests |
+| Lifecycle state | Non-borrower attempts cancellation or repayment | Transaction reverts | Contract tests |
+| API input abuse | Unsupported network, missing property ID, non-string property ID, or invalid principal is submitted | API returns validation failure without server crash | Oracle API tests |
+| Frontend readiness | Wallet/readiness controls are unavailable or disconnected | UI remains in guarded readiness state | Frontend tests |
+
+This matrix supports the claim that security testing and adversarial testing were performed for the prototype scope. It should not be described as a formal audit or as evidence of production readiness.
+
 ## Hosted Oracle API Exposure
 
 The hosted Oracle API is a demo/testnet service, not a production public transaction gateway. The current Express API accepts cross-origin requests and does not implement application-level authentication, rate limiting, request signing, or per-origin transaction policy.

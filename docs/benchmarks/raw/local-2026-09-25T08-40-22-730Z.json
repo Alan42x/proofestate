@@ -1,0 +1,969 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-25T08:40:21.563Z",
+  "methodology": {
+    "warmups": 5,
+    "measuredRuns": 30,
+    "network": "localhost",
+    "propertyId": "PROP-001",
+    "principal": "750000",
+    "apiUrl": "http://127.0.0.1:8787"
+  },
+  "environment": {
+    "os": "Darwin 23.1.0 x64",
+    "cpu": "Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz",
+    "node": "v20.20.2",
+    "pnpm": "10.9.0",
+    "hardhat": "2.28.6",
+    "snarkjs": "see package lock / pnpm exec snarkjs output",
+    "git": {
+      "commit": "5f512070cbfc8c0b40d50d2be50d6595b17f29a7",
+      "dirty": true,
+      "statusShort": "M docs/benchmarks/final-benchmarks.md\n M docs/evaluation-notes.md\n M thesis/thesis.md\n?? docs/benchmarks/raw/local-2026-09-25T08-31-48-821Z.json\n?? docs/benchmarks/raw/local-2026-09-25T08-32-12-086Z.json\n?? docs/benchmarks/raw/local-2026-09-25T08-32-24-316Z.json\n?? docs/benchmarks/raw/local-2026-09-25T08-32-36-406Z.json\n?? docs/benchmarks/raw/local-2026-09-25T08-33-01-512Z.json\n?? docs/benchmarks/raw/local-2026-09-25T08-33-59-578Z.json\n?? docs/benchmarks/raw/local-2026-09-25T08-38-18-654Z.json\n?? docs/benchmarks/raw/local-2026-09-25T08-38-46-670Z.json\n?? docs/benchmarks/raw/local-2026-09-25T08-39-10-679Z.json\n?? thesis/cover-letter.md\n?? thesis/declarations.md\n?? thesis/docx/\n?? thesis/highlights.md\n?? thesis/manuscript.md"
+    }
+  },
+  "summaries": {
+    "buildVerification": {
+      "runs": 30,
+      "failures": 0,
+      "minMs": 1.9067919999979495,
+      "maxMs": 7.942047000000457,
+      "meanMs": 3.2210059666661435,
+      "medianMs": 3.0532100000000355,
+      "p95Ms": 4.765292000000045,
+      "stddevMs": 1.0901693602029483
+    },
+    "buildComplianceInputs": {
+      "runs": 30,
+      "failures": 0,
+      "minMs": 3.187604000002466,
+      "maxMs": 6.715932999999495,
+      "meanMs": 4.014642933333652,
+      "medianMs": 3.7283339999994496,
+      "p95Ms": 5.3135480000000825,
+      "stddevMs": 0.7946266506313844
+    },
+    "generateComplianceProof": {
+      "runs": 30,
+      "failures": 0,
+      "minMs": 372.42175700000007,
+      "maxMs": 481.21413799999937,
+      "meanMs": 407.5532468666667,
+      "medianMs": 399.5274989999998,
+      "p95Ms": 469.5346669999999,
+      "stddevMs": 24.661125732107102
+    },
+    "apiVerify": {
+      "runs": 30,
+      "failures": 0,
+      "minMs": 5.021048000000519,
+      "maxMs": 12.53627200000119,
+      "meanMs": 6.784361599999951,
+      "medianMs": 5.981515000003128,
+      "p95Ms": 11.45351699999992,
+      "stddevMs": 1.910411453714453
+    },
+    "apiCompliance": {
+      "runs": 30,
+      "failures": 0,
+      "minMs": 377.60631999999896,
+      "maxMs": 487.6694630000002,
+      "meanMs": 413.2717077000004,
+      "medianMs": 409.16133600000103,
+      "p95Ms": 480.3021660000013,
+      "stddevMs": 22.64531502202952
+    }
+  },
+  "failures": [],
+  "frontendBundleSizes": [
+    {
+      "asset": "index-B72wscIt.js",
+      "bytes": 636260
+    },
+    {
+      "asset": "index-BFtmxQu3.css",
+      "bytes": 64463
+    },
+    {
+      "asset": "ccip-DAv_GoVX.js",
+      "bytes": 3042
+    }
+  ],
+  "rawSamples": [
+    {
+      "label": "warmup:buildVerification",
+      "durationMs": 534.9237499999999,
+      "ok": true
+    },
+    {
+      "label": "warmup:buildComplianceInputs",
+      "durationMs": 5.116761999999994,
+      "ok": true
+    },
+    {
+      "label": "warmup:generateComplianceProof",
+      "durationMs": 751.3214380000001,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiVerify",
+      "durationMs": 43.79845699999987,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiCompliance",
+      "durationMs": 429.71404900000016,
+      "ok": true
+    },
+    {
+      "label": "warmup:buildVerification",
+      "durationMs": 3.606740999999829,
+      "ok": true
+    },
+    {
+      "label": "warmup:buildComplianceInputs",
+      "durationMs": 4.204520000000002,
+      "ok": true
+    },
+    {
+      "label": "warmup:generateComplianceProof",
+      "durationMs": 408.2539509999999,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiVerify",
+      "durationMs": 6.421968000000106,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiCompliance",
+      "durationMs": 428.6126440000003,
+      "ok": true
+    },
+    {
+      "label": "warmup:buildVerification",
+      "durationMs": 3.0967090000003736,
+      "ok": true
+    },
+    {
+      "label": "warmup:buildComplianceInputs",
+      "durationMs": 4.7510409999999865,
+      "ok": true
+    },
+    {
+      "label": "warmup:generateComplianceProof",
+      "durationMs": 431.188842,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiVerify",
+      "durationMs": 6.89947200000006,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiCompliance",
+      "durationMs": 407.854151,
+      "ok": true
+    },
+    {
+      "label": "warmup:buildVerification",
+      "durationMs": 3.0646829999996044,
+      "ok": true
+    },
+    {
+      "label": "warmup:buildComplianceInputs",
+      "durationMs": 4.05771199999981,
+      "ok": true
+    },
+    {
+      "label": "warmup:generateComplianceProof",
+      "durationMs": 398.174767,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiVerify",
+      "durationMs": 5.98861799999986,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiCompliance",
+      "durationMs": 394.7592060000002,
+      "ok": true
+    },
+    {
+      "label": "warmup:buildVerification",
+      "durationMs": 2.916095999999925,
+      "ok": true
+    },
+    {
+      "label": "warmup:buildComplianceInputs",
+      "durationMs": 3.7955110000002605,
+      "ok": true
+    },
+    {
+      "label": "warmup:generateComplianceProof",
+      "durationMs": 450.05594199999996,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiVerify",
+      "durationMs": 6.05281500000001,
+      "ok": true
+    },
+    {
+      "label": "warmup:apiCompliance",
+      "durationMs": 396.71731,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.5537850000000617,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.895070000000487,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 469.5346669999999,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 6.40977600000042,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 410.47307,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.6105740000002697,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 5.149049999999988,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 423.14869199999976,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.791206999999304,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 400.0384489999997,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.9524559999999838,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.2645280000006096,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 398.2318000000005,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 11.009624999999687,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 392.4559569999992,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.559998999999152,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 5.237984999999753,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 398.8867650000002,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.677671000001283,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 407.49077300000135,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.274495999999999,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.5747360000004846,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 406.71690500000113,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.440104999999676,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 431.14857200000006,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.915510999999242,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 6.715932999999495,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 452.9249149999996,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 7.159160999999585,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 410.571946,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.3839629999984027,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.5799070000011852,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 399.5274989999998,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 6.210965000000215,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 487.6694630000002,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.7991210000000137,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.411747000000105,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 377.42293400000017,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 11.45351699999992,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 399.3420669999996,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.0532100000000355,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 4.2347719999997935,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 391.0428499999998,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.021048000000519,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 409.2001770000006,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.18982799999867,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.6062220000003435,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 405.5072650000002,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.729945999999472,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 403.3512389999996,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.788228999999774,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 5.3135480000000825,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 416.24132800000007,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.260904999999184,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 400.5721889999986,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.8338149999999587,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.395201999999699,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 400.3965879999996,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.8444909999998345,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 377.60631999999896,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.8532500000001164,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 4.0854810000000725,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 392.8572320000003,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 6.40425900000082,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 425.91896799999995,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.2428450000006706,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.536039000000528,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 400.4074920000021,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.431276999999682,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 403.47182200000316,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.2980349999997998,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.9062989999983984,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 391.44978099999935,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 9.373681999997643,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 409.16133600000103,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.644643999999971,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 4.217155999998795,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 407.86577899999975,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.459802000001218,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 404.00470700000005,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.712878999998793,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.4671010000020033,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 396.7300490000016,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.95025700000042,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 398.5542629999982,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.816499999997177,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.610493000000133,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 384.89600900000005,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 6.071648999997706,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 381.8649350000014,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.763548000002629,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 4.4635269999998854,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 394.41862500000207,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.519691999998031,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 407.3274300000012,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.297884999999951,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.2788190000028408,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 390.8031200000005,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.848444999999629,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 480.3021660000013,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 7.942047000000457,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 5.17893400000321,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 398.117424,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.680534999999509,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 397.1850290000002,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.1711279999981343,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.337919999998121,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 388.4291680000024,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 6.879355999997642,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 419.42729300000065,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 1.9067919999979495,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.187604000002466,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 430.0608949999987,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.9996009999995294,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 420.61409300000014,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.36229800000001,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.702755000002071,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 402.7105449999981,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.981515000003128,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 428.64662300000055,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 4.765292000000045,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 4.592113999999128,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 440.54326299999957,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 7.645327999998699,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 399.71739700000035,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.921415999997407,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.734426999999414,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 397.0127489999977,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 6.430948000001081,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 428.1974470000023,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.332481999997981,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 4.047922000001563,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 401.2300130000003,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 12.53627200000119,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 412.9610990000001,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 1.9506540000002133,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.7439220000014757,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 415.8471589999972,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 5.733581000000413,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 415.3610630000003,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 3.2231250000004366,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.241740999998001,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 372.42175700000007,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 9.222021000001405,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 416.7394510000013,
+      "ok": true
+    },
+    {
+      "label": "measured:buildVerification",
+      "durationMs": 2.5103719999970053,
+      "ok": true
+    },
+    {
+      "label": "measured:buildComplianceInputs",
+      "durationMs": 3.7283339999994496,
+      "ok": true
+    },
+    {
+      "label": "measured:generateComplianceProof",
+      "durationMs": 481.21413799999937,
+      "ok": true
+    },
+    {
+      "label": "measured:apiVerify",
+      "durationMs": 6.354211000001669,
+      "ok": true
+    },
+    {
+      "label": "measured:apiCompliance",
+      "durationMs": 418.7758869999998,
+      "ok": true
+    }
+  ]
+}

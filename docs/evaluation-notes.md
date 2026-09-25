@@ -1,10 +1,10 @@
 # ProofEstate Evaluation Notes
 
-Updated: 2026-08-03 22:49 +08
+Updated: 2026-09-25 17:45 +08
 
 ## Environment
 
-This evidence snapshot was revalidated under the project-supported Node 20 runtime.
+This evidence file aggregates the Node 20 functional, gas, benchmark, and security-evaluation evidence used by the thesis and manuscript.
 
 | Item | Value |
 | --- | --- |
@@ -15,7 +15,8 @@ This evidence snapshot was revalidated under the project-supported Node 20 runti
 | Hardhat | 2.28.6 |
 | snarkjs | 0.7.6 |
 | circom CLI | 2.2.3 at `$HOME/.cargo/bin/circom`; not on default PATH |
-| Git commit | `4f2acc59d660c7d3666b9f55861b58f13995431c` |
+| Baseline test/gas commit | `4f2acc59d660c7d3666b9f55861b58f13995431c` |
+| Final benchmark raw commit | `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` |
 
 `snarkjs r1cs info zk/build/ltv.r1cs` reports:
 
@@ -69,6 +70,22 @@ Revalidation results:
 - `pnpm test:gas`: passing.
 - README local Markdown links/images: passing.
 - README `pnpm` script references: passing.
+
+Latest functional revalidation run on 2026-09-25 under Node v20.20.2:
+
+```bash
+pnpm test:all
+```
+
+Latest revalidation results:
+
+- `pnpm test:all`: passing.
+- Contract tests: 28 passing.
+- Oracle API tests: 12 passing.
+- Frontend tests: 6 passing.
+- Frontend production build: passing.
+- The first sandboxed Oracle API test attempt failed with local `127.0.0.1` listen `EPERM`; the same command passed when rerun with local port access.
+
 
 Notes:
 
@@ -139,23 +156,55 @@ Final benchmark checkout production build output:
 
 | Asset | Size | Gzip |
 | --- | ---: | ---: |
-| `dist/index.html` | 0.40 kB | 0.26 kB |
+| `dist/index.html` | 0.40 kB | 0.27 kB |
 | `dist/assets/index-BFtmxQu3.css` | 64.46 kB | 12.05 kB |
-| `dist/assets/ccip-B5I7aiLd.js` | 3.04 kB | 1.39 kB |
-| `dist/assets/index-DrKouoma.js` | 631.18 kB | 189.69 kB |
+| `dist/assets/ccip-DAv_GoVX.js` | 3.04 kB | 1.39 kB |
+| `dist/assets/index-B72wscIt.js` | 636.26 kB | 189.62 kB |
 
 `du -sh frontend/dist` reports `2.5M`.
 
 ## Benchmark Snapshot
 
-The current formal local benchmark is recorded in:
+The current formal local benchmark summary is recorded in:
 
 ```text
 docs/benchmarks/final-benchmarks.md
-docs/benchmarks/raw/local-2026-08-03T14-49-27-759Z.json
 ```
 
-It uses 5 warm-up iterations and 30 measured iterations for `PROP-001` with principal `750000`.
+The current benchmark set includes a 30-run compliant path, boundary and failure-case runs, and 10/30/50 repeated-run stability snapshots. Raw JSON files are preserved in `docs/benchmarks/raw/`.
+
+## Experiment Matrix Revalidation
+
+Additional local benchmark runs were collected on 2026-09-25 under Node v20.20.2 to cover correctness boundary and failure cases in addition to the original compliant path. The Oracle API was run locally on `http://127.0.0.1:8787`. Local port access required running the Oracle API and benchmark commands outside the filesystem sandbox.
+
+Raw files:
+
+| Case | Property | Principal | Runs | Raw file | Result |
+| --- | --- | ---: | ---: | --- | --- |
+| Compliant | `PROP-001` | 750000 | 30 | `docs/benchmarks/raw/local-2026-09-25T08-40-22-730Z.json` | Pass, 0 failures, proof generated |
+| Boundary | `PROP-001` | 784000 | 30 | `docs/benchmarks/raw/local-2026-09-25T08-38-18-654Z.json` | Pass, 0 failures, proof generated |
+| Non-compliant | `PROP-001` | 784001 | 30 | `docs/benchmarks/raw/local-2026-09-25T08-38-46-670Z.json` | Reject, 0 failures, proof skipped |
+| Invalid registry | `PROP-004` | 100000 | 30 | `docs/benchmarks/raw/local-2026-09-25T08-40-41-666Z.json` | Reject with `NO_ENCUMBRANCE`, proof skipped |
+| Stability 10-run | `PROP-001` | 750000 | 10 | `docs/benchmarks/raw/local-2026-09-25T08-33-01-512Z.json` | Pass, 0 failures |
+| Stability 50-run | `PROP-001` | 750000 | 50 | `docs/benchmarks/raw/local-2026-09-25T08-33-59-578Z.json` | Pass, 0 failures |
+
+Primary compliant-path latency from the 30-run revalidation:
+
+| Metric | Median ms | Mean ms | P95 ms |
+| --- | ---: | ---: | ---: |
+| Generate Groth16 proof | 399.53 | 407.55 | 469.53 |
+| Oracle `/verify` latency | 5.98 | 6.78 | 11.45 |
+| Oracle `/compliance` latency | 409.16 | 413.27 | 480.30 |
+
+Bounded stability results for repeated compliant proof generation:
+
+| Measured runs | Failures | Median proof ms | P95 proof ms |
+| ---: | ---: | ---: | ---: |
+| 10 | 0 | 441.43 | n/a |
+| 30 | 0 | 399.53 | 469.53 |
+| 50 | 0 | 406.01 | 440.06 |
+
+These runs characterize local repeated proof-generation stability and selected correctness/failure cases. They do not claim public-chain throughput or concurrent production scalability. The raw files record git commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true` because manuscript and documentation updates were in progress.
 
 ## Sensitive and Runtime File Check
 

@@ -14,7 +14,7 @@ The proof establishes that the requested principal is no more than 80 percent of
 
 The prototype implements a complete local workflow in which the oracle verifies a mock property record, computes commitments, generates Groth16 proof calldata, submits proof data to an on-chain verifier, and enables a role-gated lending contract to approve or reject a loan only when compliance is bound to the relevant property and principal commitment. The accompanying DApp exposes borrower, loan-officer, administrator, readiness, and audit views for inspection and evaluation.
 
-The evaluation is local-first to preserve reproducibility. It includes 28 passing contract tests, 12 passing oracle API tests, 6 passing frontend tests, a passing frontend production build, a gas baseline, circuit-size inspection, local end-to-end workflow evidence, and a 30-run benchmark of the successful proof-generation path. The benchmark shows that Groth16 proof generation dominates local latency: median proof generation is 547.53 ms, while median oracle `/compliance` latency is 555.20 ms. The measured average gas for `ComplianceVerifier.verifyProofAndSetCompliance` is 310411.
+The evaluation is local-first to preserve reproducibility. It includes 28 passing contract tests, 12 passing oracle API tests, 6 passing frontend tests, a passing frontend production build, a gas baseline, circuit-size inspection, local end-to-end workflow evidence, a 30-run compliant-path benchmark, a 30-run correctness matrix for boundary and rejection cases, and a bounded 10/30/50 repeated-run stability snapshot. The benchmark shows that Groth16 proof generation dominates local latency: median proof generation is 399.53 ms, while median oracle `/compliance` latency is 409.16 ms. The measured average gas for `ComplianceVerifier.verifyProofAndSetCompliance` is 310411.
 
 ProofEstate is not a production lending protocol. It uses a mock registry, a centralized oracle, prototype Groth16 setup artifacts, and no real ETH/ERC20 disbursement, KYC/AML, liquidation, production monitoring, or decentralized oracle governance. Its contribution is a bounded but complete architecture pattern: sensitive off-chain facts can be committed, proven against a specific compliance rule in zero knowledge, and used to drive auditable smart-contract state without revealing the underlying values on chain.
 
@@ -394,7 +394,7 @@ loanPrincipal * 10000 <= propertyValue * maxLtvBps
 
 with `maxLtvBps = 8000`.
 
-![ZK proof workflow](../docs/figures/04-zk-proof-workflow.png)
+![ZK proof workflow](../docs/figures/04-zk-proof-workflow.png){width=3.25in}
 
 *Figure 4. Zero-knowledge proof workflow showing witness construction, commitment generation, Groth16 proof generation, public-signal binding, and on-chain verification.*
 
@@ -461,29 +461,51 @@ The repository includes implementation and evidence artifacts intended to suppor
 - benchmark summaries and raw benchmark JSON;
 - local deployment and workflow instructions;
 - local DApp screenshot evidence;
-- a final benchmark raw file with clean git metadata.
+- a final experiment-matrix benchmark set covering compliant, boundary, rejection, and repeated-run stability cases.
 
-The final benchmark raw file is:
+The final benchmark summary is:
 
 ```text
-docs/benchmarks/raw/local-2026-08-03T14-49-27-759Z.json
+docs/benchmarks/final-benchmarks.md
 ```
 
-It records git commit `4f2acc59d660c7d3666b9f55861b58f13995431c` with `dirty: false`.
+The primary compliant-path raw file is:
+
+```text
+docs/benchmarks/raw/local-2026-09-25T08-40-22-730Z.json
+```
+
+The September 2026 raw files record git commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true` because manuscript and documentation updates were intentionally in progress while the final experiment-matrix evidence was collected.
 
 ## 5. Evaluation
 
 ### 5.1 Methodology
 
-The evaluation is local-first. This choice is deliberate: local execution is reproducible, independent of public RPC availability, and suitable for consistent gas and proof-generation measurements. The results should therefore be interpreted as controlled prototype measurements, not public-network throughput claims.
+The evaluation is local-first. This choice is deliberate: local execution is reproducible, independent of public RPC availability, and suitable for consistent proof-generation, API-latency, and gas measurements. The results should therefore be interpreted as controlled prototype measurements, not public-network throughput claims.
 
-The final benchmark was collected with:
+The September 2026 evaluation adds a correctness matrix and bounded repeated-run stability snapshot to the earlier compliant-path benchmark. The primary compliant-path command was:
 
 ```bash
 pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
 ```
 
-The benchmark uses 5 warm-up iterations and 30 measured iterations. The first five iterations are excluded from summary statistics. The evaluated property is `PROP-001`, and the principal is `750000`. The benchmark measures local latency and excludes Sepolia transaction latency.
+The boundary and failure-case commands were:
+
+```bash
+pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=784000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=784001 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-004 --principal=100000 --api=http://127.0.0.1:8787
+```
+
+The bounded repeated-run stability commands were:
+
+```bash
+pnpm benchmark:local --warmups=5 --runs=10 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=50 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
+```
+
+Warm-up iterations are excluded from summary statistics. Sepolia transaction latency is excluded from local performance claims.
 
 The final benchmark environment is:
 
@@ -496,21 +518,22 @@ The final benchmark environment is:
 | Hardhat | 2.28.6 |
 | snarkjs | 0.7.6 |
 | circom | 2.2.3 at `$HOME/.cargo/bin/circom` |
-| Git commit | `4f2acc59d660c7d3666b9f55861b58f13995431c` |
-| Git dirty flag | `false` |
+| Git commit | `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` |
+| Git dirty flag | `true` during manuscript/documentation updates |
 | Network label | `localhost` |
 
 ### 5.2 Evaluation Questions
 
-The evaluation is organized around five questions that correspond to the research question and design requirements:
+The evaluation is organized around six questions that correspond to the research question and design requirements:
 
 | ID | Evaluation question | Evidence used |
 | --- | --- | --- |
 | EQ1 | Does the implementation enforce the intended role and state-transition rules? | Contract tests, role tests, loan lifecycle tests |
 | EQ2 | Does the ZK proof bind to the intended property, valuation commitment, principal commitment, and LTV threshold? | Circuit design, proof-verifier tests, public-signal mismatch tests |
 | EQ3 | Does the local workflow complete end to end without publishing plaintext valuation or principal on chain? | Local CLI workflow, DApp screenshots, contract state inspection |
-| EQ4 | What are the main local performance costs of the successful proof-generation path? | 30-run benchmark, gas snapshot, circuit-size inspection |
-| EQ5 | What assumptions and residual risks remain after introducing zero-knowledge proofs? | Security analysis, threat model, limitations, hosted Oracle API analysis |
+| EQ4 | Do boundary and failure cases behave correctly? | Correctness matrix for compliant, boundary, non-compliant, and invalid-registry cases |
+| EQ5 | What are the main local performance costs of the successful proof-generation path? | 30-run benchmark, 10/30/50 repeated-run stability snapshot, gas snapshot, circuit-size inspection |
+| EQ6 | What assumptions and residual risks remain after introducing zero-knowledge proofs? | Security analysis, threat model, limitations, hosted Oracle API analysis |
 
 ### 5.3 Metrics and Evidence Mapping
 
@@ -519,6 +542,7 @@ The measured metrics are selected to match the prototype's security and performa
 | Metric category | Metric | Interpretation |
 | --- | --- | --- |
 | Functional correctness | Passing contract, oracle, and frontend tests | Whether implementation behavior matches intended role, proof, API, and UI assumptions |
+| Boundary correctness | Compliant, exact-boundary, non-compliant, and invalid-registry cases | Whether the policy accepts and rejects the intended input classes |
 | Proof performance | Groth16 proof-generation latency | Main off-chain cryptographic cost of the compliance path |
 | API performance | `/verify` and `/compliance` latency | End-user visible oracle-service latency in the local path |
 | On-chain cost | Gas for verification, compliance, and loan lifecycle methods | Cost distribution across proof verification and ordinary lending state transitions |
@@ -547,7 +571,7 @@ The oracle API tests cover service readiness, owner-scoped property listing, uns
 
 The frontend tests cover representative wallet-readiness and table-rendering behavior. The frontend production build passes, with a known Vite chunk-size warning that does not fail the build.
 
-### 5.5 Benchmark Workload
+### 5.5 Correctness Matrix
 
 `PROP-001` has a mock registry valuation of `980000`. Under the 80 percent LTV rule:
 
@@ -555,29 +579,65 @@ The frontend tests cover representative wallet-readiness and table-rendering beh
 980000 * 8000 / 10000 = 784000
 ```
 
-The benchmark principal `750000` is compliant. This final benchmark therefore measures the successful proof-generation path; non-compliant and invalid-registry paths are covered by tests but are not included in the latency table.
+The benchmark matrix uses this value to test the compliant path, exact boundary, one-unit-above-boundary failure, and registry-failure path.
 
-### 5.6 Latency Results
+| Case | Property | Principal | Expected result | Observed result | Proof generation |
+| --- | --- | ---: | --- | --- | --- |
+| Compliant | `PROP-001` | 750000 | Pass | Pass, 0 failures across 30 measured runs | Generated |
+| Boundary | `PROP-001` | 784000 | Pass at exactly 80% LTV | Pass, 0 failures across 30 measured runs | Generated |
+| Non-compliant | `PROP-001` | 784001 | Reject above 80% LTV | Reject, 0 failures across 30 measured runs | Skipped, `NON_COMPLIANT_OR_MISSING_PROOF_INPUTS` |
+| Invalid registry | `PROP-004` | 100000 | Reject failed registry verification | Reject, 0 failures across 30 measured runs | Skipped, `NO_ENCUMBRANCE` |
+
+The matrix separates correctness from throughput. Passing cases generate Groth16 proofs. Rejected cases return compliance failure without invoking proof generation, which is the intended behavior because there is no valid proof statement to submit on chain.
+
+### 5.6 Primary Latency Results
+
+Primary compliant path: `PROP-001`, principal `750000`, 5 warm-up runs and 30 measured runs.
 
 | Metric | Runs | Failures | Min ms | Median ms | Mean ms | P95 ms | Max ms | Std dev |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Build verification input | 30 | 0 | 2.88 | 3.65 | 3.73 | 4.79 | 4.92 | 0.50 |
-| Build compliance inputs | 30 | 0 | 4.48 | 5.02 | 5.35 | 7.10 | 7.87 | 0.72 |
-| Generate Groth16 proof | 30 | 0 | 532.51 | 547.53 | 573.10 | 682.98 | 691.24 | 49.14 |
-| Oracle `/verify` latency | 30 | 0 | 6.58 | 7.70 | 8.11 | 10.04 | 14.49 | 1.45 |
-| Oracle `/compliance` latency | 30 | 0 | 539.48 | 555.20 | 583.46 | 702.65 | 721.27 | 51.27 |
+| Build verification input | 30 | 0 | 1.91 | 3.05 | 3.22 | 4.77 | 7.94 | 1.09 |
+| Build compliance inputs | 30 | 0 | 3.19 | 3.73 | 4.01 | 5.31 | 6.72 | 0.79 |
+| Generate Groth16 proof | 30 | 0 | 372.42 | 399.53 | 407.55 | 469.53 | 481.21 | 24.66 |
+| Oracle `/verify` latency | 30 | 0 | 5.02 | 5.98 | 6.78 | 11.45 | 12.54 | 1.91 |
+| Oracle `/compliance` latency | 30 | 0 | 377.61 | 409.16 | 413.27 | 480.30 | 487.67 | 22.65 |
 
-The results show that proof generation dominates local latency. Building verification and compliance inputs is fast, with median times near or below 5 ms. Oracle `/verify` is also fast because it evaluates registry rules and computes commitments. Oracle `/compliance` has a median latency of 555.20 ms because it includes Groth16 proof generation.
+The results show that proof generation dominates local latency. Building verification and compliance inputs is fast, with median times below 5 ms. Oracle `/verify` is also fast because it evaluates registry rules and computes commitments. Oracle `/compliance` has a median latency of 409.16 ms because it includes Groth16 proof generation.
 
 The difference between proof-generation median latency and Oracle `/compliance` median latency is small:
 
 ```text
-555.20 ms - 547.53 ms = 7.67 ms
+409.16 ms - 399.53 ms = 9.63 ms
 ```
 
 This indicates that API overhead is relatively small compared with proving time in the successful local path.
 
-### 5.7 Gas Results
+### 5.7 Boundary and Failure-Case Latency Results
+
+| Case | Metric | Runs | Failures | Median ms | Mean ms | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Boundary | Generate Groth16 proof | 30 | 0 | 437.08 | 471.37 | Proof generated at exactly 80% LTV |
+| Boundary | Oracle `/compliance` latency | 30 | 0 | 432.62 | 451.57 | Includes proof generation |
+| Non-compliant | Build compliance inputs | 30 | 0 | 3.24 | 3.37 | Rejects above 80% LTV |
+| Non-compliant | Oracle `/compliance` latency | 30 | 0 | 5.38 | 5.54 | Proof generation skipped |
+| Invalid registry | Build compliance inputs | 30 | 0 | 0.19 | 0.19 | Fails registry validation |
+| Invalid registry | Oracle `/compliance` latency | 30 | 0 | 1.56 | 1.66 | Proof generation skipped |
+
+Rejected paths are faster because the oracle does not invoke Groth16 proof generation when the LTV predicate or registry validation fails.
+
+### 5.8 Bounded Repeated-Run Stability
+
+All stability runs use `PROP-001` with principal `750000` and the same local Oracle API. This is a repeated local workload, not a public-chain throughput or concurrent-user benchmark.
+
+| Measured runs | Failures | Median proof ms | Mean proof ms | P95 proof ms | Median `/compliance` ms | P95 `/compliance` ms |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 0 | 441.43 | 455.58 | n/a | 428.45 | n/a |
+| 30 | 0 | 399.53 | 407.55 | 469.53 | 409.16 | 480.30 |
+| 50 | 0 | 406.01 | 413.36 | 440.06 | 408.36 | 475.02 |
+
+The 10/30/50-run results show zero failures and similar median proof-generation latency. This supports the claim that the local proof-generation path is stable for repeated prototype workloads. It does not establish production scalability, public-chain throughput, or concurrent-traffic capacity.
+
+### 5.9 Gas Results
 
 Gas results use the Node 20 evaluation baseline generated with Hardhat gas reporter:
 
@@ -609,7 +669,7 @@ Deployment gas:
 
 The most expensive runtime method in the core proof path is `ComplianceVerifier.verifyProofAndSetCompliance`, with average gas of 310411. This is expected because it performs public signal checks and calls the generated pairing-based verifier. The loan lifecycle methods are cheaper than proof verification, with approval averaging 81464 gas and repayment averaging 57219 gas.
 
-### 5.8 Circuit Size
+### 5.10 Circuit Size
 
 The circuit-size inspection reports:
 
@@ -624,20 +684,20 @@ The circuit-size inspection reports:
 
 The circuit is intentionally small because it proves only one LTV rule. Adding more compliance rules would likely increase circuit size, setup complexity, proof generation time, and verifier maintenance overhead.
 
-### 5.9 Frontend Build Size
+### 5.11 Frontend Build Size
 
 The final frontend production build snapshot is:
 
 | Asset | Size | Gzip |
 | --- | ---: | ---: |
-| `dist/index.html` | 0.40 kB | 0.26 kB |
+| `dist/index.html` | 0.40 kB | 0.27 kB |
 | `dist/assets/index-BFtmxQu3.css` | 64.46 kB | 12.05 kB |
-| `dist/assets/ccip-B5I7aiLd.js` | 3.04 kB | 1.39 kB |
-| `dist/assets/index-DrKouoma.js` | 631.18 kB | 189.69 kB |
+| `dist/assets/ccip-DAv_GoVX.js` | 3.04 kB | 1.39 kB |
+| `dist/assets/index-B72wscIt.js` | 636.26 kB | 189.62 kB |
 
 `du -sh frontend/dist` reports `2.5M`.
 
-### 5.10 Local End-to-End Workflow Evidence
+### 5.12 Local End-to-End Workflow Evidence
 
 The local CLI workflow completes the full sequence:
 
@@ -662,7 +722,7 @@ This duration includes oracle verification, compliance proof generation, on-chai
 
 *Figure 6. DApp evidence for the completed local workflow. The loan state is `Repaid`, proof binding remains matched, and the active collateral lock has been released.*
 
-### 5.11 Threats to Validity
+### 5.13 Threats to Validity
 
 The evaluation is designed to support a bounded prototype claim rather than a production performance claim. The main threats to validity are as follows.
 
@@ -670,19 +730,21 @@ Internal validity is affected by the use of a mock property registry and a singl
 
 External validity is limited because all benchmark latency results are local. Hardhat provides reproducible execution and stable gas measurement, but it does not model public network congestion, RPC provider variability, wallet confirmation delays, or Sepolia transaction inclusion time.
 
-Construct validity is limited by the benchmark workload. The final latency table measures the successful proof-generation path for one property and one compliant principal. Non-compliant, exact-boundary, and invalid-registry cases are covered by tests, but they are not included as separate latency distributions.
+Construct validity is limited by the benchmark scope. The updated matrix covers the successful path, exact boundary, one-unit-above-boundary rejection, invalid-registry rejection, and repeated proof-generation runs. It still does not measure concurrent production traffic, public-chain inclusion latency, or throughput under multiple independent borrowers.
 
-Reproducibility risk is reduced by recording the command, environment, raw benchmark file, git commit, and dirty flag. However, hardware, Node.js runtime behavior, and dependency versions may still affect absolute latency values. The most robust interpretation is therefore comparative within the local run: proof generation dominates ordinary API and input-construction overhead.
+Reproducibility risk is reduced by recording the command, environment, raw benchmark file, git commit, and dirty flag. The September 2026 benchmark files record `dirty: true` because manuscript and documentation changes were in progress during the run. Hardware, Node.js runtime behavior, and dependency versions may still affect absolute latency values.
 
-### 5.12 Evaluation Interpretation
+### 5.14 Evaluation Interpretation
 
-The evaluation supports three conclusions.
+The evaluation supports four conclusions.
 
 First, the implementation is functionally complete within the declared prototype scope. The full local workflow can be executed, and the test suites cover the core success and failure paths.
 
-Second, proof generation is the main latency cost. The median proof-generation time is 547.53 ms, while the median oracle `/compliance` latency is 555.20 ms. This indicates that optimizing proof generation would have greater impact than optimizing ordinary API request handling.
+Second, the correctness matrix supports the LTV boundary claim. The system accepts a principal below the 80% limit, accepts the exact 80% boundary, rejects a principal one unit above the limit without proof generation, and rejects an encumbered registry record without proof generation.
 
-Third, on-chain verification is practical for the prototype but non-negligible. The verifier call is more expensive than simple loan lifecycle state updates. This supports the architectural choice to prove a narrow rule rather than aggregating many policies into one larger circuit.
+Third, proof generation is the main latency cost. In the primary 30-run compliant benchmark, median proof-generation time is 399.53 ms and median oracle `/compliance` latency is 409.16 ms. This indicates that optimizing proof generation would have greater impact than optimizing ordinary API request handling.
+
+Fourth, on-chain verification is practical for the prototype but non-negligible. The verifier call is more expensive than simple loan lifecycle state updates. This supports the architectural choice to prove a narrow rule rather than aggregating many policies into one larger circuit.
 
 The evaluation does not claim production throughput. It measures repeated local execution for a thesis prototype with one oracle process, a mock registry, and a local Hardhat chain.
 
@@ -781,6 +843,21 @@ The security claim can be decomposed into concrete properties. Each property is 
 | Loan approval integrity | `Lending` checks owner, verification, compliance, principal binding, role, and state | Loan lifecycle tests | Loan officer can still make discretionary approval/rejection decisions |
 | Collateral lock | `activeLoanByProperty` prevents duplicate active borrowing | Contract tests | No real lien, liquidation, or legal collateral integration |
 | Administrative continuity | Final admin removal is blocked | RoleAdminManager tests | No multisig, timelock, or emergency pause |
+
+The adversarial test matrix used for the prototype is summarized below. It consolidates contract, Oracle API, frontend, and benchmark evidence into security-relevant attack or misuse cases.
+
+| Category | Scenario | Expected behavior | Evidence |
+| --- | --- | --- | --- |
+| Role misuse | Non-oracle, non-verifier, non-loan-officer, or non-borrower calls a privileged function | Revert or guarded failure | Contract tests |
+| Proof misuse | Proof is tampered with or public signals bind to the wrong property, valuation, principal, or threshold | Compliance update rejected | Contract tests |
+| Boundary abuse | Principal is exactly at, or one unit above, the 80 percent LTV boundary | Boundary passes; over-limit case rejects without proof generation | Benchmark matrix |
+| Registry failure | Encumbered property record is submitted | Oracle rejects and skips proof generation | Oracle API tests; benchmark matrix |
+| State replay | Property verification is refreshed after compliance | Stale compliance and principal binding are cleared | Contract tests |
+| Collateral reuse | Borrower attempts another active loan for the same property | Duplicate active borrowing is rejected | Contract tests |
+| API abuse | Malformed property ID, unsupported network, or invalid principal is submitted | API returns validation failure without server error | Oracle API tests |
+| Frontend readiness | User reaches the DApp before wallet/readiness conditions are satisfied | Interface remains in readiness-gated state | Frontend tests |
+
+The matrix is evidence of systematic prototype-level security and adversarial testing. It is not a third-party audit and does not establish production security.
 
 ### 6.6 Privacy Boundary
 
@@ -941,7 +1018,7 @@ Any production adaptation would require legal, regulatory, and operational revie
 
 ProofEstate demonstrates that a sensitive lending compliance rule can be proven privately and enforced on chain. The implemented system proves that a requested principal is at most 80 percent of a property valuation without publishing either plaintext value on chain. It binds proof public signals to property state and principal commitments, and then uses that compliance state to control a role-gated loan lifecycle.
 
-The evaluation shows that the system is reproducible locally and functionally complete within its scoped prototype. The system passes contract, oracle, frontend, build, gas, and local workflow checks. The final benchmark shows median Groth16 proof generation time of 547.53 ms, median oracle `/compliance` latency of 555.20 ms, and average on-chain proof verification gas of 310411. These results support the conclusion that proof generation is the dominant latency cost and that on-chain verification is practical for a narrow prototype rule.
+The evaluation shows that the system is reproducible locally and functionally complete within its scoped prototype. The system passes contract, oracle, frontend, build, gas, and local workflow checks, and the final experiment matrix covers the successful path, exact 80 percent boundary, one-unit-above rejection, and registry-failure rejection. The final compliant-path benchmark shows median Groth16 proof generation time of 399.53 ms, median oracle `/compliance` latency of 409.16 ms, and average on-chain proof verification gas of 310411. These results support the conclusion that proof generation is the dominant latency cost and that on-chain verification is practical for a narrow prototype rule.
 
 The project remains bounded by important limitations: centralized oracle trust, mock registry data, prototype setup artifacts, no proof freshness, and no real lending settlement. Within those boundaries, ProofEstate provides a coherent implementation pattern for combining commitments, zero-knowledge proofs, and smart contracts to preserve privacy while maintaining auditable compliance enforcement.
 
@@ -978,7 +1055,7 @@ pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=75000
 | --- | --- |
 | `docs/evaluation-notes.md` | Final functional and environment evidence |
 | `docs/benchmarks/final-benchmarks.md` | Final benchmark summary |
-| `docs/benchmarks/raw/local-2026-08-03T14-49-27-759Z.json` | Final raw benchmark data |
+| `docs/benchmarks/raw/local-2026-09-25T08-40-22-730Z.json` | Primary final compliant-path raw benchmark data |
 | `docs/smart-contract-interface-spec.md` | Contract interface specification |
 | `docs/zk-proof-design.md` | ZK proof design |
 | `docs/security-evaluation-report.md` | Security evaluation |
