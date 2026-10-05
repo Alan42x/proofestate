@@ -447,7 +447,7 @@ The React DApp supports the end-to-end inspection workflow. It includes:
 
 The DApp improves usability and observability, but it does not replace contract validation. The contracts and oracle API remain responsible for enforcing security-critical checks. The screenshots below use local mock values for evaluation visibility; they should not be interpreted as evidence that plaintext valuation or principal values are stored on chain.
 
-![DApp compliance proof workspace](../docs/screenshots/03-compliance-proof-success.png)
+![DApp compliance proof workspace](../docs/screenshots/03-zk-compliance-proof-verified.png)
 
 *Figure 5. DApp compliance proof workspace after successful proof generation for `PROP-001` and principal `750000`. The view shows the calculated LTV, maximum borrow amount, principal commitment, proof verification status, and matched proof binding.*
 
@@ -718,9 +718,9 @@ Final local workflow evidence:
 
 This duration includes oracle verification, compliance proof generation, on-chain proof verification, loan request, approval, and repayment on the local Hardhat chain.
 
-![DApp final repaid loan state](../docs/screenshots/06-repayment-repaid.png)
+![DApp borrower loan lifecycle](../docs/screenshots/04-borrower-loan-lifecycle.png)
 
-*Figure 6. DApp evidence for the completed local workflow. The loan state is `Repaid`, proof binding remains matched, and the active collateral lock has been released.*
+*Figure 6. DApp evidence for the borrower loan lifecycle. The ledger shows multiple local outcomes, including repaid, approved, cancelled, and rejected loans, while the selected loan detail preserves proof binding and commitment evidence.*
 
 ### 5.13 Threats to Validity
 
@@ -1069,15 +1069,15 @@ The DApp screenshots were captured against the local Hardhat and oracle workflow
 
 | Screenshot | Evidence shown |
 | --- | --- |
-| `docs/screenshots/01-wallet-readiness.png` | Wallet connected on localhost, local RPC ready, oracle API ready, contracts deployed, and wallet network matched |
-| `docs/screenshots/02-property-verified-onchain-record.png` | `PROP-001` verification completed with on-chain record, verified status, and valuation commitment |
-| `docs/screenshots/03-compliance-proof-success.png` | ZK compliance proof completed for principal `750000`, LTV below the maximum borrow amount, and proof binding matched |
-| `docs/screenshots/04-loan-requested.png` | Borrower loan request submitted, state `Requested`, proof binding matched, and collateral lock active |
-| `docs/screenshots/05-loan-officer-approval.png` | Loan officer approval completed, state `Approved`, proof binding matched, and approval timestamp recorded |
-| `docs/screenshots/06-repayment-repaid.png` | Borrower repayment completed, state `Repaid`, repayment timestamp recorded, and collateral lock released |
-| `docs/screenshots/07-admin-role-access-management.png` | Admin role management, role directory, grant/revoke controls, role records, and admin readiness |
-| `docs/screenshots/08-contract-readiness-settings.png` | Contract and network operations view showing service metrics, contract coverage, local RPC readiness, and oracle service readiness |
-| `docs/screenshots/09-event-audit-log.png` | Audit log showing loan ledger, on-chain event log, proof/asset coverage, permission changes, and final `Repaid` state |
+| `docs/screenshots/01-property-verification-success.png` | `PROP-001` verification completed with property data, verification rules, on-chain record, valuation commitment, and proof status |
+| `docs/screenshots/02-property-verification-rejection-case.png` | `PROP-010` inactive registry status case showing verification waiting state and unverified on-chain record |
+| `docs/screenshots/03-zk-compliance-proof-verified.png` | ZK compliance proof completed for principal `750000`, LTV below the maximum borrow amount, reusable on-chain proof, and proof binding matched |
+| `docs/screenshots/04-borrower-loan-lifecycle.png` | Borrower loan request and repayment workspace with loan details, proof binding, collateral lock, and lifecycle ledger |
+| `docs/screenshots/05-loan-officer-approval-workspace.png` | Loan officer approval workspace with loan book, approval decision, commitments, terms, and timeline |
+| `docs/screenshots/06-admin-role-access-management.png` | Admin role management, role directory, grant/revoke controls, target inspector, role records, and admin readiness |
+| `docs/screenshots/07-contract-network-operations.png` | Contract and network operations view showing service metrics, contract coverage, local RPC readiness, oracle service readiness, and contract matrix |
+| `docs/screenshots/08-audit-logs-overview.png` | Audit log overview showing portfolio metrics, issued exposure, on-chain activity, proof coverage, permission changes, and loan ledger |
+| `docs/screenshots/09-onchain-event-traceability.png` | On-chain event log showing proof/property/loan events, event fields, operator role, contract address, block, and transaction hash |
 
 ## References
 
