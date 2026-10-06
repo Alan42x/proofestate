@@ -1,10 +1,36 @@
 # ProofEstate Evaluation Notes
 
-Updated: 2026-09-25 17:45 +08
+Updated: 2026-10-06; historical measurements below retain their original dates.
 
 ## Environment
 
 This evidence file aggregates the Node 20 functional, gas, benchmark, and security-evaluation evidence used by the thesis and manuscript.
+
+## Submission Revision Evidence
+
+The submission revision extended `test/proofestate.test.js` with six security and three arithmetic regression tests, reusing its deployment fixture and proof cache without changing protocol contracts, circuit, or oracle behavior. `pnpm test` passed with **37 tests** under Node **v22.22.1**. The archived 28-test Node 20 results and all historical performance measurements below remain separate evidence.
+
+| Added scenario | Observed result |
+| --- | --- |
+| Valid proof offered for another verified property | Rejected at public signal 0 |
+| Threshold signal changed from 8000 to 9000 | Rejected at public signal 3 |
+| Refresh retains the valuation commitment | Compliance clears; the identical proof can restore it |
+| Owner changes after request, with valuation commitment retained | Original borrower's pending request can still be approved |
+| Another principal's proof replaces current compliance | Pending request for the old commitment is rejected and lock released |
+| Verification refresh after approval | Approved loan and active lock remain |
+| Exact 80% boundary and one unit above | Boundary proof accepted on chain; over-limit witness fails a circuit constraint |
+| Largest 64-bit valuation | Maximum compliant principal proves and verifies; its next integer fails |
+| Valuation and principal at `2^64` | Both overflow witnesses fail despite valid commitments and a satisfied inequality |
+
+The four accepted workflow observations delimit freshness, ownership continuity, the shared compliance slot, and approval as a snapshot. They are not production guarantees. The owner-change test deliberately uses the authorized oracle to preserve the valuation commitment while changing the owner.
+
+The arithmetic tests call the prover directly with consistently computed commitments, independently of API validation. To isolate the principal range constraint, that overflow case uses a policy input of 10001, which satisfies the raw circuit's 14-bit policy range and the inequality; the application wrapper still requires 8000. Expected failures must contain a witness assertion failure, so missing proving artifacts do not count as policy rejections.
+
+`pnpm thesis:check` runs `scripts/thesis/audit.mjs` to check titles, abstract/keyword limits, local figure references, caption/reference numbering, and raw timing summaries. It is read-only and writes no evidence manifest. Original raw observations and the provenance recorded below remain the evidence sources.
+
+For the archived timing files, API requests use `write: false`; direct and API proving are separate invocations. Quantiles use nearest rank, population standard deviation uses denominator `n`, and “failures” means caught exceptions or failed HTTP status. Each timing sample is not an independent correctness assertion or on-chain proof verification.
+
+## Archived Benchmark Environment
 
 | Item | Value |
 | --- | --- |

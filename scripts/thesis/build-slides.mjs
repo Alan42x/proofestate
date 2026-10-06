@@ -1,0 +1,784 @@
+#!/usr/bin/env node
+/**
+ * Build the editable, 15-slide ProofEstate defense deck from this source.
+ * Run: pnpm thesis:slides
+ * Optional: --out <file.pptx> --preview-dir <directory>
+ * Requires the Codex-bundled @oai/artifact-tool presentation runtime (>= 2.7.3).
+ * ARTIFACT_TOOL_PATH can point to its package directory on another machine.
+ * Speaker Notes contain only the read-aloud script; evidence paths stay here.
+ */
+import fs from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseArgs } from "node:util";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const TITLE = "ProofEstate: Blockchain-Based Real Estate Lending Platform with ZK Compliance and Property Verification";
+const SIZE = { width: 1280, height: 720 };
+const C = {
+  blue: "#003D7C", orange: "#EF7C00", ink: "#13283E", gray: "#586879",
+  rule: "#CCD5DF", orangeTint: "#FFF2E3", blueTint: "#F0F4F8",
+  white: "#FFFFFF", navy: "#082C4E",
+};
+const LOGO = "slides/assets/nus-logo.png"; // Unmodified NUS mark from the existing deck.
+
+// Slide content, layout, evidence pointers and spoken Notes are maintained together.
+// Coordinates and font sizes are in pixels on a 1280 × 720 canvas.
+const DECK = [
+  // 01 — DISSERTATION DEFENSE
+  {
+    title: TITLE,
+    kicker: "DISSERTATION DEFENSE",
+    source: "ProofEstate thesis, Chs. 5–6; local prototype evaluation.",
+    evidence: [
+      "test/proofestate.test.js",
+      "docs/benchmarks/final-benchmarks.md",
+      "docs/evaluation-notes.md",
+    ],
+    notes: `Good morning, everyone. My name is Zhang Tianyi. Today I will present my project, ProofEstate: Blockchain-Based Real Estate Lending Platform with ZK Compliance and Property Verification.
+
+The question behind this project is simple: can a public smart contract enforce a lending rule without publishing the property's valuation or the requested loan amount? To investigate this, I built an end-to-end prototype that combines a property registry, an oracle service, a zero-knowledge circuit, smart contracts, and a web application.
+
+I will explain how the proof is connected to the lending decision, show the implementation and evaluation results, and then discuss the boundaries that the tests reveal. The main contribution is a concrete and reproducible integration, with clearly stated assumptions and limitations.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("ProofEstate:", 64, 145, 1130, 73, 56, C.blue, { bold: true });
+      text("Blockchain-Based Real Estate Lending Platform", 64, 236, 1130, 46, 38, C.blue, { bold: true });
+      text("with ZK Compliance and Property Verification", 64, 284, 1130, 46, 38, C.blue, { bold: true });
+      rect(64, 344, 1152, 1, C.orange);
+      text("Binding a private LTV relation to an auditable lending decision", 64, 366, 1120, 42, 26, C.gray);
+      text("Zhang Tianyi", 64, 431, 430, 38, 26, C.blue, { bold: true });
+      text("Supervisor: Nicholas Mac Gregor GARCIA", 64, 473, 1060, 34, 21, C.gray);
+      text("37", 64, 531, 330, 65, 46, C.blue, { bold: true });
+      text("contract tests", 64, 601, 330, 30, 22, C.blue, { bold: true });
+      text("Current revision · Node 22.22.1", 64, 639, 330, 24, 17, C.gray);
+      text("399.53 ms", 452, 531, 340, 65, 46, C.blue, { bold: true });
+      text("median local proof", 452, 601, 340, 30, 22, C.blue, { bold: true });
+      text("Archived 30-run session", 452, 639, 340, 24, 17, C.gray);
+      text("310,411 gas", 870, 531, 346, 65, 46, C.blue, { bold: true });
+      text("compliance operation", 870, 601, 346, 30, 22, C.blue, { bold: true });
+      text("Archived whole-call average", 870, 639, 346, 24, 17, C.gray);
+    },
+  },
+
+  // 02 — RESEARCH QUESTION
+  {
+    title: "Private proofs connect financial rules to public decisions",
+    kicker: "RESEARCH QUESTION",
+    source: "ProofEstate thesis, §§1.1–1.3, 2.8, 7.1.",
+    evidence: [
+      "docs/design-decisions.md",
+    ],
+    notes: `The central challenge is connecting a private compliance calculation to a public decision.
+
+A plaintext on-chain design can check the loan-to-value ratio directly, but it publishes the financial inputs. An off-chain service can keep those inputs outside the blockchain, but its decision depends on the backend operator and does not provide an independently verified on-chain proof.
+
+ProofEstate takes a third approach. It commits to the valuation and principal, proves that they satisfy the lending rule, and checks that the proof matches the current contract state before approval.
+
+This does not automatically make the entire application confidential. The current prototype API still exposes these values. The demonstrated result is more specific: the blockchain can enforce the relation without directly publishing the valuation or principal.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("Can a public contract approve a loan without publishing valuation or principal?", 64, 213, 1144, 76, 30, C.blue, { bold: true });
+      rect(64, 316, 1152, 52, C.blue);
+      text("Design", 78, 330, 257, 24, 20, C.white, { bold: true });
+      text("Chain enforcement", 363, 330, 362, 24, 20, C.white, { bold: true });
+      text("Financial plaintext", 753, 330, 449, 24, 20, C.white, { bold: true });
+      text("Plaintext on chain", 78, 384, 257, 46, 22, C.blue, { bold: true });
+      text("Contract checks the inequality", 363, 384, 362, 46, 22, C.ink);
+      text("Published in calldata / storage", 753, 384, 449, 46, 22, C.ink);
+      rect(64, 446, 1152, 1, C.rule);
+      text("Off-chain decision", 78, 462, 257, 46, 22, C.blue, { bold: true });
+      text("Backend decision only", 363, 462, 362, 46, 22, C.ink);
+      text("Depends on backend access controls", 753, 462, 449, 46, 22, C.ink);
+      rect(64, 524, 1152, 1, C.rule);
+      rect(64, 524, 1152, 78, C.orangeTint);
+      text("ProofEstate", 78, 540, 257, 46, 22, C.blue, { bold: true });
+      text("Proof + state binding at approval", 363, 540, 362, 46, 22, C.ink);
+      text("Omitted from chain; API still exposes it", 753, 540, 449, 46, 22, C.ink);
+      rect(64, 602, 1152, 1, C.rule);
+      text("Contribution: a working proof-to-state integration with executable boundary tests.", 64, 626, 1144, 29, 22, C.blue, { bold: true });
+    },
+  },
+
+  // 03 — SYSTEM ARCHITECTURE
+  {
+    title: "Trusted data and bound proofs drive lending decisions",
+    kicker: "SYSTEM ARCHITECTURE",
+    source: "ProofEstate thesis, §§3.2–3.4, 4.2–4.3.",
+    evidence: [
+      "contracts/PropertyVerification.sol",
+      "contracts/ComplianceVerifier.sol",
+      "contracts/Lending.sol",
+      "backend/oracle/service.js",
+    ],
+    notes: `This diagram shows how that approach is implemented.
+
+On the left are the mock property registry and the React application. The registry supplies ownership, valuation, and eligibility data. The application lets borrowers and loan officers interact with the system.
+
+In the middle, the trusted oracle validates the registry record and prepares the proving inputs. The Groth16 prover then generates a proof and its public signals.
+
+On the right, PropertyVerification stores the verified property record. ComplianceVerifier checks the proof's bindings, calls the generated verifier, and records compliance. Lending uses that record when deciding whether to approve a request.
+
+The oracle remains trusted for the correctness of external facts. The contracts enforce the proof and state checks, but they cannot establish whether a real-world appraisal or land-title record is authentic.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("Registry / client", 64, 212, 320, 31, 22, C.blue, { bold: true });
+      text("Trusted oracle / prover", 456, 212, 360, 31, 22, C.blue, { bold: true });
+      text("Public contract state", 896, 197, 320, 31, 22, C.blue, { bold: true });
+      rect(64, 268, 320, 116, C.white, { border: C.rule, name: "registry" });
+      text("Mock property registry", 82, 283, 284, 30, 23, C.blue, { bold: true });
+      text("Owner, valuation and eligibility", 82, 319, 284, 51, 21, C.gray);
+      rect(456, 268, 360, 116, C.white, { border: C.rule, name: "oracle" });
+      text("Oracle API", 474, 283, 324, 30, 23, C.blue, { bold: true });
+      text("/verify and /compliance", 474, 319, 324, 51, 21, C.gray);
+      rect(896, 239, 320, 116, C.white, { border: C.rule, name: "property-state" });
+      text("PropertyVerification", 914, 254, 284, 30, 23, C.blue, { bold: true });
+      text("Owner, Cv and compliance record", 914, 290, 284, 51, 21, C.gray);
+      rect(64, 487, 320, 116, C.white, { border: C.rule, name: "dapp" });
+      text("React DApp / wallets", 82, 502, 284, 30, 23, C.blue, { bold: true });
+      text("Oracle requests and loan actions", 82, 538, 284, 51, 21, C.gray);
+      rect(456, 487, 360, 116, C.white, { border: C.rule, name: "prover" });
+      text("Groth16 prover", 474, 502, 324, 30, 23, C.blue, { bold: true });
+      text("Witness → proof + public signals", 474, 538, 324, 51, 21, C.gray);
+      rect(896, 383, 320, 116, C.white, { border: C.rule, name: "compliance" });
+      text("ComplianceVerifier", 914, 398, 284, 30, 23, C.blue, { bold: true });
+      text("Bindings → generated verifier", 914, 434, 284, 51, 21, C.gray);
+      rect(896, 527, 320, 116, C.white, { border: C.rule, name: "lending" });
+      text("Lending", 914, 542, 284, 30, 23, C.blue, { bold: true });
+      text("Reads current verification and Cp", 914, 578, 284, 51, 21, C.gray);
+      connect("registry", "oracle", "right", "left", "straight");
+      connect("oracle", "property-state", "right", "left", "elbow");
+      connect("oracle", "prover", "bottom", "top", "straight");
+      connect("prover", "compliance", "right", "left", "elbow");
+      connect("compliance", "property-state", "top", "bottom", "straight");
+      connect("dapp", "oracle", "right", "left", "elbow");
+      text("Witness inputs", 650, 422, 166, 30, 18, C.gray);
+      text("Current API exposes witness values and salts.", 64, 409, 344, 62, 21, C.orange, { bold: true });
+    },
+  },
+
+  // 04 — PROOF STATEMENT
+  {
+    title: "The circuit proves LTV and commitment openings",
+    kicker: "PROOF STATEMENT",
+    source: "ProofEstate thesis, §§4.4, 5.10, 6.1; circuit implementation.",
+    evidence: [
+      "circuits/ltv.circom",
+      "zk/ltvCircuit.js",
+    ],
+    notes: `The circuit proves two things together: the loan-to-value rule and the openings of the public commitments.
+
+Here, v represents the property valuation, p the requested principal, and t the policy threshold in basis points. The inequality is: ten thousand times the principal must be no greater than the threshold times the valuation. The contract fixes the threshold at eight thousand, which means an eighty percent limit.
+
+The public statement contains the property identifier, two commitments, and the threshold. The witness contains the valuation, principal, and salts. The circuit recomputes both MiMC commitments and checks the inequality.
+
+Range constraints keep this calculation in integer arithmetic rather than allowing field wraparound. The circuit has four thousand, one hundred and ninety-six constraints. These inputs are private to the circuit, but the trusted oracle still handles them.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("10000p ≤ tv", 64, 224, 594, 91, 64, C.blue, { bold: true, font: "Georgia" });
+      text("t = 8000 in the contract wrapper", 64, 335, 603, 39, 25, C.orange, { bold: true });
+      text("Cv = MiMCSponge(k, v, sv)", 64, 404, 626, 41, 25, C.ink, { font: "Courier New" });
+      text("Cp = MiMCSponge(k, p, sp)", 64, 447, 626, 41, 25, C.ink, { font: "Courier New" });
+      text("64-bit v, p · 14-bit t · 80-bit comparison", 64, 550, 630, 44, 23, C.blue, { bold: true });
+      text("4,196 constraints · BN254 / bn-128", 64, 599, 630, 38, 23, C.gray);
+      rect(746, 223, 1, 409, C.rule);
+      text("PUBLIC STATEMENT", 790, 225, 426, 32, 18, C.orange, { bold: true });
+      text("k   Property identifier", 790, 269, 426, 37, 25, C.ink, { font: "Courier New" });
+      text("Cv  Valuation commitment", 790, 308, 426, 37, 25, C.ink, { font: "Courier New" });
+      text("Cp  Principal commitment", 790, 347, 426, 37, 25, C.ink, { font: "Courier New" });
+      text("t   Policy threshold", 790, 386, 426, 37, 25, C.ink, { font: "Courier New" });
+      text("CIRCUIT-PRIVATE WITNESS", 790, 455, 426, 31, 18, C.orange, { bold: true });
+      text("v, p, sv, sp", 790, 499, 426, 35, 24, C.ink);
+      text("Valuation, principal and salts", 790, 536, 426, 35, 24, C.ink);
+      text("Private to the circuit, visible to the oracle.", 790, 594, 426, 53, 21, C.gray);
+    },
+  },
+
+  // 05 — APPLICATION BINDING
+  {
+    title: "Four signal checks bind each proof to contract state",
+    kicker: "APPLICATION BINDING",
+    source: "ProofEstate thesis, §§4.2, 6.1, 6.7; verifier implementation.",
+    evidence: [
+      "contracts/ComplianceVerifier.sol",
+      "contracts/PropertyVerification.sol",
+      "contracts/Lending.sol",
+    ],
+    notes: `A valid mathematical proof is not sufficient by itself. It must refer to the correct application state.
+
+ProofEstate checks four public signals before calling the Groth16 verifier. The property field must match the selected property identifier. The valuation commitment must match the current stored record. The principal commitment must match the one submitted to the wrapper. Finally, the threshold must equal the fixed policy value of eight thousand.
+
+Only after those bindings match and the proof verifies does the contract write compliance state. Lending then performs a separate check at approval: the accepted principal commitment must match the loan request.
+
+This prevents substitution across these contexts. However, it does not provide single-use freshness or bind the proof to a particular borrower, loan identifier, expiry, or deployment domain.`,
+    draw: ({ text, rect, image, connect }) => {
+      rect(64, 217, 1152, 52, C.blue);
+      text("Public signal", 78, 231, 288, 24, 20, C.white, { bold: true });
+      text("Required match", 394, 231, 451, 24, 20, C.white, { bold: true });
+      text("Prevents", 873, 231, 329, 24, 20, C.white, { bold: true });
+      text("k · propertyKeyField", 78, 285, 288, 43, 22, C.blue, { bold: true });
+      text("propertyIdToField(propertyId)", 394, 285, 451, 43, 22, C.ink);
+      text("Wrong-property substitution", 873, 285, 329, 43, 22, C.ink);
+      rect(64, 344, 1152, 1, C.rule);
+      text("Cv · valuationCommitment", 78, 360, 288, 43, 22, C.blue, { bold: true });
+      text("Current stored valuation commitment", 394, 360, 451, 43, 22, C.ink);
+      text("Different valuation context", 873, 360, 329, 43, 22, C.ink);
+      rect(64, 419, 1152, 1, C.rule);
+      text("Cp · principalCommitment", 78, 435, 288, 43, 22, C.blue, { bold: true });
+      text("Principal submitted to the wrapper", 394, 435, 451, 43, 22, C.ink);
+      text("Different principal context", 873, 435, 329, 43, 22, C.ink);
+      rect(64, 494, 1152, 1, C.rule);
+      text("t · maxLtvBps", 78, 510, 288, 43, 22, C.blue, { bold: true });
+      text("Fixed contract constant: 8000", 394, 510, 451, 43, 22, C.ink);
+      text("Weaker-threshold substitution", 873, 510, 329, 43, 22, C.ink);
+      rect(64, 569, 1152, 1, C.rule);
+      text("All bindings match → Groth16 verifies → compliance is written.", 64, 590, 1152, 35, 25, C.blue, { bold: true });
+      text("Lending later matches Cp to the requested loan at approval.", 64, 632, 1152, 29, 21, C.gray);
+    },
+  },
+
+  // 06 — LENDING LIFECYCLE
+  {
+    title: "Compliance gates approval; locks govern the loan lifecycle",
+    kicker: "LENDING LIFECYCLE",
+    source: "ProofEstate thesis, §§3.4, 4.2; Lending contract.",
+    evidence: [
+      "contracts/Lending.sol",
+    ],
+    notes: `The normal demonstration follows this sequence: verify the property, generate the proof, verify it on chain, submit the loan request, obtain approval, and then repay.
+
+The contract distinguishes the checks at each stage. A request checks the recorded owner, a valid principal commitment, and the absence of an active loan for that property. Approval checks the loan officer's role, the requested state, current property verification, and matching compliance.
+
+If verification or compliance fails during approval, the request becomes rejected and the property lock is released. The requested and approved states hold the lock; rejected, cancelled, and repaid states release it.
+
+This prevents concurrent active borrowing against the same property within the prototype. Repayment records a state change only. It does not transfer Ether or tokens, and ownership is not checked again at approval.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("Normal flow: verify property → prove → record compliance → request → approve → repay", 64, 196, 1152, 34, 21, C.gray);
+      text("Request: recorded owner + valid Cp + no active loan", 64, 242, 1152, 34, 24, C.blue, { bold: true });
+      text("Approval: officer role + Requested state + verified property + matching compliance", 64, 286, 1152, 34, 23, C.orange, { bold: true });
+      rect(64, 359, 268, 104, C.white, { border: C.rule, name: "requested" });
+      text("Requested", 82, 374, 232, 30, 23, C.blue, { bold: true });
+      text("Lock held", 82, 410, 232, 39, 21, C.gray);
+      rect(498, 359, 268, 104, C.orangeTint, { border: C.rule, name: "approved" });
+      text("Approved", 516, 374, 232, 30, 23, C.blue, { bold: true });
+      text("Lock held", 516, 410, 232, 39, 21, C.gray);
+      rect(932, 359, 268, 104, C.white, { border: C.rule, name: "repaid" });
+      text("Repaid", 950, 374, 232, 30, 23, C.blue, { bold: true });
+      text("Lock released", 950, 410, 232, 39, 21, C.gray);
+      rect(64, 543, 268, 104, C.white, { border: C.rule, name: "rejected" });
+      text("Rejected", 82, 558, 232, 30, 23, C.blue, { bold: true });
+      text("Lock released", 82, 594, 232, 39, 21, C.gray);
+      rect(498, 543, 268, 104, C.white, { border: C.rule, name: "cancelled" });
+      text("Cancelled", 516, 558, 232, 30, 23, C.blue, { bold: true });
+      text("Lock released", 516, 594, 232, 39, 21, C.gray);
+      connect("requested", "approved", "right", "left", "straight");
+      connect("approved", "repaid", "right", "left", "straight");
+      connect("requested", "rejected", "bottom", "top", "straight");
+      connect("requested", "cancelled", "bottom", "top", "elbow");
+      text("Approve", 353, 368, 124, 30, 20, C.blue, { bold: true, align: "center" });
+      text("Repay", 786, 368, 126, 30, 20, C.blue, { bold: true, align: "center" });
+      text("Reject / checks fail", 222, 511, 200, 29, 18, C.blue, { bold: true });
+      text("Borrower cancels", 446, 511, 170, 29, 18, C.blue, { bold: true });
+      text("Repayment records state;", 894, 555, 318, 29, 22, C.gray);
+      text("no ETH / ERC20 settlement.", 894, 586, 318, 29, 22, C.gray);
+    },
+  },
+
+  // 07 — PRODUCT EVIDENCE
+  {
+    title: "The DApp makes proof status and binding inspectable",
+    kicker: "PRODUCT EVIDENCE",
+    source: "ProofEstate thesis, §4.5 and Appendix C; local DApp capture.",
+    evidence: [
+      "docs/screenshots/03-zk-compliance-proof-verified.png",
+    ],
+    notes: `This is the original local compliance workspace captured in the repository.
+
+The selected property is PROP-001. Its mock valuation is nine hundred and eighty thousand, and the requested principal is seven hundred and fifty thousand. That gives a displayed loan-to-value ratio of approximately seventy-six point five percent, below the eighty percent cap.
+
+The screen shows successful proof generation and matched binding information. The application therefore makes the proof workflow inspectable instead of requiring the user to assemble calldata manually.
+
+These are local mock values. Their visibility here does not mean that they are published as financial plaintext in the contracts. It also reminds us that the current application interface itself is not confidential. The screenshot supports the product demonstration; contract tests provide separate evidence for enforcement.`,
+    draw: ({ text, rect, image, connect }) => {
+      image("docs/screenshots/03-zk-compliance-proof-verified.png", 103.193, 209, 788.615, 439);
+      text("76.5%", 968, 232, 248, 65, 44, C.blue, { bold: true });
+      text("displayed LTV", 968, 302, 248, 30, 22, C.blue, { bold: true });
+      text("Mock valuation: 980,000; principal: 750,000", 968, 340, 248, 43, 17, C.gray);
+      text("Matched", 968, 424, 248, 65, 36, C.blue, { bold: true });
+      text("proof binding", 968, 494, 248, 30, 22, C.blue, { bold: true });
+      text("Public signals match the local contract context", 968, 532, 248, 43, 17, C.gray);
+      text("Local mock-workflow capture", 968, 609, 248, 47, 19, C.orange, { bold: true });
+    },
+  },
+
+  // 08 — PRODUCT EVIDENCE
+  {
+    title: "The loan ledger exposes context and lifecycle decisions",
+    kicker: "PRODUCT EVIDENCE",
+    source: "ProofEstate thesis, §§4.5, 5.12 and Appendix C; local loan ledger.",
+    evidence: [
+      "docs/screenshots/04-borrower-loan-lifecycle.png",
+      "contracts/Lending.sol",
+    ],
+    notes: `The loan workspace exposes the lending lifecycle and its recorded outcomes.
+
+The selected loan remains connected to a property and a principal commitment, while the ledger shows several local requests and terminal states. This makes approval, rejection, cancellation, and repayment visible to the user.
+
+It is important to read this screenshot correctly. The ledger contains multiple loans; it is not a single image proving one uninterrupted sequence across every row. The separate archived local command-line workflow is the end-to-end observation that finishes in the repaid state.
+
+The application helps users inspect and operate the workflow, while the contracts enforce roles and state transitions. In the current prototype, repayment releases the active lock and records the result, without transferring financial assets.`,
+    draw: ({ text, rect, image, connect }) => {
+      image("docs/screenshots/04-borrower-loan-lifecycle.png", 102.797, 209, 789.407, 439);
+      text("Loan context", 968, 236, 248, 34, 26, C.blue, { bold: true });
+      text("Property + principal commitment remain inspectable.", 968, 282, 248, 93, 23, C.gray);
+      text("Lifecycle visibility", 968, 398, 248, 65, 26, C.blue, { bold: true });
+      text("The ledger contains multiple local outcomes.", 968, 473, 248, 92, 23, C.gray);
+      text("State transition only;", 968, 598, 248, 26, 21, C.orange, { bold: true });
+      text("no asset transfer.", 968, 626, 248, 26, 21, C.orange, { bold: true });
+    },
+  },
+
+  // 09 — EXPERIMENT DESIGN
+  {
+    title: "Four cases test the 80% limit and registry rejection",
+    kicker: "EXPERIMENT DESIGN",
+    source: "ProofEstate thesis, §§5.1, 5.4–5.5; contract tests and archived timing runs.",
+    evidence: [
+      "docs/benchmarks/final-benchmarks.md",
+      "docs/evaluation-notes.md",
+      "test/proofestate.test.js",
+    ],
+    notes: `The evaluation separates behavioral correctness from performance measurement.
+
+For PROP-001, the valuation of nine hundred and eighty thousand gives an exact eighty percent boundary of seven hundred and eighty-four thousand. The experiment includes a compliant principal of seven hundred and fifty thousand, the exact boundary, one unit above the boundary, and an encumbered property that fails registry validation.
+
+Each timing case uses five warm-up iterations and thirty measured iterations. Passing cases generate proofs; rejected cases skip proving. Zero recorded timing exceptions are not the same as independently verifying every proof or asserting every decision.
+
+The current contract suite has thirty-seven passing tests, including six security regressions and three arithmetic regressions. Those results use Node twenty-two. The archived timing and gas measurements retain their original Node twenty baseline.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("PROP-001 valuation: 980,000 → maximum principal: 784,000", 64, 207, 1152, 36, 26, C.blue, { bold: true });
+      rect(64, 274, 1152, 52, C.blue);
+      text("Case", 78, 288, 275, 24, 20, C.white, { bold: true });
+      text("Principal / property", 381, 288, 314, 24, 20, C.white, { bold: true });
+      text("Recorded proving behavior", 723, 288, 479, 24, 20, C.white, { bold: true });
+      text("Compliant", 78, 342, 275, 30, 22, C.blue, { bold: true });
+      text("750,000 / PROP-001", 381, 342, 314, 30, 22, C.ink);
+      text("Proof generated", 723, 342, 479, 30, 22, C.ink);
+      rect(64, 388, 1152, 1, C.rule);
+      text("Exact 80% boundary", 78, 404, 275, 30, 22, C.blue, { bold: true });
+      text("784,000 / PROP-001", 381, 404, 314, 30, 22, C.ink);
+      text("Proof generated", 723, 404, 479, 30, 22, C.ink);
+      rect(64, 450, 1152, 1, C.rule);
+      text("One unit over", 78, 466, 275, 30, 22, C.blue, { bold: true });
+      text("784,001 / PROP-001", 381, 466, 314, 30, 22, C.ink);
+      text("Rejected; proving skipped", 723, 466, 479, 30, 22, C.ink);
+      rect(64, 512, 1152, 1, C.rule);
+      text("Registry failure", 78, 528, 275, 30, 22, C.blue, { bold: true });
+      text("100,000 / PROP-004", 381, 528, 314, 30, 22, C.ink);
+      text("Encumbered; proving skipped", 723, 528, 479, 30, 22, C.ink);
+      rect(64, 574, 1152, 1, C.rule);
+      rect(64, 592, 1152, 1, C.rule);
+      text("37", 64, 608, 110, 50, 40, C.blue, { bold: true });
+      text("contract tests", 187, 603, 280, 26, 20, C.ink);
+      text("Current Node 22 revision", 187, 631, 280, 26, 20, C.ink);
+      text("5 warmups + 30 measured iterations per case", 518, 608, 698, 22, 19, C.gray);
+      text("Archived Node 20 timing; no exceptions ≠ exhaustive correctness", 518, 632, 698, 22, 19, C.gray);
+    },
+  },
+
+  // 10 — LOCAL LATENCY
+  {
+    title: "Proving dominates the measured read-only compliance path",
+    kicker: "LOCAL LATENCY",
+    source: "ProofEstate thesis, §5.6, Table 12; archived 30-run session, 25 Sep 2026.",
+    evidence: [
+      "docs/benchmarks/raw/local-2026-09-25T08-40-22-730Z.json",
+    ],
+    notes: `Proof generation dominates the measured local compliance path.
+
+The median direct proving time is three hundred and ninety-nine point five three milliseconds. The read-only compliance endpoint has a median response time of four hundred and nine point one six milliseconds. Ordinary verification is much lighter, with a median of five point nine eight milliseconds.
+
+The ninety-fifth percentile is approximately four hundred and seventy milliseconds for direct proving and four hundred and eighty milliseconds for the compliance endpoint.
+
+Warm-up iterations are excluded. The median and ninety-fifth percentile use nearest-rank statistics; for thirty observations, the reported median is the lower central value.
+
+These timings exclude blockchain submission and confirmation. Also, direct proving and API compliance generate separate proofs in separate invocations. Therefore, the difference between their medians is not a measurement of API overhead.
+
+The results describe a small, sequential local workload. They support a bounded feasibility observation, rather than a claim about production throughput or public-chain latency.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("Read-only /compliance", 64, 223, 652, 31, 24, C.blue, { bold: true });
+      rect(64, 266, 534, 29, C.orange);
+      text("409.16 ms", 613, 263, 184, 38, 24, C.orange, { bold: true });
+      text("Direct Groth16 proof", 64, 335, 652, 31, 24, C.blue, { bold: true });
+      rect(64, 378, 521, 29, C.blue);
+      text("399.53 ms", 600, 375, 184, 38, 24, C.blue, { bold: true });
+      text("Read-only /verify", 64, 447, 652, 31, 24, C.blue, { bold: true });
+      rect(64, 490, 8, 29, C.gray);
+      text("5.98 ms", 87, 487, 184, 38, 24, C.gray, { bold: true });
+      rect(64, 575, 652, 1, C.rule);
+      text("0", 64, 588, 100, 28, 18, C.gray);
+      text("250", 343, 588, 100, 28, 18, C.gray, { align: "center" });
+      text("500 ms", 616, 588, 100, 28, 18, C.gray, { align: "right" });
+      text("P95", 904, 229, 304, 36, 25, C.blue, { bold: true });
+      text("Proof: 469.53 ms", 904, 284, 304, 41, 26, C.ink);
+      text("API: 480.30 ms", 904, 327, 304, 41, 26, C.ink);
+      text("n = 30 · local sequential runs", 904, 398, 304, 64, 22, C.gray);
+      text("Independent proof calls;", 904, 503, 304, 58, 22, C.orange, { bold: true });
+      text("median difference does not measure API overhead.", 904, 563, 304, 58, 22, C.orange, { bold: true });
+      text("API timings exclude blockchain submission and confirmation.", 64, 630, 803, 28, 21, C.gray);
+    },
+  },
+
+  // 11 — ON-CHAIN COST
+  {
+    title: "Full compliance processing averages 310,411 gas",
+    kicker: "ON-CHAIN COST",
+    source: "ProofEstate thesis, §5.9, Table 15; archived Node 20 gas baseline.",
+    evidence: [
+      "docs/evaluation-notes.md",
+    ],
+    notes: `This slide shows the on-chain cost of the archived workload.
+
+The complete compliance operation averages three hundred and ten thousand, four hundred and eleven gas. That includes the public-signal checks, the generated verifier call, state writes, and events. It is not the cost of the cryptographic verifier alone.
+
+Requesting a loan averages about two hundred and thirty-four thousand gas. Approval averages about eighty-one thousand, and repayment about fifty-seven thousand.
+
+These figures come from the historical Node twenty gas-reporter baseline. The reporter aggregates calls with different storage states and outcomes, including approval attempts that reject a request. The new thirty-seven-test suite does not replace that historical baseline.
+
+The figures help characterize where the prototype spends gas. They do not establish transaction fees, public-network confirmation time, or economic feasibility.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("verifyProofAndSetCompliance", 64, 219, 666, 30, 24, C.blue, { bold: true });
+      rect(64, 258, 556, 27, C.orange);
+      text("310,411", 635, 253, 164, 40, 24, C.orange, { bold: true });
+      text("requestLoan", 64, 311, 666, 30, 24, C.blue, { bold: true });
+      rect(64, 350, 418, 27, C.blue);
+      text("233,609", 497, 345, 164, 40, 24, C.blue, { bold: true });
+      text("approveLoan", 64, 403, 666, 30, 24, C.blue, { bold: true });
+      rect(64, 442, 146, 27, C.blue);
+      text("81,464", 225, 437, 164, 40, 24, C.blue, { bold: true });
+      text("repay", 64, 495, 666, 30, 24, C.blue, { bold: true });
+      rect(64, 534, 103, 27, C.gray);
+      text("57,219", 182, 529, 164, 40, 24, C.gray, { bold: true });
+      text("Whole compliance operation", 891, 223, 325, 70, 30, C.blue, { bold: true });
+      text("Signal checks", 891, 327, 325, 41, 25, C.ink);
+      text("Generated verifier", 891, 370, 325, 41, 25, C.ink);
+      text("State writes + events", 891, 413, 325, 41, 25, C.ink);
+      text("Archived Node 20 workload", 891, 487, 325, 66, 21, C.gray);
+      text("Mixed storage states and approval outcomes.", 891, 555, 325, 66, 21, C.gray);
+      text("These are gas units, not isolated verifier cost or transaction fees.", 64, 630, 823, 28, 21, C.orange, { bold: true });
+    },
+  },
+
+  // 12 — PRIVACY BOUNDARY
+  {
+    title: "Financial plaintext stays off chain; the API exposes inputs",
+    kicker: "PRIVACY BOUNDARY",
+    source: "ProofEstate thesis, §§3.5, 6.6, 6.8; oracle API and registry implementation.",
+    evidence: [
+      "backend/oracle/server.js",
+      "backend/oracle/service.js",
+      "backend/oracle/properties.js",
+    ],
+    notes: `The privacy conclusion needs to distinguish the blockchain from the rest of the application.
+
+On the public blockchain, ProofEstate records identifiers, owner addresses, commitments, proof material, and lifecycle state. It omits the valuation and principal as financial plaintext.
+
+However, the current oracle API exposes financial values, witness inputs, and salts without caller authentication. The mock registry is also available in the artifact. In addition, the valuation salt is deterministic, so an observer with the relevant public context can test candidate valuations against the commitment.
+
+As a result, application-wide confidentiality is not established. Groth16 zero knowledge cannot protect information that another interface has already revealed.
+
+The supported result is selective omission of financial plaintext from the blockchain, under a trusted proving service. This is an important boundary for interpreting the prototype.`,
+    draw: ({ text, rect, image, connect }) => {
+      rect(64, 219, 1152, 52, C.blue);
+      text("Boundary", 78, 233, 231, 24, 20, C.white, { bold: true });
+      text("What is visible", 337, 233, 455, 24, 20, C.white, { bold: true });
+      text("Supported conclusion", 820, 233, 382, 24, 20, C.white, { bold: true });
+      text("Public blockchain", 78, 287, 231, 67, 23, C.blue, { bold: true });
+      text("Identifiers, owner, commitments, proofs and lifecycle state", 337, 287, 455, 67, 23, C.ink);
+      text("Valuation / principal plaintext omitted", 820, 287, 382, 67, 23, C.ink);
+      rect(64, 370, 1152, 1, C.rule);
+      rect(64, 370, 1152, 99, C.orangeTint);
+      text("Oracle + current API", 78, 386, 231, 67, 23, C.blue, { bold: true });
+      text("Valuation, principal, witness inputs and salts", 337, 386, 455, 67, 23, C.ink);
+      text("Application confidentiality is not established", 820, 386, 382, 67, 23, C.ink);
+      rect(64, 469, 1152, 1, C.rule);
+      text("Mock registry / blinding", 78, 485, 231, 67, 23, C.blue, { bold: true });
+      text("Public property values; deterministic valuation salt", 337, 485, 455, 67, 23, C.ink);
+      text("Candidate valuation testing remains possible", 820, 485, 382, 67, 23, C.ink);
+      rect(64, 568, 1152, 1, C.rule);
+      text("Zero knowledge does not protect values already exposed by another interface.", 64, 600, 1152, 56, 26, C.blue, { bold: true });
+    },
+  },
+
+  // 13 — REGRESSION FINDINGS
+  {
+    title: "Regression tests expose four proof-lifecycle boundaries",
+    kicker: "REGRESSION FINDINGS",
+    source: "ProofEstate thesis, §6.5, Table 23; security regression tests.",
+    evidence: [
+      "test/proofestate.test.js",
+    ],
+    notes: `The regression tests reveal four lifecycle boundaries that successful proof verification does not resolve.
+
+First, if a property refresh retains the same valuation commitment, the identical proof can restore cleared compliance. Resetting state therefore does not guarantee proof freshness.
+
+Second, if the authorized oracle changes the owner after a request, while retaining the valuation commitment, the original request can still be approved once compliance is restored. Ownership is not rechecked at approval.
+
+Third, a valid proof for another principal can replace the property's single compliance record. The old pending request is then rejected and its lock released.
+
+Finally, a refresh after approval does not change the approved loan or its active lock. Approval is a snapshot decision.
+
+These are tested boundaries, not claims of production security. The approval argument also depends on the oracle, proof system, commitment construction, and maintained roles.`,
+    draw: ({ text, rect, image, connect }) => {
+      rect(64, 214, 1152, 52, C.blue);
+      text("Tested change", 78, 228, 274, 24, 20, C.white, { bold: true });
+      text("Observed behavior", 380, 228, 450, 24, 20, C.white, { bold: true });
+      text("Limit of the claim", 858, 228, 344, 24, 20, C.white, { bold: true });
+      text("Refresh; same valuation", 78, 282, 274, 52, 22, C.blue, { bold: true });
+      text("Identical proof restores cleared compliance", 380, 282, 450, 52, 22, C.ink);
+      text("Reset does not imply freshness", 858, 282, 344, 52, 22, C.ink);
+      rect(64, 350, 1152, 1, C.rule);
+      text("Owner changes after request", 78, 366, 274, 52, 22, C.blue, { bold: true });
+      text("Original request can still be approved", 380, 366, 450, 52, 22, C.ink);
+      text("Owner is not rechecked at approval", 858, 366, 344, 52, 22, C.ink);
+      rect(64, 434, 1152, 1, C.rule);
+      text("Another principal replaces Cp", 78, 450, 274, 52, 22, C.blue, { bold: true });
+      text("Old pending request rejected; lock released", 380, 450, 450, 52, 22, C.ink);
+      text("One mutable compliance slot per property", 858, 450, 344, 52, 22, C.ink);
+      rect(64, 518, 1152, 1, C.rule);
+      text("Refresh after approval", 78, 534, 274, 52, 22, C.blue, { bold: true });
+      text("Approved state and active lock remain", 380, 534, 450, 52, 22, C.ink);
+      text("Approval is a snapshot decision", 858, 534, 344, 52, 22, C.ink);
+      rect(64, 602, 1152, 1, C.rule);
+      text("Approval integrity also assumes an honest oracle, valid setup, commitment binding and maintained roles.", 64, 612, 1152, 47, 22, C.orange, { bold: true });
+    },
+  },
+
+  // 14 — RESEARCH PRIORITIES
+  {
+    title: "Next steps: protect witnesses and strengthen proof context",
+    kicker: "RESEARCH PRIORITIES",
+    source: "ProofEstate thesis, §§8.1–8.3.",
+    evidence: [
+      "docs/limitations-and-extensions.md",
+    ],
+    notes: `The next research steps should address those boundaries directly.
+
+The first priority is protecting witness delivery. That means authenticating callers, restricting API responses, and using suitable secret randomness for valuation blinding.
+
+The second priority is an explicit proof lifecycle. A stronger design would bind proofs to their loan context and freshness, revalidate ownership where required, and define how compliance records can be replaced or revoked.
+
+The third priority is stronger source assurance and evaluation. That includes signed registry attestations, a documented setup model, matched performance baselines, and experiments with concurrency and public-chain conditions.
+
+Broader features, such as identity policies, real settlement, and liquidation, are further extensions. This is a research priority sequence, not a delivery timetable or a claim that these features already exist.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("01", 64, 223, 112, 78, 58, C.orange, { bold: true });
+      text("Protect witness delivery", 203, 227, 1004, 38, 29, C.blue, { bold: true });
+      text("Authenticate callers; restrict API responses; use secret valuation blinding.", 203, 277, 1004, 67, 24, C.gray);
+      rect(203, 342, 1013, 1, C.rule);
+      text("02", 64, 352, 112, 78, 58, C.blue, { bold: true });
+      text("Define proof lifecycle", 203, 356, 1004, 38, 29, C.blue, { bold: true });
+      text("Bind loan context and freshness; revalidate ownership; specify revocation.", 203, 406, 1004, 67, 24, C.gray);
+      rect(203, 471, 1013, 1, C.rule);
+      text("03", 64, 481, 112, 78, 58, C.blue, { bold: true });
+      text("Strengthen source and evaluation", 203, 485, 1004, 38, 29, C.blue, { bold: true });
+      text("Signed attestations and setup assurance; matched baselines; concurrent / chain measurements.", 203, 535, 1004, 67, 24, C.gray);
+      text("Broader extensions: identity policies, real settlement, liquidation and operational governance.", 64, 627, 1152, 30, 21, C.gray);
+    },
+  },
+
+  // 15 — CONCLUSION
+  {
+    title: "Bound proofs support approval under explicit assumptions",
+    kicker: "CONCLUSION",
+    source: "ProofEstate thesis, §§6.1, 9; implementation and evaluation.",
+    evidence: [
+      "test/proofestate.test.js",
+      "docs/benchmarks/final-benchmarks.md",
+    ],
+    notes: `To conclude, ProofEstate demonstrates an implemented pattern for connecting a committed loan-to-value relation to an auditable lending decision.
+
+The verifier checks that the proof belongs to the current property, valuation commitment, principal commitment, and policy threshold. Approval then checks the accepted compliance record against the request. The evidence includes thirty-seven passing contract tests and archived local measurements with a median proving time of about four hundred milliseconds.
+
+The result is conditional on the oracle, setup, proof-system, commitment, and role assumptions. It omits financial plaintext from the blockchain, while leaving application confidentiality, proof freshness, real-world source authenticity, and financial settlement as open work.
+
+Thank you for your attention. I am happy to take questions about the design, evaluation, and limitations.`,
+    draw: ({ text, rect, image, connect }) => {
+      text("A committed LTV relation becomes a contract-checkable approval decision.", 64, 224, 1120, 106, 42, C.blue, { bold: true });
+      text("The contribution is the implemented binding pattern and its tested boundaries.", 64, 364, 1120, 77, 29, C.gray);
+      rect(64, 473, 1152, 1, C.rule);
+      text("37 contract tests", 64, 506, 542, 41, 32, C.blue, { bold: true });
+      text("399.53 ms median local proof", 64, 559, 673, 43, 30, C.blue);
+      text("Questions & discussion", 797, 512, 419, 100, 40, C.orange, { bold: true });
+      text("Under explicit oracle, proof-system, commitment and role assumptions.", 64, 627, 1152, 29, 22, C.gray);
+    },
+  }
+
+];
+
+async function loadRuntime() {
+  if (!process.env.ARTIFACT_TOOL_PATH) {
+    try {
+      const [artifact, runtime] = await Promise.all([
+        import("@oai/artifact-tool"),
+        import("@oai/artifact-tool/presentation-jsx/jsx-runtime"),
+      ]);
+      return { ...artifact, jsx: runtime.jsx };
+    } catch (error) {
+      if (error.code !== "ERR_MODULE_NOT_FOUND") throw error;
+    }
+  }
+  const directory = process.env.ARTIFACT_TOOL_PATH
+    ? path.resolve(process.env.ARTIFACT_TOOL_PATH)
+    : path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/@oai/artifact-tool");
+  let metadata;
+  try {
+    metadata = JSON.parse(await fs.readFile(path.join(directory, "package.json"), "utf8"));
+  } catch (error) {
+    throw new Error("Presentation runtime unavailable. Use the Codex-bundled @oai/artifact-tool, or set ARTIFACT_TOOL_PATH to its package directory. See README.md.", { cause: error });
+  }
+  const [major, minor, patch] = metadata.version.split(".").map(Number);
+  if (metadata.name !== "@oai/artifact-tool" ||
+      major < 2 || (major === 2 && (minor < 7 || (minor === 7 && patch < 3)))) {
+    throw new Error("The presentation builder requires @oai/artifact-tool >= 2.7.3.");
+  }
+  function exportedFile(key) {
+    const entry = metadata.exports[key];
+    const relative = typeof entry === "string" ? entry : entry?.import || entry?.default || entry?.node;
+    if (!relative) throw new Error(`Missing presentation runtime export: ${key}`);
+    return pathToFileURL(path.join(directory, relative)).href;
+  }
+  const [artifact, runtime] = await Promise.all([
+    import(exportedFile(".")), import(exportedFile("./presentation-jsx/jsx-runtime")),
+  ]);
+  return { ...artifact, jsx: runtime.jsx };
+}
+
+function applyTheme(presentation) {
+  const theme = presentation.theme.toProto();
+  theme.name = "ProofEstate NUS";
+  theme.colorScheme.name = "NUS Blue and Orange";
+  const palette = {
+    accent1: C.blue, accent2: C.orange, accent3: C.navy, accent4: C.gray,
+    accent5: C.rule, accent6: C.orangeTint, bg1: C.white, bg2: C.blue,
+    tx1: C.ink, tx2: C.white, dk1: C.ink, lt1: C.white,
+    dk2: C.navy, lt2: C.blueTint, hlink: C.blue, folHlink: C.blue,
+  };
+  for (const entry of theme.colorScheme.colors) {
+    if (palette[entry.name]) entry.color.value = palette[entry.name].slice(1);
+  }
+  presentation.theme.replaceFromProto(theme);
+}
+
+function drawingTools(slide, jsx, assets) {
+  let sequence = 0;
+  const nodes = new Map();
+  function compose(type, props, left, top, width, height) {
+    return slide.compose(jsx(type, { ...props, width: "fill", height: "fill" }), {
+      frame: { left, top, width, height }, baseUnit: 1,
+    })[0];
+  }
+  return {
+    text(value, x, y, w, h, size, color = C.ink, options = {}) {
+      return compose("text", {
+        name: options.name || `text-${++sequence}`,
+        style: {
+          fontSize: size, typeface: options.font || "Arial", color,
+          bold: options.bold || false, alignment: options.align || "left",
+          anchor: options.anchor === "ctr" ? 2 : 1,
+          wrap: "square", autoFit: "none",
+          insets: { left: 0, right: 0, top: 0, bottom: 0 },
+        },
+        children: value,
+      }, x, y, w, h);
+    },
+    rect(x, y, w, h, fill, options = {}) {
+      const name = options.name || `rect-${++sequence}`;
+      const shape = compose("shape", {
+        name, geometry: "rect", fill,
+        line: { style: "solid", width: options.border ? options.borderWidth || 1 : 0,
+          fill: options.border || fill },
+      }, x, y, w, h);
+      nodes.set(name, shape);
+      return shape;
+    },
+    image(file, x, y, w, h) {
+      const image = slide.images.add({
+        dataUrl: assets.get(file), fit: "contain",
+        name: path.basename(file, path.extname(file)),
+        alt: file === LOGO ? "National University of Singapore" : "ProofEstate local mock DApp capture",
+      });
+      image.position = { left: x, top: y, width: w, height: h };
+      return image;
+    },
+    connect(from, to, fromSide, toSide, kind = "straight") {
+      const source = nodes.get(from), target = nodes.get(to);
+      if (!source || !target) throw new Error(`Unknown diagram node: ${from} → ${to}`);
+      return slide.shapes.connect(source, target, {
+        name: `${from}-to-${to}`, kind, fromSide, toSide,
+        line: { style: "solid", fill: C.orange, width: 2.5 },
+        // Artifact Tool's tail is the destination end of an attached connector.
+        tail: { type: "arrow", width: "med", length: "med" },
+      });
+    },
+  };
+}
+
+function addChrome(tools, definition, index) {
+  const { text, rect, image } = tools;
+  const cover = index === 0;
+  rect(64, cover ? 53 : 48, 6, 16, C.orange);
+  text(definition.kicker, 84, cover ? 46 : 41, cover ? 850 : 960, 30,
+    14, C.orange, { bold: true, anchor: "ctr", name: "section-label" });
+  if (!cover) text(definition.title, 64, 88, 1152, 108, 40, C.blue,
+    { bold: true, name: "slide-title" });
+  if (cover) image(LOGO, 1042, 42.023, 174, 82.953);
+  else image(LOGO, 1088.024, 24, 127.951, 61);
+  rect(64, 665, 1152, 1, C.rule);
+  text(`Source: ${definition.source}`, 64, 679, 1035, 23, 11, C.gray, { name: "source-footer" });
+  text(`${String(index + 1).padStart(2, "0")} / ${DECK.length}`, 1132, 678, 84, 25,
+    12, C.blue, { bold: true, align: "right", name: "page-number" });
+}
+
+async function build({ out, previewDir }) {
+  // Fail before replacing the deck if an evidence file or required image is missing.
+  const evidence = new Set(["thesis/thesis.md", LOGO, ...DECK.flatMap(slide => slide.evidence)]);
+  await Promise.all([...evidence].map(file => fs.access(path.join(ROOT, file))));
+  const assets = new Map();
+  for (const file of [...evidence].filter(file => /\.png$/i.test(file))) {
+    assets.set(file, `data:image/png;base64,${(await fs.readFile(path.join(ROOT, file))).toString("base64")}`);
+  }
+  const { Presentation, PresentationFile, jsx } = await loadRuntime();
+  const presentation = Presentation.create({ slideSize: SIZE });
+  applyTheme(presentation);
+  for (const [index, definition] of DECK.entries()) {
+    const slide = presentation.slides.add();
+    slide.background.fill = C.white;
+    const tools = drawingTools(slide, jsx, assets);
+    addChrome(tools, definition, index);
+    definition.draw(tools);
+    slide.speakerNotes.setText(definition.notes);
+  }
+  if (previewDir) {
+    await fs.mkdir(previewDir, { recursive: true });
+    for (const [index, slide] of presentation.slides.items.entries()) {
+      const stem = path.join(previewDir, `slide-${String(index + 1).padStart(2, "0")}`);
+      const png = await presentation.export({ slide, format: "png", scale: 1 });
+      const layout = await presentation.export({ slide, format: "layout" });
+      await fs.writeFile(`${stem}.png`, new Uint8Array(await png.arrayBuffer()));
+      await fs.writeFile(`${stem}.layout.json`, await layout.text());
+    }
+  }
+  await fs.mkdir(path.dirname(out), { recursive: true });
+  const pptx = await PresentationFile.exportPptx(presentation);
+  await pptx.save(out);
+  console.log(`Built ${DECK.length} editable slides with ${DECK.length} read-aloud Notes: ${path.relative(ROOT, out)}`);
+}
+
+const { values } = parseArgs({
+  options: { out: { type: "string" }, "preview-dir": { type: "string" }, help: { type: "boolean" } },
+});
+if (values.help) {
+  console.log("Usage: pnpm thesis:slides [--out <file.pptx>] [--preview-dir <directory>]\nRequires Codex-bundled @oai/artifact-tool >= 2.7.3; optionally set ARTIFACT_TOOL_PATH.");
+} else {
+  const out = values.out ? path.resolve(values.out) : path.join(ROOT, "slides/proofestate-nus-defense-presentation.pptx");
+  if (!out.endsWith(".pptx")) throw new Error("--out must be a .pptx file.");
+  await build({ out, previewDir: values["preview-dir"] && path.resolve(values["preview-dir"]) });
+}

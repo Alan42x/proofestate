@@ -1,6 +1,6 @@
-# Design Decisions
+# Architecture and Design Decisions
 
-This document records the main architectural decisions behind ProofEstate. Each decision is scoped to a dissertation prototype whose goal is to demonstrate one privacy-preserving real-estate lending rule end to end.
+This document records ProofEstate's architectural decisions, alternatives, and trade-offs. It consolidates the design rationale and architecture comparison for a prototype that demonstrates one proof-backed lending rule end to end. Comparisons describe mechanisms; they are not measured performance baselines.
 
 ## Decision Summary
 
@@ -12,7 +12,7 @@ This document records the main architectural decisions behind ProofEstate. Each 
 | Commitment hash | MiMC Sponge | Efficient inside arithmetic circuits |
 | Registry integration | Centralized Oracle over mock dataset | Keeps project focused on privacy-preserving compliance, not registry infrastructure |
 | Compliance scope | One LTV rule | Narrow, auditable, and defensible proof statement |
-| Deployment evidence | Localhost first, Sepolia optional | Reproducibility is more important than testnet spectacle |
+| Deployment evidence | Localhost first, Sepolia optional | Deterministic functional tests and repeatable local measurements |
 | Collateral model | One active loan per property | Prevents duplicate active borrowing with minimal state |
 
 ## Ethereum-Compatible Contracts
@@ -52,7 +52,7 @@ Alternatives considered:
 - PLONK-style systems offer more flexible setup assumptions, but add tooling and verifier complexity.
 - STARK-style systems avoid trusted setup, but typically have larger proofs and more complex verifier integration for this MVP.
 - Plaintext on-chain verification would be much simpler, but would reveal valuation and principal.
-- Off-chain-only verification would preserve privacy but would not provide on-chain proof enforcement.
+- An off-chain-only service could keep inputs private with appropriate access controls, but would not provide on-chain proof enforcement.
 
 Trade-off:
 
@@ -72,7 +72,7 @@ Rationale:
 - MiMC is efficient in arithmetic circuits compared with hashes designed for conventional CPUs.
 - circomlib provides a standard implementation.
 - Including `propertyKeyField` binds each commitment to a specific property context.
-- The chain can store commitments without learning the underlying valuation or principal.
+- The chain stores commitments rather than plaintext valuation or principal. Commitment hiding additionally depends on secret, suitable randomness and surrounding interfaces.
 
 Alternatives considered:
 
@@ -82,7 +82,7 @@ Alternatives considered:
 
 Trade-off:
 
-MiMC improves circuit efficiency, but requires careful documentation so readers understand why Ethereum-native hashing is not used inside the proof.
+MiMC is selected for arithmetic-circuit suitability. The implementation does not establish application-wide confidentiality: its valuation salt is deterministic, and its mock registry and unauthenticated API expose witness values. No measured MiMC/Poseidon/Keccak comparison is reported.
 
 ## Centralized Oracle Service
 
@@ -181,3 +181,19 @@ Sepolia remains useful as optional public validation, especially for demonstrati
 Trade-off:
 
 Local evidence is less externally visible than Sepolia transaction hashes, but it is more reproducible and more appropriate for benchmark claims.
+
+## Architecture Comparison
+
+The following comparison concerns disclosure and enforcement capabilities. Alternative implementations, matched latency/gas measurements, and production-readiness ratings have not been evaluated.
+
+| Alternative | Financial data disclosure | Enforcement | Main dependency |
+| --- | --- | --- | --- |
+| Plaintext on chain | Values appear in public calldata or storage | Contract evaluates the inequality | Correct and authentic source values |
+| Off-chain only | Backend confidentiality depends on access controls | Backend decision; no independent on-chain proof | Backend operator and database |
+| ProofEstate Groth16 | Plaintext omitted from chain; registry/API disclose values and valuation hiding is not established | Contract verifies the proof and application binding | Honest oracle, uncompromised setup, commitment binding, maintained roles |
+| PLONK-style proof | Can omit witness values; commitment and interface disclosure still require analysis | Requires an integrated verifier and binding checks | Specific setup model, source authenticity, verifier implementation |
+| STARK-style proof | Can omit witness values; surrounding disclosure still requires analysis | Requires an integrated verifier and binding checks | Specific hash/proof assumptions and verifier implementation |
+| Threshold oracle | Oracle distribution alone does not protect witness values | Depends on attestation and contract integration | Honest threshold, committee governance, coordination and disputes |
+| On-chain registry | Plaintext records are public; commitments need a separate hiding analysis | Contract-readable source state | Authentic update authority and freshness policy |
+
+The prototype selects Groth16 and a centralized mock-registry oracle to keep the implemented path reproducible. This does not establish a speed advantage or a production-security ranking. Threshold attestations would add committee membership, aggregation, signer coordination, monitoring, and dispute handling. A commitment registry would still require an authenticated writer and an explicit freshness policy.

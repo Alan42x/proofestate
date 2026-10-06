@@ -7,7 +7,11 @@ This report evaluates ProofEstate as a dissertation prototype. The system demons
 The security claim is intentionally bounded:
 
 ```text
-If the Oracle writes a correct property verification record and the Groth16 verifier corresponds to circuits/ltv.circom, then Lending approves only a property/principal commitment pair that has passed the 80% LTV proof and current on-chain binding checks.
+Assuming Groth16 soundness, uncompromised setup, commitment binding, an honest
+oracle valuation record, and maintained roles in which only the designated
+verifier writes compliance, approval requires current property verification
+and a compliant record for the request's principal commitment that passed
+the 80% LTV relation and current valuation-commitment binding checks.
 ```
 
 This is not a production security claim. The MVP does not implement production identity, real asset transfer, liquidation, monitoring, decentralized oracle consensus, or a production trusted setup ceremony.
@@ -78,7 +82,7 @@ The attacker is not assumed to:
 | Duplicate active collateral use | `activeLoanByProperty` rejects second active loan | Contract tests |
 | Unauthorized approval/rejection | Loan officer methods require `LOAN_OFFICER_ROLE` | Contract tests |
 | Unauthorized cancellation/repayment | Borrower-only checks in `cancelLoan` and `repay` | Contract tests |
-| Last admin removal | `RoleAdminManager` prevents removing final admin | Contract tests |
+| Final manager administrator removal | `RoleAdminManager` retains its final manager admin; managed-contract roles can still become partial | Contract tests |
 | Malformed property/principal input | Oracle validates network, property ID, and principal types/ranges | Oracle API tests |
 | Unsupported network access | Dataset access is restricted to `localhost` and `sepolia` | Oracle API tests |
 
@@ -91,20 +95,20 @@ The security review was performed as a bounded prototype review rather than a pr
 | Role boundary | Non-oracle account attempts to write property verification | Transaction reverts | Contract tests |
 | Role boundary | Direct compliance write bypasses `ComplianceVerifier` | Transaction reverts | Contract tests |
 | Role boundary | Non-loan-officer attempts approval or rejection | Transaction reverts | Contract tests |
-| Admin safety | Final protocol admin is removed | Transaction reverts | Contract tests |
+| Manager admin retention | Final `RoleAdminManager` admin is removed | Transaction reverts | Contract tests |
 | Proof binding | Proof public signal uses a different property identifier | Compliance update reverts | Contract tests |
 | Proof binding | Proof public signal uses a stale valuation commitment | Compliance update reverts or stale state is cleared on refresh | Contract tests |
 | Proof binding | Proof public signal uses a different principal commitment | Compliance update or loan approval is rejected | Contract tests |
 | Policy binding | Public signal changes the LTV threshold | Compliance update reverts | Contract tests |
 | Proof integrity | Groth16 proof calldata is tampered with | Generated verifier rejects the proof | Contract tests |
-| Boundary correctness | Principal is exactly `784000` for `PROP-001` | Accepted at exactly 80% LTV | Benchmark correctness matrix |
-| Boundary correctness | Principal is `784001` for `PROP-001` | Rejected without proof generation | Benchmark correctness matrix |
+| Boundary correctness | Principal is exactly `784000` for `PROP-001` | Proof accepted on chain at exactly 80% LTV | Circuit arithmetic tests; archived scenario records |
+| Boundary correctness | Principal is `784001` for `PROP-001` | Oracle skips proving; direct over-limit witness fails a constraint | Circuit arithmetic tests; archived scenario records |
 | Registry failure | `PROP-004` fails registry validation | Rejected without proof generation | Oracle API tests; benchmark correctness matrix |
 | Lifecycle state | Property verification is refreshed after compliance | Prior compliance and principal binding are cleared | Contract tests |
 | Lifecycle state | Same property is reused while an active loan exists | Second active loan is rejected | Contract tests |
 | Lifecycle state | Non-borrower attempts cancellation or repayment | Transaction reverts | Contract tests |
 | API input abuse | Unsupported network, missing property ID, non-string property ID, or invalid principal is submitted | API returns validation failure without server crash | Oracle API tests |
-| Frontend readiness | Wallet/readiness controls are unavailable or disconnected | UI remains in guarded readiness state | Frontend tests |
+| Frontend wallet gate | Wallet is disconnected or the app has not been entered | Wallet-gate component displays the corresponding state | Component tests; no full-app authorization claim |
 
 This matrix supports the claim that security testing and adversarial testing were performed for the prototype scope. It should not be described as a formal audit or as evidence of production readiness.
 
@@ -114,7 +118,7 @@ The hosted Oracle API is a demo/testnet service, not a production public transac
 
 When `write=true` is enabled, a public caller could ask the Oracle service to submit Sepolia verification or compliance transactions from the configured Oracle signer, subject to on-chain role checks and account balance. This does not bypass contract authorization, but it can consume Oracle gas, API resources, and proof-generation time.
 
-For the dissertation prototype this risk is acceptable only because Sepolia is optional public validation and no real assets move. A production deployment should add API authentication, origin allowlisting, rate limiting, transaction allowlists, request quotas, monitoring, and explicit operator approval for privileged writes.
+No real settlement limits financial exposure but does not mitigate API disclosure, denial of service, or unauthorized use of the signer. Authentication, response restrictions, request quotas, transaction policies, monitoring, and protected key custody are required beyond controlled demonstration use. Property filters, self-declared role query parameters, and CORS do not authenticate the caller.
 
 ## Privacy Evaluation
 
@@ -142,6 +146,10 @@ Residual privacy risks:
 - Owner address and loan lifecycle state remain public.
 - The centralized Oracle observes plaintext registry values and loan principal during proof generation.
 - The current proof is not borrower-private; it proves LTV for a property/principal commitment pair.
+- The mock registry contains valuations, and compliant API responses expose valuation, principal, and both salts through `proofInputs`.
+- Valuation salts are deterministically derived from available property context, allowing candidate testing. Strong application confidentiality is not established.
+
+The demonstrated privacy property is omission of financial plaintext from the blockchain, not secrecy across the registry and API.
 
 ## Replay and Freshness Analysis
 
@@ -155,7 +163,20 @@ The proof is not currently bound to:
 - expiry;
 - single-use nonce.
 
-This means the same valid proof can be submitted again for the same property and principal commitment. In the MVP this is acceptable because it only refreshes the same compliance state. A production version should add proof freshness through an expiry, nonce, registry version, or loan-specific challenge.
+An unchanged valuation commitment allows the same valid proof to restore compliance after a refresh. The proof also lacks registry-version, chain-ID, and deployment-address binding. A freshness design must prove and validate or consume the intended nonce/version/domain on chain.
+
+## Submission Security Boundary Tests
+
+Six security and three arithmetic regression tests in `test/proofestate.test.js` supplement the original suite. `pnpm test` passes with 37 tests. Cross-property substitution and threshold tampering are rejected. The following accepted behaviors bound the security claim:
+
+| Scenario | Contract behavior |
+| --- | --- |
+| Unchanged valuation refresh | Identical proof can restore cleared compliance |
+| Oracle changes the owner after request, retaining the valuation commitment | Original borrower's request can be approved after proof resubmission |
+| Another principal proof is accepted | Old pending request is rejected; its active lock is released |
+| Refresh follows approval | Approved state and active lock remain |
+
+Ownership is checked only at request, compliance occupies one mutable slot per property, and approval is a snapshot rather than continuous monitoring. These tests execute against unchanged protocol contracts and do not establish production safety.
 
 ## Role and Administration Risks
 
@@ -166,7 +187,7 @@ The protocol uses role-gated operations rather than ownership-only control:
 - Loan officer approves or rejects loans.
 - RoleAdminManager coordinates protocol admin grants.
 
-The main administrative risk is operator mistake. `RoleAdminManager` prevents removing the last admin, but it does not provide multisig approval, timelock delay, or emergency pause. These controls are future work.
+`RoleAdminManager` prevents removal of its final manager administrator. Individual role methods can create partial administration across the managed contracts; the manager count does not establish complete administrative continuity. Multisignature approval, timelocks, and emergency controls are future work.
 
 ## Remaining Risks
 

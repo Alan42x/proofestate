@@ -104,7 +104,7 @@ async function main() {
     deployedAt: new Date().toISOString()
   };
 
-  const outputDir = path.join(__dirname, "..", "deployments");
+  const outputDir = path.join(__dirname, "../..", "deployments");
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(
     path.join(outputDir, `${network}.json`),

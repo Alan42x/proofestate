@@ -1,22 +1,14 @@
-# ProofEstate: Blockchain-Based Real-Estate Lending Platform with Zero-Knowledge Compliance and Property Verification
+# ProofEstate: Blockchain-Based Real Estate Lending Platform with ZK Compliance and Property Verification
 
 ## Abstract
 
-Real-estate lending depends on verifiable facts: property ownership, property valuation, borrower authorization, and policy constraints such as maximum loan-to-value (LTV). Public blockchains can make the resulting approval workflow auditable and programmatically enforceable, but their transparency also makes naive implementations unsuitable for sensitive lending data. If valuation and requested-principal values are submitted directly to a smart contract, they may become permanently visible through calldata, events, or contract state. This creates a central design tension: the workflow benefits from public enforcement, while the facts that determine eligibility should remain confidential.
+Public blockchains make lending decisions auditable, but direct verification of a loan-to-value (LTV) rule exposes financial inputs. A valid zero-knowledge proof must also be bound to the property record and requested principal before it can authorize the intended lending decision. This thesis investigates that application-security problem through ProofEstate, an implemented real-estate lending prototype.
 
-This thesis presents ProofEstate, an end-to-end prototype for privacy-preserving real-estate lending verification. ProofEstate combines a mock property registry, a trusted oracle service, MiMC commitments, a Groth16 zero-knowledge proof, Ethereum-compatible smart contracts, and a React decentralized application. The implemented proof statement is intentionally narrow:
+ProofEstate combines a mock registry, trusted oracle, MiMC commitments, Groth16 proof, Solidity contracts, and React application. The circuit proves that a committed principal does not exceed 80% of a committed valuation. Before writing compliance, the verifier checks the property field identifier, current valuation commitment, principal commitment, and fixed threshold. Loan approval requires current verification and compliance matching the request. Ownership is checked when a loan is requested; approval and later refreshes have distinct boundaries.
 
-```text
-loanPrincipal * 10000 <= propertyValue * 8000
-```
+Evaluation combines archived September 2026 measurements with nine additional security and arithmetic regression tests. The resulting contract suite has 37 passing tests; archived evidence includes 12 oracle API tests, six frontend component tests, circuit and gas inspection, a complete local workflow, four input scenarios, and sequential 10/30/50-run timing sessions. The primary 30-run session reports median proof generation of 399.53 ms and a median read-only compliance response of 409.16 ms, excluding blockchain transactions. Archived proof verification and compliance update average 310,411 gas. Added tests verify substitution and threshold rejection, integer boundaries, and accepted replay, ownership-change, compliance-replacement, and post-approval behaviors.
 
-The proof establishes that the requested principal is no more than 80 percent of the property valuation without publishing either plaintext value on chain. The blockchain records commitments, proof hashes, ownership and verification state, compliance state, and loan lifecycle state; it does not store plaintext valuation, plaintext principal, salts, or witness files.
-
-The prototype implements a complete local workflow in which the oracle verifies a mock property record, computes commitments, generates Groth16 proof calldata, submits proof data to an on-chain verifier, and enables a role-gated lending contract to approve or reject a loan only when compliance is bound to the relevant property and principal commitment. The accompanying DApp exposes borrower, loan-officer, administrator, readiness, and audit views for inspection and evaluation.
-
-The evaluation is local-first to preserve reproducibility. It includes 28 passing contract tests, 12 passing oracle API tests, 6 passing frontend tests, a passing frontend production build, a gas baseline, circuit-size inspection, local end-to-end workflow evidence, a 30-run compliant-path benchmark, a 30-run correctness matrix for boundary and rejection cases, and a bounded 10/30/50 repeated-run stability snapshot. The benchmark shows that Groth16 proof generation dominates local latency: median proof generation is 399.53 ms, while median oracle `/compliance` latency is 409.16 ms. The measured average gas for `ComplianceVerifier.verifyProofAndSetCompliance` is 310411.
-
-ProofEstate is not a production lending protocol. It uses a mock registry, a centralized oracle, prototype Groth16 setup artifacts, and no real ETH/ERC20 disbursement, KYC/AML, liquidation, production monitoring, or decentralized oracle governance. Its contribution is a bounded but complete architecture pattern: sensitive off-chain facts can be committed, proven against a specific compliance rule in zero knowledge, and used to drive auditable smart-contract state without revealing the underlying values on chain.
+The contribution is a concrete proof-to-state binding pattern and conditional approval argument, supported by reproducible local observations. The prototype omits valuation and principal plaintext from the blockchain, while its mock registry and unauthenticated API expose values and salts. Deterministic valuation blinding does not establish strong hiding. Proof freshness, approval-time ownership revalidation, continuous collateral monitoring, real settlement, and production performance remain open requirements. No comparative speedup or application-wide confidentiality is established.
 
 **Keywords:** zero-knowledge proofs, smart contracts, real-estate lending, privacy-preserving compliance, Groth16, oracle, commitments
 
@@ -36,9 +28,7 @@ ProofEstate explores this design through a concrete end-to-end prototype. It doe
 
 The main research question is:
 
-```text
-Can a real-estate lending workflow enforce an LTV compliance rule on chain without revealing the underlying property valuation or requested loan principal?
-```
+*Can a real-estate lending workflow enforce an LTV compliance rule on chain without revealing the underlying property valuation or requested loan principal?*
 
 The question is decomposed into five design and evaluation subquestions:
 
@@ -73,7 +63,7 @@ This is equivalent to proving:
 loanPrincipal <= 80 percent of propertyValue
 ```
 
-The rule is intentionally narrow. A single lending policy can be specified, implemented, tested, benchmarked, and explained rigorously. ProofEstate does not implement real disbursement, fiat settlement, ETH/ERC20 transfers, KYC/AML, credit scoring, liquidation, delinquency handling, production registry integration, production monitoring, or decentralized oracle governance. These omissions define the boundary of the research prototype rather than hidden production claims.
+The rule is an illustrative application policy, not an assertion that 80% is the legally applicable LTV limit for a particular jurisdiction, borrower, or loan product. A single policy can be specified, implemented, tested, benchmarked, and explained rigorously. ProofEstate does not implement real disbursement, fiat settlement, ETH/ERC20 transfers, KYC/AML, credit scoring, liquidation, delinquency handling, production registry integration, production monitoring, or decentralized oracle governance. These omissions define the boundary of the research prototype.
 
 ### 1.5 Thesis Organization
 
@@ -108,7 +98,7 @@ ProofEstate uses a centralized oracle service. It reads a mock property registry
 
 ### 2.4 Commitments
 
-A commitment binds a value without revealing it. ProofEstate uses commitments so that smart contracts can refer to hidden valuation and principal values without storing them directly. The circuit computes:
+A commitment can bind a value, with hiding dependent on its construction and secret randomness. ProofEstate uses hash-based commitments to refer to valuation and principal without directly publishing them in contract storage. The circuit computes:
 
 ```text
 valuationCommitment = MiMC(propertyKeyField, propertyValue, valuationSalt)
@@ -149,15 +139,17 @@ Zero-knowledge proof systems differ in setup assumptions, proof size, prover tim
 
 Zerocash shows how zk-SNARKs can hide transaction metadata in a ledger-based currency, while Hawk studies privacy-preserving smart contracts more generally [16], [17]. ProofEstate does not attempt to provide full payment anonymity or a general private-contract compiler. Instead, it uses the same broad principle of selective disclosure for a narrower compliance problem: proving that a lending policy is satisfied without publishing the underlying valuation and principal.
 
-ProofEstate belongs to the broader category of privacy-preserving compliance systems: applications that prove a user, asset, or transaction satisfies a policy without revealing all underlying data. Similar patterns can apply to income verification, identity eligibility, insurance claims, accredited-investor checks, and asset-backed lending. The important design principle is minimal disclosure. ProofEstate hides valuation and principal from public-chain observers, but it does not hide the property key, owner address, compliance state, proof hash, or loan lifecycle state. This bounded privacy claim is more defensible than a claim of full borrower anonymity.
+ProofEstate belongs to the broader category of selective-disclosure compliance systems: applications that prove a user, asset, or transaction satisfies a policy without including all underlying data in the proof statement. Similar patterns can apply to income verification, identity eligibility, insurance claims, and asset-backed lending. ProofEstate omits plaintext valuation and principal from blockchain transactions and storage, while publishing the property key, owner address, commitments, compliance state, proof hash, and loan lifecycle. This is a data-publication boundary; confidentiality against an observer who can also access the prototype registry or API is not established.
 
 ### 2.8 Research Gap and Positioning
 
-The related systems leave a specific gap for a dissertation-scale implementation. Existing DeFi lending systems demonstrate robust on-chain loan accounting, but they generally assume crypto-native collateral and public collateral values. Oracle systems address off-chain data availability and authenticity, but oracle design is a separate problem from private policy enforcement. General privacy-preserving smart-contract systems show that zero-knowledge proofs can protect transaction data, but they are broader and more complex than needed for one auditable lending rule.
+The application question examined here is how a proof of a private lending predicate is connected to the exact public state that authorizes approval. The cited DeFi protocols, oracle systems, and private-contract systems provide relevant foundations, but are not matched experimental baselines. This review is a focused architectural comparison, not a systematic literature review or evidence that state binding has never been used elsewhere. Originality is claimed for the concrete integration, explicit statement and trust boundaries, and reproducible evaluation of this prototype.
 
 ProofEstate is positioned at the intersection of these areas. Its contribution is not a new proof system, a decentralized oracle network, or a production lending market. Instead, it gives a concrete, reproducible architecture for a narrower question: how an off-chain real-estate fact can be committed, proven against a fixed LTV policy, checked against current on-chain state, and used to drive a loan lifecycle without publishing the underlying valuation or requested principal.
 
 The following table summarizes the positioning:
+
+*Table 1. Architectural context and the focus of this prototype.*
 
 | Area | What existing work provides | Remaining gap addressed by ProofEstate |
 | --- | --- | --- |
@@ -182,37 +174,17 @@ These requirements shape the architecture. The oracle handles off-chain registry
 
 ### 3.2 Architecture Overview
 
-ProofEstate combines off-chain fact processing with on-chain verification and enforcement.
+ProofEstate links off-chain facts to on-chain verification and enforcement (Figure 1).
 
-![System architecture](../docs/figures/01-system-architecture.png)
+The components are a React DApp, Node.js oracle API, mock property registry, Circom/snarkjs Groth16 prover, Solidity verification/compliance/lending/role contracts, and a local Hardhat chain for reproduction and evaluation.
 
-*Figure 1. ProofEstate system architecture showing the off-chain registry/oracle layer, zero-knowledge proving workflow, and on-chain verification and lending contracts.*
-
-The architecture contains the following components:
-
-- a React DApp for user interaction;
-- a Node.js oracle API;
-- a mock property registry;
-- a Circom/snarkjs Groth16 proving workflow;
-- Solidity contracts for verification, compliance, lending, and role administration;
-- a local Hardhat chain as the canonical reproduction and evaluation environment.
-
-The high-level data flow is:
-
-```text
-Property registry
--> oracle verification
--> commitment generation
--> ZK proof generation
--> on-chain proof verification
--> loan request
--> loan approval or rejection
--> repayment or closure
-```
+The flow moves from registry lookup and oracle verification to commitment and proof generation, on-chain verification, loan request and decision, and repayment or closure.
 
 ### 3.3 Actors
 
 The main actors are:
+
+*Table 2. Operational actors.*
 
 | Actor | Responsibility |
 | --- | --- |
@@ -222,13 +194,17 @@ The main actors are:
 | Protocol admin | Manages protocol administration roles |
 | Auditor / evaluator | Reviews contract state, events, benchmark results, screenshots, and documentation |
 
+![System architecture](../docs/figures/01-system-architecture.png){width=6.2in}
+
+*Figure 1. ProofEstate architecture and the registry, oracle/prover, client, and contract boundaries. The API handles plaintext witness data; the on-chain layer receives commitments, proofs, and public signals.*
+
 ### 3.4 Workflow
 
-![End-to-end data flow](../docs/figures/05-end-to-end-data-flow.png)
+![End-to-end data flow](../docs/figures/05-end-to-end-data-flow.png){width=6.2in}
 
-*Figure 2. End-to-end data flow from property-registry lookup to proof-bound compliance verification, loan approval, and repayment.*
+*Figure 2. End-to-end data and control flow from registry verification and proving to borrower requests and loan-officer decisions. Ownership is checked at request time; verification and matching compliance are checked at approval.*
 
-The workflow proceeds as follows:
+The workflow in Figure 2 proceeds as follows:
 
 1. The borrower connects a wallet to the DApp.
 2. The DApp requests property verification from the oracle API.
@@ -241,27 +217,29 @@ The workflow proceeds as follows:
 9. The generated verifier validates the proof.
 10. `PropertyVerification` records compliance and the principal commitment.
 11. The borrower requests a loan with the property ID and principal commitment.
-12. `Lending` checks property ownership, verification, compliance, and principal binding.
-13. A loan officer approves or rejects the loan.
-14. The borrower repays the approved loan, releasing the active collateral lock.
+12. `Lending.requestLoan` checks the recorded owner, a nonzero principal commitment, and the active-loan lock; verification and compliance are checked later.
+13. A loan officer approves or rejects the loan. Approval checks the current verification flag and matching compliance commitment, but does not recheck the owner.
+14. The borrower marks the approved loan as repaid, releasing the active collateral lock; no funds are transferred.
 
 ### 3.5 Data Visibility Boundary
 
-The system is designed for confidentiality against public-chain observers for two values: property valuation and requested principal. These values are private witness inputs to the circuit and are represented on chain only through commitments.
+The contracts represent valuation and requested principal through commitments and do not receive either value as plaintext. The witness is private with respect to the Groth16 proof interface, which is distinct from confidentiality of the surrounding application.
 
-The system deliberately leaves some information public. The property key, owner address, valuation commitment, principal commitment, proof hash, compliance state, and loan lifecycle state are visible. This visibility is sufficient for auditable contract enforcement, but it does not provide anonymity. The oracle also sees plaintext witness values during proof construction. ProofEstate therefore demonstrates privacy-preserving compliance, not anonymous lending and not oracle-private computation.
+The mock registry includes plaintext valuations. The oracle's verification and compliance responses expose registry data and, on a compliant path, proof inputs including valuation, principal, and salts. The API does not authenticate callers. Consequently, the prototype does not protect these values from an observer with registry or API access. The property key, owner address, commitments, proof hash, compliance state, and loan lifecycle are also public on chain. Section 6.6 analyzes this narrower disclosure boundary.
 
 ### 3.6 Design Invariants
 
 The implementation is structured around five invariants:
 
+*Table 3. Contract and application invariants.*
+
 | Invariant | Enforcement point |
 | --- | --- |
 | Plaintext valuation and principal are not written to contract storage | Commitments are stored; witness values remain off chain |
 | A proof must match the current property and principal context | `ComplianceVerifier` checks all public signals before calling the generated verifier |
-| A refreshed property verification cannot reuse stale compliance | `PropertyVerification.setVerified` clears compliance and principal binding |
+| A refreshed property verification clears the stored compliance decision | `PropertyVerification.setVerified` resets compliance and principal binding; this does not make an unchanged proof single-use |
 | Loan approval requires proof-bound compliance for the same principal commitment | `Lending.approveLoan` calls `isCompliantFor(propertyId, principalCommitment)` |
-| The frontend is not a security boundary | Contracts and oracle API validate roles, state, network labels, property IDs, and principal values |
+| Contract authorization does not depend on the frontend | Contracts enforce roles and state; API input validation does not authenticate the user or authorize use of the oracle signer |
 
 These invariants connect the cryptographic statement to application-level state. The proof alone establishes only that a private witness satisfies the LTV relation for a set of public signals. The contracts must additionally ensure that those public signals correspond to the property record and loan request currently being acted upon.
 
@@ -307,13 +285,15 @@ The security-critical on-chain layer is divided into five core contracts.
 - principal commitment;
 - update timestamp.
 
-`setVerified` requires `ORACLE_ROLE`. When a property is refreshed, stale compliance and stale principal binding are cleared. This prevents an old proof from remaining valid after a property record changes.
+`setVerified` requires `ORACLE_ROLE`. Every refresh clears the stored compliance flag, proof hash, and principal commitment. A proof bound to a different valuation commitment then fails the binding check. If the valuation commitment remains unchanged, the same previously valid proof can be submitted again. Clearing application state therefore does not establish cryptographic freshness.
 
 `setCompliant` requires `COMPLIANCE_ROLE`. In deployment, that role is granted to `ComplianceVerifier`, preventing arbitrary accounts from writing compliance state directly.
 
 #### ComplianceVerifier
 
 `ComplianceVerifier` is the bridge between application state and the generated Groth16 verifier. It does not accept a proof merely because the verifier returns true. Before proof verification, it checks each public signal against the current application state:
+
+*Table 4. Required public-signal bindings.*
 
 | Public signal | Required value |
 | ---: | --- |
@@ -351,15 +331,17 @@ The contract requires the caller to be the recorded property owner when requesti
 - the caller has `LOAN_OFFICER_ROLE`;
 - no invalid state transition is attempted.
 
-The contract also enforces one active loan per property. This prevents duplicate active borrowing against the same collateral within the prototype model.
+Figure 3 summarizes the loan lifecycle. The contract enforces one active loan per property, preventing duplicate active borrowing against the same collateral within the prototype model.
 
 ![Loan state machine](../docs/figures/06-loan-state-machine.png)
 
-*Figure 3. Loan lifecycle state machine for the prototype lending contract. Requested loans may be approved, rejected, cancelled, or repaid according to role and borrower checks.*
+*Figure 3. Loan lifecycle state machine. Requested loans may become Approved, Rejected, or Cancelled. Only Approved loans may become Repaid; repayment records a state change without asset settlement.*
+
+Ownership is checked at request time only. A later oracle ownership update can coexist with approval of the original borrower's pending request if valid compliance is restored. Moreover, only one principal commitment is stored per property: submitting compliance for another principal replaces the previous record and can cause a pending request to be rejected. Once a loan is approved, later verification or compliance changes do not automatically alter its state. These behaviors are verified by the submission security tests and are limitations of approval as a snapshot decision.
 
 #### RoleAdminManager
 
-`RoleAdminManager` coordinates protocol admin grants and revocations across `PropertyVerification`, `Lending`, and itself. It also prevents removal of the final admin. This reduces the risk of accidental administrative lockout during testing and evaluation.
+`RoleAdminManager` coordinates protocol admin grants and revocations across `PropertyVerification`, `Lending`, and itself. It prevents removal of its final manager administrator. Its inherited role methods and the managed contracts' individual role methods can still create partial administrative configurations, so the manager count is not a proof of complete administrative continuity across all contracts.
 
 #### Generated Groth16 Verifier
 
@@ -376,7 +358,7 @@ The oracle service performs four responsibilities:
 
 The service exposes API endpoints for health checks, property listing, property verification, and compliance proof generation. It validates property IDs, network labels, and principal values before building proof inputs. Invalid requests fail explicitly rather than causing unhandled server errors.
 
-The oracle is trusted in the prototype. It observes plaintext valuation and principal during proof generation. The privacy claim is therefore on-chain privacy, not oracle-private computation. Future work should replace or reduce this centralized trust point through signed registry attestations, threshold oracle verification, or a stronger credential model.
+The oracle is trusted for source correctness, witness handling, and privileged writes. Its current API returns plaintext property data and proof inputs; input validation and an owner filter do not constitute access control. Future work must address both data-source authenticity and confidential witness delivery through authenticated interfaces, restricted responses, signed registry attestations, or threshold oracle verification.
 
 ### 4.4 ZK Circuit
 
@@ -392,13 +374,15 @@ It proves:
 loanPrincipal * 10000 <= propertyValue * maxLtvBps
 ```
 
-with `maxLtvBps = 8000`.
+with `maxLtvBps = 8000`. Figure 4 traces proof generation and verification.
 
 ![ZK proof workflow](../docs/figures/04-zk-proof-workflow.png){width=3.25in}
 
 *Figure 4. Zero-knowledge proof workflow showing witness construction, commitment generation, Groth16 proof generation, public-signal binding, and on-chain verification.*
 
 The public inputs are:
+
+*Table 5. Public circuit inputs.*
 
 | Input | Meaning |
 | --- | --- |
@@ -408,6 +392,8 @@ The public inputs are:
 | `maxLtvBps` | maximum LTV threshold in basis points |
 
 The private inputs are:
+
+*Table 6. Private circuit inputs.*
 
 | Input | Meaning |
 | --- | --- |
@@ -445,7 +431,7 @@ The React DApp supports the end-to-end inspection workflow. It includes:
 - contract readiness;
 - event and audit views.
 
-The DApp improves usability and observability, but it does not replace contract validation. The contracts and oracle API remain responsible for enforcing security-critical checks. The screenshots below use local mock values for evaluation visibility; they should not be interpreted as evidence that plaintext valuation or principal values are stored on chain.
+The DApp improves usability and observability, but it does not replace contract validation. The contracts and oracle API remain responsible for enforcing security-critical checks. Figures 5 and 6 use local mock values for evaluation visibility; they do not show plaintext valuation or principal stored on chain.
 
 ![DApp compliance proof workspace](../docs/screenshots/03-zk-compliance-proof-verified.png)
 
@@ -453,7 +439,7 @@ The DApp improves usability and observability, but it does not replace contract 
 
 ### 4.6 Reproducibility Artifacts
 
-The repository includes implementation and evidence artifacts intended to support independent review:
+The repository provides the following artifacts for independent review:
 
 - contract interface documentation;
 - ZK proof design documentation;
@@ -475,7 +461,7 @@ The primary compliant-path raw file is:
 docs/benchmarks/raw/local-2026-09-25T08-40-22-730Z.json
 ```
 
-The September 2026 raw files record git commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true` because manuscript and documentation updates were intentionally in progress while the final experiment-matrix evidence was collected.
+The September 2026 raw files record commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` and `dirty: true`: the experiment matrix was collected from a working tree with uncommitted changes.
 
 ## 5. Evaluation
 
@@ -486,28 +472,46 @@ The evaluation is local-first. This choice is deliberate: local execution is rep
 The September 2026 evaluation adds a correctness matrix and bounded repeated-run stability snapshot to the earlier compliant-path benchmark. The primary compliant-path command was:
 
 ```bash
-pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 \
+  --property=PROP-001 --principal=750000 \
+  --api=http://127.0.0.1:8787
 ```
 
 The boundary and failure-case commands were:
 
 ```bash
-pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=784000 --api=http://127.0.0.1:8787
-pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=784001 --api=http://127.0.0.1:8787
-pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-004 --principal=100000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 \
+  --property=PROP-001 --principal=784000 \
+  --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 \
+  --property=PROP-001 --principal=784001 \
+  --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 \
+  --property=PROP-004 --principal=100000 \
+  --api=http://127.0.0.1:8787
 ```
 
 The bounded repeated-run stability commands were:
 
 ```bash
-pnpm benchmark:local --warmups=5 --runs=10 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
-pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
-pnpm benchmark:local --warmups=5 --runs=50 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=10 \
+  --property=PROP-001 --principal=750000 \
+  --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 \
+  --property=PROP-001 --principal=750000 \
+  --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=50 \
+  --property=PROP-001 --principal=750000 \
+  --api=http://127.0.0.1:8787
 ```
 
-Warm-up iterations are excluded from summary statistics. Sepolia transaction latency is excluded from local performance claims.
+Warm-up iterations are excluded from summary statistics. Each iteration sequentially times input construction, a direct proof-generation invocation, and separate API requests. The API calls use `write: false`; neither API timing includes submission, transaction inclusion, or confirmation. The `/compliance` request generates its own proof, so its timing is not the enclosing duration of the separately timed direct proof. Differences between their medians cannot estimate API overhead. Sepolia transaction latency is excluded.
+
+The benchmark uses the nearest-rank quantile definition: the reported 50th percentile is sorted observation `ceil(0.50*n)` and P95 is observation `ceil(0.95*n)`. For even sample counts, the reported “median” is therefore the lower central observation, rather than the mean of the two central observations. Standard deviation uses denominator `n`; P95 is suppressed for fewer than 20 measurements. These descriptive summaries do not provide confidence intervals or a statistical comparison between implementations.
 
 The final benchmark environment is:
+
+*Table 7. Archived timing environment.*
 
 | Item | Value |
 | --- | --- |
@@ -526,6 +530,8 @@ The final benchmark environment is:
 
 The evaluation is organized around six questions that correspond to the research question and design requirements:
 
+*Table 8. Evaluation questions and evidence.*
+
 | ID | Evaluation question | Evidence used |
 | --- | --- | --- |
 | EQ1 | Does the implementation enforce the intended role and state-transition rules? | Contract tests, role tests, loan lifecycle tests |
@@ -539,6 +545,8 @@ The evaluation is organized around six questions that correspond to the research
 
 The measured metrics are selected to match the prototype's security and performance claims rather than to estimate production throughput.
 
+*Table 9. Metrics and their interpretation.*
+
 | Metric category | Metric | Interpretation |
 | --- | --- | --- |
 | Functional correctness | Passing contract, oracle, and frontend tests | Whether implementation behavior matches intended role, proof, API, and UI assumptions |
@@ -551,11 +559,14 @@ The measured metrics are selected to match the prototype's security and performa
 
 ### 5.4 Functional Evidence
 
-The final functional evidence is:
+The archived functional evidence and the subsequent submission regression results are:
+
+*Table 10. Archived and submission functional evidence.*
 
 | Evidence | Result |
 | --- | --- |
-| Contract tests | 28 passing |
+| Archived contract suite | 28 passing |
+| Contract suite after submission security tests | 37 passing, including six security and three arithmetic boundary tests |
 | Oracle API tests | 12 passing |
 | Frontend tests | 6 passing |
 | Frontend production build | Passing |
@@ -569,9 +580,11 @@ The contract tests cover deployment, role configuration, property verification, 
 
 The oracle API tests cover service readiness, owner-scoped property listing, unsupported network rejection, property ID validation, principal validation, non-compliant behavior, and registry verification failure behavior.
 
-The frontend tests cover representative wallet-readiness and table-rendering behavior. The frontend production build passes, with a known Vite chunk-size warning that does not fail the build.
+The six frontend tests cover the wallet gate and selected table/detail components. They do not exercise the complete wallet transaction lifecycle or all application pages. The frontend production build passes, with a Vite chunk-size warning that does not fail the build.
 
-### 5.5 Correctness Matrix
+The six added tests reject a valid proof offered for another verified property and a modified threshold signal; demonstrate accepted proof resubmission after an unchanged refresh; demonstrate approval without an ownership recheck; demonstrate rejection after principal replacement; and demonstrate that an approved loan survives a later compliance reset. The final four are boundary observations, not additional production guarantees. All tests share `test/proofestate.test.js`. Three further arithmetic tests verify exact-boundary acceptance on chain and circuit rejection one unit above it, the largest 64-bit valuation and its maximum compliant principal, and valuation/principal overflow with consistently recomputed commitments. These tests bypass the API rejection path and check the circuit itself.
+
+### 5.5 Scenario and Boundary Evidence
 
 `PROP-001` has a mock registry valuation of `980000`. Under the 80 percent LTV rule:
 
@@ -581,20 +594,26 @@ The frontend tests cover representative wallet-readiness and table-rendering beh
 
 The benchmark matrix uses this value to test the compliant path, exact boundary, one-unit-above-boundary failure, and registry-failure path.
 
-| Case | Property | Principal | Expected result | Observed result | Proof generation |
-| --- | --- | ---: | --- | --- | --- |
-| Compliant | `PROP-001` | 750000 | Pass | Pass, 0 failures across 30 measured runs | Generated |
-| Boundary | `PROP-001` | 784000 | Pass at exactly 80% LTV | Pass, 0 failures across 30 measured runs | Generated |
-| Non-compliant | `PROP-001` | 784001 | Reject above 80% LTV | Reject, 0 failures across 30 measured runs | Skipped, `NON_COMPLIANT_OR_MISSING_PROOF_INPUTS` |
-| Invalid registry | `PROP-004` | 100000 | Reject failed registry verification | Reject, 0 failures across 30 measured runs | Skipped, `NO_ENCUMBRANCE` |
+*Table 11. Policy scenarios and recorded proving behavior.*
 
-The matrix separates correctness from throughput. Passing cases generate Groth16 proofs. Rejected cases return compliance failure without invoking proof generation, which is the intended behavior because there is no valid proof statement to submit on chain.
+| Scenario | Property | Principal | Policy expectation | Recorded proving behavior |
+| --- | --- | ---: | --- | --- |
+| Compliant | `PROP-001` | 750000 | Within 80% limit | Proof generated |
+| Exact boundary | `PROP-001` | 784000 | Equals 80% limit | Proof generated |
+| Above boundary | `PROP-001` | 784001 | Exceeds 80% limit | Proving skipped: non-compliant |
+| Registry failure | `PROP-004` | 100000 | Encumbrance rule fails | Proving skipped: `NO_ENCUMBRANCE` |
+
+Each scenario contains 30 measured iterations and no recorded timing exceptions. Valuation and principal use the same abstract integer unit; no currency conversion or floating-point monetary arithmetic is performed.
+
+Passing scenarios generate Groth16 proofs and rejected scenarios skip proving. In the timing harness, “failures” counts caught exceptions or non-success HTTP responses; an expected policy rejection is not a timing failure. The harness does not independently assert every API response's decision or verify every generated proof on chain. Recorded skip reasons and implementation tests provide separate behavioral evidence. Registry eligibility is checked by the oracle and is not included in the LTV circuit.
 
 ### 5.6 Primary Latency Results
 
 Primary compliant path: `PROP-001`, principal `750000`, 5 warm-up runs and 30 measured runs.
 
-| Metric | Runs | Failures | Min ms | Median ms | Mean ms | P95 ms | Max ms | Std dev |
+*Table 12. Primary sequential latency measurements in milliseconds.*
+
+| Metric | n | Fail. | Min ms | Median ms | Mean ms | P95 ms | Max ms | Std dev |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Build verification input | 30 | 0 | 1.91 | 3.05 | 3.22 | 4.77 | 7.94 | 1.09 |
 | Build compliance inputs | 30 | 0 | 3.19 | 3.73 | 4.01 | 5.31 | 6.72 | 0.79 |
@@ -604,17 +623,13 @@ Primary compliant path: `PROP-001`, principal `750000`, 5 warm-up runs and 30 me
 
 The results show that proof generation dominates local latency. Building verification and compliance inputs is fast, with median times below 5 ms. Oracle `/verify` is also fast because it evaluates registry rules and computes commitments. Oracle `/compliance` has a median latency of 409.16 ms because it includes Groth16 proof generation.
 
-The difference between proof-generation median latency and Oracle `/compliance` median latency is small:
-
-```text
-409.16 ms - 399.53 ms = 9.63 ms
-```
-
-This indicates that API overhead is relatively small compared with proving time in the successful local path.
+The two reported medians are similar in scale, which is consistent with proving being the main cost of a successful read-only compliance request. It does not measure API overhead: the API and direct measurements use separate proof invocations. A paired decomposition would require timing the prover inside each API request and reporting the residual from the same invocation.
 
 ### 5.7 Boundary and Failure-Case Latency Results
 
-| Case | Metric | Runs | Failures | Median ms | Mean ms | Notes |
+*Table 13. Boundary and rejection-path timings.*
+
+| Case | Metric | n | Fail. | Median ms | Mean ms | Notes |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | Boundary | Generate Groth16 proof | 30 | 0 | 437.08 | 471.37 | Proof generated at exactly 80% LTV |
 | Boundary | Oracle `/compliance` latency | 30 | 0 | 432.62 | 451.57 | Includes proof generation |
@@ -629,7 +644,9 @@ Rejected paths are faster because the oracle does not invoke Groth16 proof gener
 
 All stability runs use `PROP-001` with principal `750000` and the same local Oracle API. This is a repeated local workload, not a public-chain throughput or concurrent-user benchmark.
 
-| Measured runs | Failures | Median proof ms | Mean proof ms | P95 proof ms | Median `/compliance` ms | P95 `/compliance` ms |
+*Table 14. Sequential timing-session summaries.*
+
+| Measured runs | Fail. | Median proof ms | Mean proof ms | P95 proof ms | Median `/compliance` ms | P95 `/compliance` ms |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 10 | 0 | 441.43 | 455.58 | n/a | 428.45 | n/a |
 | 30 | 0 | 399.53 | 407.55 | 469.53 | 409.16 | 480.30 |
@@ -645,6 +662,8 @@ Gas results use the Node 20 evaluation baseline generated with Hardhat gas repor
 REPORT_GAS=true hardhat test
 ```
 
+*Table 15. Archived method gas averages.*
+
 | Contract | Method | Average gas |
 | --- | --- | ---: |
 | `PropertyVerification` | `setVerified` | 115996 |
@@ -659,6 +678,8 @@ REPORT_GAS=true hardhat test
 
 Deployment gas:
 
+*Table 16. Archived deployment gas averages.*
+
 | Contract | Average gas |
 | --- | ---: |
 | `PropertyVerification` | 771511 |
@@ -667,11 +688,13 @@ Deployment gas:
 | `Lending` | 1152092 |
 | `RoleAdminManager` | 719736 |
 
-The most expensive runtime method in the core proof path is `ComplianceVerifier.verifyProofAndSetCompliance`, with average gas of 310411. This is expected because it performs public signal checks and calls the generated pairing-based verifier. The loan lifecycle methods are cheaper than proof verification, with approval averaging 81464 gas and repayment averaging 57219 gas.
+The archived average of 310,411 gas for `ComplianceVerifier.verifyProofAndSetCompliance` includes signal checks, the generated verifier call, state writes, and event emission. It is not an isolated pairing-verification cost. The reporter aggregates observed calls to each method: `setVerified` spans different storage states, and `approveLoan` can include approval and rejection paths. These averages are descriptive costs of the archived test workload, not a guaranteed price for every successful transaction. Gas is not converted to currency or public-network latency. The additional submission tests do not replace this historical gas baseline.
 
 ### 5.10 Circuit Size
 
 The circuit-size inspection reports:
+
+*Table 17. Circuit structure.*
 
 | Metric | Value |
 | --- | ---: |
@@ -688,6 +711,8 @@ The circuit is intentionally small because it proves only one LTV rule. Adding m
 
 The final frontend production build snapshot is:
 
+*Table 18. Archived frontend bundle sizes.*
+
 | Asset | Size | Gzip |
 | --- | ---: | ---: |
 | `dist/index.html` | 0.40 kB | 0.27 kB |
@@ -699,24 +724,17 @@ The final frontend production build snapshot is:
 
 ### 5.12 Local End-to-End Workflow Evidence
 
-The local CLI workflow completes the full sequence:
-
-```text
-oracle verification
--> compliance proof generation
--> on-chain verification
--> loan request
--> loan officer approval
--> repayment
-```
+The local CLI workflow completes oracle verification, compliance proof generation, on-chain proof verification, loan request, loan-officer approval, and repayment.
 
 Final local workflow evidence:
+
+*Table 19. Single archived local workflow observation.*
 
 | Scenario | Command | Duration | Final state |
 | --- | --- | ---: | --- |
 | Happy path | `pnpm demo:flow PROP-001 750000` | 1.82s | `Repaid` |
 
-This duration includes oracle verification, compliance proof generation, on-chain proof verification, loan request, approval, and repayment on the local Hardhat chain.
+The recorded duration covers this full sequence on the local Hardhat chain.
 
 ![DApp borrower loan lifecycle](../docs/screenshots/04-borrower-loan-lifecycle.png)
 
@@ -732,33 +750,40 @@ External validity is limited because all benchmark latency results are local. Ha
 
 Construct validity is limited by the benchmark scope. The updated matrix covers the successful path, exact boundary, one-unit-above-boundary rejection, invalid-registry rejection, and repeated proof-generation runs. It still does not measure concurrent production traffic, public-chain inclusion latency, or throughput under multiple independent borrowers.
 
-Reproducibility risk is reduced by recording the command, environment, raw benchmark file, git commit, and dirty flag. The September 2026 benchmark files record `dirty: true` because manuscript and documentation changes were in progress during the run. Hardware, Node.js runtime behavior, and dependency versions may still affect absolute latency values.
+Reproducibility is supported by recorded commands, environment, raw observations, commit, and dirty flag. The September files record `dirty: true` with untracked benchmark and manuscript artifacts; this is not an immutable release snapshot. The evaluation notes map reported results to source files, raw observations, and reproduction commands. Hardware, Node.js scheduling, session order, warm-up effects, and dependency versions can affect latency. The small sequential sessions cannot estimate rare failure rates, operational availability, or comparative speedups; no confidence intervals, matched baseline, or throughput experiment are reported.
 
 ### 5.14 Evaluation Interpretation
 
 The evaluation supports four conclusions.
 
-First, the implementation is functionally complete within the declared prototype scope. The full local workflow can be executed, and the test suites cover the core success and failure paths.
+First, the full local workflow executes within the declared prototype scope, and the test suites cover its core success and failure paths.
 
-Second, the correctness matrix supports the LTV boundary claim. The system accepts a principal below the 80% limit, accepts the exact 80% boundary, rejects a principal one unit above the limit without proof generation, and rejects an encumbered registry record without proof generation.
+Second, the correctness matrix accepts below-limit and exact-boundary principals, and rejects a principal one unit above the 80% limit or an encumbered registry record before proof generation.
 
-Third, proof generation is the main latency cost. In the primary 30-run compliant benchmark, median proof-generation time is 399.53 ms and median oracle `/compliance` latency is 409.16 ms. This indicates that optimizing proof generation would have greater impact than optimizing ordinary API request handling.
+Third, the primary 30-run benchmark reports median direct proving of 399.53 ms and median read-only `/compliance` latency of 409.16 ms. This is consistent with proving dominating success-path latency, but independent invocations do not quantify API overhead or optimization gains.
 
-Fourth, on-chain verification is practical for the prototype but non-negligible. The verifier call is more expensive than simple loan lifecycle state updates. This supports the architectural choice to prove a narrow rule rather than aggregating many policies into one larger circuit.
-
-The evaluation does not claim production throughput. It measures repeated local execution for a thesis prototype with one oracle process, a mock registry, and a local Hardhat chain.
+Fourth, the archived whole compliance operation averages 310,411 gas, exceeding the reported lending-transition averages in that workload. The measurement includes binding checks, proof verification, writes, and events. It does not isolate verifier cost or compare single-policy and aggregated-policy circuits; economic feasibility and comparative circuit efficiency remain unevaluated.
 
 ## 6. Security and Privacy Analysis
 
-### 6.1 Security Claim
+### 6.1 Security Claim and Argument
 
-The bounded security claim is:
+Let `x = (k, Cv, Cp, t)` be the public statement and `w = (v, p, sv, sp)` the witness. The implemented relation requires:
 
 ```text
-If the oracle writes a correct property verification record and the Groth16 verifier corresponds to the implemented LTV circuit, then Lending approves only a property/principal commitment pair that has passed the 80 percent LTV proof and current on-chain binding checks.
+0 <= v, p < 2^64; 0 <= t < 2^14
+Cv = MiMCSponge(k, v, sv)
+Cp = MiMCSponge(k, p, sp)
+10000 * p <= t * v
 ```
 
-This claim is deliberately limited and conditional. It does not claim production-grade lending security, full borrower privacy, decentralized oracle trust, or real asset safety.
+Here `k` is the Keccak-derived property identifier reduced modulo the BN254 scalar field. Salts are field elements and the wrapper fixes `t = 8000`. Both scaled products are below `2^78`; the inclusive comparison adds one to the right-hand product, still below the 80-bit comparison bound and far below the scalar-field modulus. The range constraints therefore make the intended comparison an integer inequality rather than a modular-arithmetic coincidence. The circuit permits zero values, whereas the oracle rejects a zero principal and its registry rules require a minimum valuation. Those application rules are not additional circuit predicates.
+
+**Conditional approval property.** Assume Groth16 soundness for the deployed circuit and uncompromised setup, binding of the selected commitment construction, an honest oracle valuation record, and maintained role configuration in which only the designated `ComplianceVerifier` can write compliance. When `Lending.approveLoan` transitions a request to Approved, the property is currently verified and its stored principal commitment equals the request commitment. That compliance record was accepted for a witness satisfying the 80% relation and the current valuation commitment.
+
+The argument follows the write path. Only the designated verifier can create a compliant record under the assumed role configuration. It checks all four signals and verifies the proof before writing that record. Any verification refresh clears compliance, and approval checks current verification and commitment equality. Thus a mismatched or absent current compliance record cannot cause an Approved transition. This is an argument from the implemented control flow, supported by tests, rather than a formal verification of the full protocol.
+
+The property does not establish authentic legal ownership, ownership continuity between request and approval, proof age, exclusive use of a proof, secrecy of API responses, or ongoing collateral sufficiency after approval. Property-field binding additionally assumes that the relevant identifiers do not collide under Keccak and field reduction; the field mapping is not injective over all 256-bit identifiers. Administrators can change role configuration, and an extra compliance writer would invalidate the stated argument.
 
 ### 6.2 Protected Assets
 
@@ -811,6 +836,8 @@ The attacker is not assumed to break Ethereum execution, break Groth16 soundness
 
 ### 6.4 Implemented Mitigations
 
+*Table 20. Mitigations and unmitigated API exposure.*
+
 | Threat | Mitigation |
 | --- | --- |
 | Unauthorized property verification | `setVerified` requires `ORACLE_ROLE` |
@@ -823,28 +850,32 @@ The attacker is not assumed to break Ethereum execution, break Groth16 soundness
 | Duplicate active borrowing | `Lending` enforces one active loan per property |
 | Unauthorized loan approval | Approval/rejection requires `LOAN_OFFICER_ROLE` |
 | Unauthorized cancellation or repayment | Borrower-only checks |
-| Admin lockout | `RoleAdminManager` prevents removing final admin |
+| Removal of final manager administrator | `RoleAdminManager` retains its final manager admin; managed-contract roles can still become partial |
 | Malformed API input | Oracle validates network, property ID, and principal |
-| Hosted Oracle write abuse | Prototype scope limits impact to optional Sepolia validation and no real assets; production use would require API authentication, rate limiting, origin policy, transaction allowlists, monitoring, and key-management controls |
+| Hosted Oracle write abuse | No implemented caller authorization or quota mechanism; input validation does not prevent consumption of signer funds or prover resources |
 
 ### 6.5 Security Properties and Evidence
 
 The security claim can be decomposed into concrete properties. Each property is supported by an implemented mechanism and evaluated by tests or inspection, but each also has a remaining limitation.
 
+*Table 21. Security properties, evidence and limitations.*
+
 | Security property | Implemented mechanism | Evidence | Remaining limitation |
 | --- | --- | --- | --- |
-| Valuation confidentiality on chain | Valuation represented by MiMC commitment and private circuit input | Circuit design, contract state inspection, DApp evidence | Oracle still sees plaintext valuation |
-| Principal confidentiality on chain | Principal represented by MiMC commitment and private circuit input | Circuit design, contract state inspection | The local UI/API may display the requested amount for evaluation; borrower anonymity is not provided |
+| No direct valuation publication on chain | MiMC commitment and private circuit input | Circuit and contract inspection | Registry/API expose valuation; deterministic salt permits candidate testing |
+| No direct principal publication on chain | MiMC commitment and private circuit input | Circuit and contract inspection | Compliance API exposes principal and salts; anonymity is not provided |
 | Property binding | Public signal 0 must match `propertyIdToField(propertyId)` | Contract tests for signal mismatch | Property key remains public |
 | Valuation-state binding | Public signal 1 must match current on-chain valuation commitment | Contract tests; stale compliance clearing | Depends on honest oracle verification write |
 | Principal binding | Public signal 2 must match the submitted principal commitment | Contract tests; approval mismatch tests | Same proof can be reused for same property/principal pair |
 | Policy binding | Public signal 3 must equal fixed `MAX_LTV_BPS = 8000` | Contract tests for threshold tampering | Policy is fixed; multiple policies are future work |
 | Compliance write integrity | Only `ComplianceVerifier` has `COMPLIANCE_ROLE` | Deployment and role tests | Generated verifier must correspond to intended circuit |
-| Loan approval integrity | `Lending` checks owner, verification, compliance, principal binding, role, and state | Loan lifecycle tests | Loan officer can still make discretionary approval/rejection decisions |
+| Loan approval gating | Owner checked at request; verification, compliance, principal binding, officer role, and state checked at approval | Loan lifecycle and submission tests | Owner is not rechecked at approval; approved state is not continuously revalidated |
 | Collateral lock | `activeLoanByProperty` prevents duplicate active borrowing | Contract tests | No real lien, liquidation, or legal collateral integration |
-| Administrative continuity | Final admin removal is blocked | RoleAdminManager tests | No multisig, timelock, or emergency pause |
+| Manager administrator retention | Removal of final manager admin is blocked | RoleAdminManager tests | Partial roles across managed contracts remain possible; no multisig or timelock |
 
 The adversarial test matrix used for the prototype is summarized below. It consolidates contract, Oracle API, frontend, and benchmark evidence into security-relevant attack or misuse cases.
+
+*Table 22. Prototype adversarial scenarios.*
 
 | Category | Scenario | Expected behavior | Evidence |
 | --- | --- | --- | --- |
@@ -855,41 +886,54 @@ The adversarial test matrix used for the prototype is summarized below. It conso
 | State replay | Property verification is refreshed after compliance | Stale compliance and principal binding are cleared | Contract tests |
 | Collateral reuse | Borrower attempts another active loan for the same property | Duplicate active borrowing is rejected | Contract tests |
 | API abuse | Malformed property ID, unsupported network, or invalid principal is submitted | API returns validation failure without server error | Oracle API tests |
-| Frontend readiness | User reaches the DApp before wallet/readiness conditions are satisfied | Interface remains in readiness-gated state | Frontend tests |
+| Frontend wallet gate | User has not connected a wallet or entered the app | Wallet-gate component displays the corresponding state | Component tests; not full application authorization evidence |
+
+The additional submission tests also document accepted behaviors that limit the claims:
+
+*Table 23. Accepted boundary behaviors established by added tests.*
+
+| Boundary scenario | Observed contract behavior | Implication |
+| --- | --- | --- |
+| Verification refresh retains the valuation commitment | Stored compliance clears; the same proof can restore it | State reset does not imply proof freshness |
+| Owner changes after request, with the valuation commitment retained | Original borrower's request can still be approved after proof resubmission | Ownership is not bound into the proof or rechecked at approval |
+| Another compliant principal is submitted before approval | The old pending request is rejected and its lock released | The property has one mutable compliance slot, not independent loan attestations |
+| Verification refresh occurs after approval | Approved loan and active lock remain | Approval is a snapshot; later compliance does not trigger servicing actions |
 
 The matrix is evidence of systematic prototype-level security and adversarial testing. It is not a third-party audit and does not establish production security.
 
 ### 6.6 Privacy Boundary
 
-ProofEstate provides on-chain privacy for valuation and principal with respect to public-chain observers. It does not provide complete transaction privacy. Owner address, property key, proof hash, compliance status, and loan state remain visible. The oracle sees plaintext values during proof generation.
+Three distinct properties must be separated. First, the circuit's witness values are absent from the Groth16 public-signal vector. Second, the transaction interface and stored records do not directly publish those values. Third, confidentiality of the application would require commitments and all auxiliary channels to prevent recovery of those values. The implementation demonstrates the first two properties but does not establish the third.
 
-The system therefore demonstrates privacy-preserving compliance, not anonymous lending.
+The valuation salt is deterministically derived from property context and an owner hash; an observer with those inputs can recompute it. Given a small domain of plausible valuations, the observer can test candidates against the public commitment. Groth16 zero knowledge does not hide information already revealed by the statement, a weakly blinded commitment, or another interface. Fresh random principal salts improve blinding only when kept secret, and the current compliant API response returns both salts and the witness values in `proofInputs`.
+
+The mock dataset is available in the artifact, and the unauthenticated API returns valuation and principal-related data. Public wallet addresses, property identifiers, proof hashes, events, and lifecycle state also support linkage. The appropriate claim for this prototype is selective omission of financial plaintext from the blockchain, under an explicitly trusted prover. No indistinguishability experiment, entropy analysis, or confidentiality proof for the complete application is reported.
 
 ### 6.7 Replay and Freshness Analysis
 
 The proof is bound to four public values: the property key mapped into the SNARK field, the current on-chain valuation commitment, the submitted principal commitment, and the fixed maximum LTV threshold. `ComplianceVerifier` checks these public signals before calling the generated Groth16 verifier. This prevents a proof generated for one property, valuation commitment, principal commitment, or LTV threshold from being accepted for a different on-chain context.
 
-The design also handles stale property verification records. When `PropertyVerification.setVerified` refreshes a property record, it clears the existing compliance flag and principal commitment. A later loan approval must therefore rely on compliance generated against the current valuation commitment.
+When `PropertyVerification.setVerified` refreshes a property record, it clears the existing compliance flag and principal commitment. A later approval requires a compliant record bound to the current valuation commitment, but the proof need not have been generated after the refresh. If that commitment is unchanged, old proof calldata can recreate the record, as the submission test demonstrates.
 
-The proof is not currently bound to a borrower address, loan ID, timestamp, expiry, or single-use nonce. As a result, the same valid proof can be resubmitted for the same property and principal commitment. In the prototype this only refreshes the same compliance state and does not bypass the lending contract's property-owner and active-loan checks. In a production system, proof freshness should be enforced through a nonce, expiry, registry version, borrower binding, or loan-specific challenge.
+The proof is not bound to a borrower address, loan ID, chain ID, deployment address, timestamp, expiry, registry version, or single-use nonce. The same proof is reusable wherever its signals and verification key remain compatible. Request-time ownership and the active-loan lock still constrain lending, but ownership is not rechecked at approval. A complete freshness design should specify the intended scope, incorporate its nonce/version/domain into the proved statement, and consume or validate that context on chain; adding a timestamp to an event alone would not provide this guarantee.
 
 ### 6.8 Hosted Oracle API Exposure
 
-The hosted Oracle API used for optional Sepolia validation is a testnet service, not a production public transaction gateway. The current API is intentionally lightweight and does not implement application-level authentication, request signing, rate limiting, per-origin transaction policy, or operator approval for each privileged write.
+The hosted Oracle API used for optional Sepolia validation is a testnet service. It lacks caller authentication, request signing, rate limiting, per-origin transaction policy, and operator approval for individual writes.
 
-When write-enabled requests are allowed, a public caller could cause the Oracle service to generate proofs or submit Sepolia verification/compliance transactions from the configured Oracle signer. Contract role checks still prevent unauthorized accounts from bypassing on-chain authorization, but the hosted service can still spend test ETH, consume prover CPU time, and exhaust API resources.
+When write-enabled requests are allowed, a public caller can trigger proving or verification/compliance transactions through the configured Oracle signer. Contract roles authorize that signer rather than the API caller, leaving test ETH, prover CPU, and service capacity exposed.
 
-This risk is acceptable only under the declared prototype scope: Sepolia is optional validation, no real assets move, and production availability is not claimed. Before production use, the hosted Oracle would need API authentication, origin allowlisting, request quotas, transaction allowlists, monitoring, and explicit key-management controls.
+The absence of real asset settlement limits financial exposure but does not prevent data disclosure, unauthorized signer use, or denial of service. Deployment beyond a controlled demonstration requires authenticated and authorized callers, restricted response schemas, quotas, transaction allowlists, monitoring, and explicit key-management controls. CORS does not authorize callers.
 
 ### 6.9 Residual Risks
 
 The main residual risks are:
 
-- centralized oracle trust;
-- mock registry data;
-- prototype trusted setup;
+- centralized oracle trust, mock registry data, and prototype trusted setup;
 - no proof freshness nonce, expiry, borrower binding, or loan ID binding;
-- deterministic valuation salt linkability;
+- deterministic valuation salts and unauthenticated API disclosure of witness values;
+- no approval-time ownership revalidation or continuous collateral monitoring;
+- one mutable compliance slot per property, allowing proof replacement to invalidate a pending request;
 - public owner address and loan state;
 - no production key management;
 - hosted Oracle API exposure if deployed without authentication, rate limiting, and transaction policy;
@@ -903,20 +947,24 @@ These risks are explicit limitations of the thesis prototype. They would need to
 
 ### 7.1 Comparison Summary
 
-| Architecture | Privacy for valuation/principal | On-chain enforcement | Main trust assumption | Prototype suitability |
-| --- | --- | --- | --- | --- |
-| Plaintext on-chain verification | None | Strong | Smart contract correctness | Poor, because it fails the privacy goal |
-| Off-chain-only verification | High if backend is trusted | Weak | Backend operator | Poor, because enforcement is not on chain |
-| ProofEstate Groth16 design | High against public-chain observers | Strong | Centralized oracle and setup assumptions | Strong |
-| PLONK-style ZK | High against public-chain observers | Strong | Universal or updatable setup model | Medium |
-| STARK-style ZK | High against public-chain observers | Strong | Hash assumptions, larger verifier/proof trade-offs | Lower for this prototype |
-| Threshold oracle | Depends on proof design | Strong if integrated | Honest threshold | Future production extension |
+*Table 24. Qualitative architectural comparison.*
 
-The selected design is evaluated against four criteria:
+| Architecture | Financial input disclosure | Chain check | Main trust assumption | Status |
+| --- | --- | --- | --- | --- |
+| Plaintext on-chain verification | Public valuation and principal | Direct LTV check | Authentic source and correct contract | Conceptual |
+| Off-chain-only verification | Backend access controls | None | Backend operator | Conceptual |
+| ProofEstate Groth16 design | Plaintext omitted; hiding not established | Proof and state binding | Oracle, setup, binding, roles | Implemented |
+| PLONK-style ZK | Commitments and interfaces | Verifier and binding | Setup model and correct verifier | Not implemented |
+| STARK-style ZK | Commitments and interfaces | Verifier and binding | Hash/proof assumptions and correct verifier | Not implemented |
+| Threshold oracle | Attestation and proof design | Attestation checks | Honest threshold and governance | Not implemented |
+
+The comparison describes mechanisms and implementation status. No matched implementations, comparative latency/gas measurements, or production-security ratings are reported. Four criteria informed the implementation:
+
+*Table 25. Criteria informing the implementation.*
 
 | Criterion | Reason for importance | Effect on design choice |
 | --- | --- | --- |
-| Minimal disclosure | The research question requires hiding valuation and principal from public-chain observers | Rejects plaintext on-chain verification |
+| Minimal disclosure | The research question requires omitting valuation and principal plaintext from the blockchain | Rejects plaintext on-chain verification |
 | Auditable enforcement | Loan approval should depend on contract-checkable state, not only backend discretion | Rejects off-chain-only approval |
 | Reproducibility | The system must be implementable and evaluable within a dissertation prototype | Favors a centralized oracle and a narrow Groth16 circuit |
 | Implementation tractability | The prototype must include contracts, circuit, oracle, DApp, tests, and benchmarks | Defers threshold oracles, multiple policies, and larger proof systems to future work |
@@ -958,16 +1006,7 @@ private facts
 -> application state transition
 ```
 
-Potential applications include:
-
-- income threshold verification;
-- KYC or eligibility checks;
-- accredited-investor proofs;
-- insurance claim verification;
-- asset-backed lending;
-- private marketplace compliance.
-
-Each application would require a credible data source, a policy-specific circuit, proof freshness, and production-grade operational controls.
+Potential applications include income threshold checks, KYC or accredited-investor eligibility, insurance claims, other asset-backed loans, and marketplace eligibility. Each application requires authenticated data, a policy-specific circuit, protected witness delivery, explicit proof lifecycle rules, and operational controls.
 
 ## 8. Limitations and Future Work
 
@@ -1016,11 +1055,11 @@ Any production adaptation would require legal, regulatory, and operational revie
 
 ## 9. Conclusion
 
-ProofEstate demonstrates that a sensitive lending compliance rule can be proven privately and enforced on chain. The implemented system proves that a requested principal is at most 80 percent of a property valuation without publishing either plaintext value on chain. It binds proof public signals to property state and principal commitments, and then uses that compliance state to control a role-gated loan lifecycle.
+ProofEstate demonstrates how a zero-knowledge LTV relation can be connected to an auditable lending state machine. The implemented proof establishes that a committed principal is at most 80% of a committed valuation. Application-level checks bind that proof to the property's current valuation commitment and the requested principal commitment before approval can occur, under the stated oracle, setup, commitment, and role assumptions.
 
-The evaluation shows that the system is reproducible locally and functionally complete within its scoped prototype. The system passes contract, oracle, frontend, build, gas, and local workflow checks, and the final experiment matrix covers the successful path, exact 80 percent boundary, one-unit-above rejection, and registry-failure rejection. The final compliant-path benchmark shows median Groth16 proof generation time of 399.53 ms, median oracle `/compliance` latency of 409.16 ms, and average on-chain proof verification gas of 310411. These results support the conclusion that proof generation is the dominant latency cost and that on-chain verification is practical for a narrow prototype rule.
+The evidence includes functional tests, archived workflow and gas inspection, four input scenarios, and sequential timing sessions. The primary reported proof-generation median is 399.53 ms and the read-only API compliance median is 409.16 ms; these exclude chain transactions. Complete proof verification and compliance update average 310,411 gas in the historical test workload. The measurements quantify the selected local implementation without establishing comparative speedups, public-network latency, or production capacity.
 
-The project remains bounded by important limitations: centralized oracle trust, mock registry data, prototype setup artifacts, no proof freshness, and no real lending settlement. Within those boundaries, ProofEstate provides a coherent implementation pattern for combining commitments, zero-knowledge proofs, and smart contracts to preserve privacy while maintaining auditable compliance enforcement.
+The strongest supported privacy result is the omission of valuation and principal plaintext from the blockchain; the registry, deterministic valuation salt, and API remain disclosure channels. The six additional security tests make freshness, ownership, proof replacement, and approval-snapshot limitations explicit. Production confidentiality, robust oracle trust, proof lifecycle control, real settlement, and public-network scalability remain open engineering and evaluation requirements.
 
 ## Appendix A: Key Reproduction Commands
 
@@ -1046,10 +1085,14 @@ pnpm demo:flow PROP-001 750000
 Run the final local benchmark command:
 
 ```bash
-pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
+pnpm benchmark:local --warmups=5 --runs=30 \
+  --property=PROP-001 --principal=750000 \
+  --api=http://127.0.0.1:8787
 ```
 
 ## Appendix B: Evidence Documents
+
+*Table 26. Repository evidence documents.*
 
 | Document | Purpose |
 | --- | --- |
@@ -1059,13 +1102,15 @@ pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=75000
 | `docs/smart-contract-interface-spec.md` | Contract interface specification |
 | `docs/zk-proof-design.md` | ZK proof design |
 | `docs/security-evaluation-report.md` | Security evaluation |
-| `docs/architecture-comparison.md` | Architecture comparison |
-| `docs/limitations-and-extensions.md` | Limitations and future work |
+| `docs/design-decisions.md` | Architecture decisions and comparison |
+| `docs/limitations-and-extensions.md` | Limitations, future work, and generalization |
 | `docs/screenshots/README.md` | Local DApp screenshot evidence index |
 
 ## Appendix C: DApp Screenshot Evidence
 
 The DApp screenshots were captured against the local Hardhat and oracle workflow. They serve as visual evidence for the browser-based workflow and complement the CLI, test, benchmark, and gas evidence reported in Section 5. Any plaintext values visible in these screenshots are local mock evaluation values, not plaintext values stored by the contracts.
+
+*Table 27. Screenshot evidence inventory.*
 
 | Screenshot | Evidence shown |
 | --- | --- |
@@ -1085,7 +1130,7 @@ The DApp screenshots were captured against the local Hardhat and oracle workflow
 
 [2] V. Buterin, "Ethereum Whitepaper: A Next-Generation Smart Contract and Decentralized Application Platform," 2014. Available at: https://ethereum.org/whitepaper/
 
-[3] OpenZeppelin, "Access Control," OpenZeppelin Contracts Documentation. Available at: https://docs.openzeppelin.com/contracts/4.x/access-control
+[3] OpenZeppelin, "Access Control," OpenZeppelin Contracts 5.x Documentation. Available at: https://docs.openzeppelin.com/contracts/5.x/access-control
 
 [4] J. Groth, "On the Size of Pairing-Based Non-interactive Arguments," EUROCRYPT 2016, LNCS 9666, pp. 305-326, 2016. DOI: 10.1007/978-3-662-49896-5_11.
 

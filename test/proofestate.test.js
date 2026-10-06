@@ -9,7 +9,7 @@ const {
   parsePropertyId,
   parsePositiveCircuitInteger
 } = require("../backend/oracle/properties");
-const { deterministicSalt } = require("../zk/ltvCircuit");
+const { deterministicSalt, buildProofInputs } = require("../zk/ltvCircuit");
 const { generateComplianceProof } = require("../zk/prover");
 
 const PROPERTY = Object.freeze({
@@ -106,19 +106,34 @@ async function setVerifiedAndCompliant(
   expect(complianceResult.compliant).to.equal(true);
   expect(generated).to.not.equal(null);
 
-  await fixture.compliance.verifyProofAndSetCompliance(
-    verificationResult.propertyKey,
-    BigInt(complianceResult.principalCommitment),
-    generated.solidity.a,
-    generated.solidity.b,
-    generated.solidity.c,
-    generated.solidity.publicSignals
-  );
+  await submitComplianceProof(fixture, verificationResult.propertyKey, {
+    compliance: complianceResult,
+    generated
+  });
 
   return {
     propertyId: verificationResult.propertyKey,
     principalCommitment: BigInt(complianceResult.principalCommitment)
   };
+}
+
+function submitComplianceProof(fixture, propertyId, proof, signals = proof.generated.solidity.publicSignals) {
+  const { a, b, c } = proof.generated.solidity;
+  return fixture.compliance.verifyProofAndSetCompliance(
+    propertyId, BigInt(proof.compliance.principalCommitment), a, b, c, signals
+  );
+}
+
+async function expectConstraintFailure(inputs) {
+  // Only a witness constraint failure satisfies this assertion; missing artifacts
+  // and other infrastructure errors must fail the test.
+  const originalConsoleError = console.error;
+  try {
+    console.error = () => {};
+    await expectAsyncError(generateComplianceProof(inputs), "Assert Failed");
+  } finally {
+    console.error = originalConsoleError;
+  }
 }
 
 async function requestLoan(fixture, propertyId, principalCommitment, borrower = fixture.borrower) {
@@ -560,18 +575,151 @@ describe("ProofEstate contracts", function () {
       const nonCompliant = await buildCompliance(PROPERTY.verified, PRINCIPAL.aboveLtv, 12345n);
       expect(nonCompliant.compliant).to.equal(false);
 
-      let proofRejected = false;
-      const originalConsoleError = console.error;
-      try {
-        console.error = () => {};
-        await generateComplianceProof(nonCompliant.proofInputs);
-      } catch (_error) {
-        proofRejected = true;
-      } finally {
-        console.error = originalConsoleError;
-      }
+      await expectConstraintFailure(nonCompliant.proofInputs);
+    });
+  });
 
-      expect(proofRejected).to.equal(true);
+  describe("Circuit arithmetic boundaries", function () {
+    it("accepts exactly 80 percent LTV on chain and cannot prove one unit above it", async function () {
+      const fixture = await loadFixture(deployProtocolFixture);
+      const record = await setVerification(fixture);
+      const boundary = await complianceProofFor(PROPERTY.verified, 784000n);
+      await submitComplianceProof(fixture, record.propertyKey, boundary);
+      expect(await fixture.verification.isCompliantFor(
+        record.propertyKey, boundary.compliance.principalCommitment
+      )).to.equal(true);
+
+      // Build consistent commitments and bypass the API's early policy check.
+      const overLimit = await buildProofInputs({
+        propertyKey: record.propertyKey,
+        propertyValue: 980000n,
+        loanPrincipal: 784001n,
+        valuationSalt: boundary.compliance.proofInputs.valuationSalt,
+        principalSalt: deterministicSalt("one unit above boundary")
+      });
+      await expectConstraintFailure(overLimit);
+    });
+
+    it("proves the largest 64-bit valuation without field wraparound and rejects its next principal", async function () {
+      const { ltvVerifier } = await loadFixture(deployProtocolFixture);
+      const value = (1n << 64n) - 1n;
+      const principal = value * 8000n / 10000n;
+      const input = {
+        propertyKey: ethers.id("64-bit arithmetic boundary"),
+        propertyValue: value,
+        valuationSalt: deterministicSalt("maximum valuation"),
+        principalSalt: deterministicSalt("maximum compliant principal")
+      };
+      const generated = await generateComplianceProof(await buildProofInputs({
+        ...input, loanPrincipal: principal
+      }));
+      const { a, b, c, publicSignals } = generated.solidity;
+      expect(await ltvVerifier.verifyProof(a, b, c, publicSignals)).to.equal(true);
+      await expectConstraintFailure(await buildProofInputs({
+        ...input, loanPrincipal: principal + 1n
+      }));
+    });
+
+    it("rejects 64-bit valuation and principal overflow even with a satisfied inequality", async function () {
+      const limit = 1n << 64n;
+      const cases = [
+        { propertyValue: limit, loanPrincipal: 1n, maxLtvBps: 8000n },
+        // The raw circuit admits a 14-bit policy input; 10001 isolates the
+        // principal range check. The application wrapper separately fixes 8000.
+        { propertyValue: limit - 1n, loanPrincipal: limit, maxLtvBps: 10001n }
+      ];
+      for (const values of cases) {
+        expect(values.loanPrincipal * 10000n <= values.propertyValue * values.maxLtvBps).to.equal(true);
+        const inputs = await buildProofInputs({
+          propertyKey: ethers.id("64-bit overflow"),
+          valuationSalt: deterministicSalt("overflow valuation"),
+          principalSalt: deterministicSalt("overflow principal"),
+          ...values
+        });
+        await expectConstraintFailure(inputs);
+      }
+    });
+  });
+
+  describe("Proof and workflow security boundaries", function () {
+    // Accepted behaviors below document the prototype's current limits.
+    // They do not establish guarantees suitable for production lending.
+    it("rejects a valid proof presented for another verified property", async function () {
+      const fixture = await loadFixture(deployProtocolFixture);
+      await setVerification(fixture);
+      const proof = await complianceProofFor(PROPERTY.verified, PRINCIPAL.compliant);
+      const { a, b, c, publicSignals } = proof.generated.solidity;
+      expect(await fixture.ltvVerifier.verifyProof(a, b, c, publicSignals)).to.equal(true);
+      const other = await setVerification(fixture, PROPERTY.duplicateLoanGuard);
+      await expect(submitComplianceProof(fixture, other.propertyKey, proof))
+        .to.be.revertedWithCustomError(fixture.compliance, "InvalidPublicSignal")
+        .withArgs(0n, await fixture.compliance.propertyIdToField(other.propertyKey), BigInt(publicSignals[0]));
+    });
+
+    it("rejects a changed policy signal before updating compliance", async function () {
+      const fixture = await loadFixture(deployProtocolFixture);
+      const record = await setVerification(fixture);
+      const proof = await complianceProofFor(PROPERTY.verified, PRINCIPAL.compliant);
+      const signals = [...proof.generated.solidity.publicSignals];
+      signals[3] = "9000";
+      await expect(submitComplianceProof(fixture, record.propertyKey, proof, signals))
+        .to.be.revertedWithCustomError(fixture.compliance, "InvalidPublicSignal")
+        .withArgs(3n, 8000n, 9000n);
+      expect(await fixture.verification.isCompliant(record.propertyKey)).to.equal(false);
+    });
+
+    it("permits the same proof after an unchanged valuation refresh clears compliance", async function () {
+      const fixture = await loadFixture(deployProtocolFixture);
+      const record = await setVerification(fixture);
+      const proof = await complianceProofFor(PROPERTY.verified, PRINCIPAL.compliant);
+      await submitComplianceProof(fixture, record.propertyKey, proof);
+      await setVerification(fixture);
+      expect(await fixture.verification.isCompliant(record.propertyKey)).to.equal(false);
+      await submitComplianceProof(fixture, record.propertyKey, proof);
+      expect(await fixture.verification.isCompliantFor(
+        record.propertyKey, proof.compliance.principalCommitment
+      )).to.equal(true);
+    });
+
+    it("does not recheck ownership at approval after the oracle changes the owner", async function () {
+      const fixture = await loadFixture(deployProtocolFixture);
+      const record = await setVerification(fixture);
+      const proof = await complianceProofFor(PROPERTY.verified, PRINCIPAL.compliant);
+      await submitComplianceProof(fixture, record.propertyKey, proof);
+      await requestLoan(fixture, record.propertyKey, proof.compliance.principalCommitment);
+      // An authorized oracle changes ownership while retaining the commitment.
+      await fixture.verification.connect(fixture.oracle).setVerified(
+        record.propertyKey, true, record.evidenceHash,
+        BigInt(record.valuationCommitment), fixture.other.address
+      );
+      await submitComplianceProof(fixture, record.propertyKey, proof);
+      await approveLoan(fixture);
+      expect((await fixture.verification.getRecord(record.propertyKey)).owner).to.equal(fixture.other.address);
+      const loan = await fixture.lending.getLoan(0);
+      expect(loan.borrower).to.equal(fixture.borrower.address);
+      expectLoanState(loan, LOAN_STATE.approved);
+    });
+
+    it("rejects a pending request when another principal replaces current compliance", async function () {
+      const fixture = await loadFixture(deployProtocolFixture);
+      const record = await setVerification(fixture);
+      const first = await complianceProofFor(PROPERTY.verified, PRINCIPAL.compliant);
+      await submitComplianceProof(fixture, record.propertyKey, first);
+      await requestLoan(fixture, record.propertyKey, first.compliance.principalCommitment);
+      const replacement = await complianceProofFor(PROPERTY.verified, 700000n);
+      await submitComplianceProof(fixture, record.propertyKey, replacement);
+      await approveLoan(fixture);
+      expectLoanState(await fixture.lending.getLoan(0), LOAN_STATE.rejected);
+      await expectNoActiveLoan(fixture.lending, record.propertyKey);
+    });
+
+    it("leaves an approved loan approved when a later refresh clears compliance", async function () {
+      const fixture = await loadFixture(deployProtocolFixture);
+      const { propertyId } = await requestAndApproveLoan(fixture);
+      await setVerification(fixture);
+      expect(await fixture.verification.isCompliant(propertyId)).to.equal(false);
+      expectLoanState(await fixture.lending.getLoan(0), LOAN_STATE.approved);
+      await expectActiveLoan(fixture.lending, propertyId, 0);
     });
   });
 

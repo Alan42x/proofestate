@@ -1,11 +1,11 @@
 const fs = require("fs");
 const path = require("path");
 const { ethers } = require("ethers");
-const { createJsonRpcProvider } = require("../backend/oracle/contracts");
+const { createJsonRpcProvider } = require("../../backend/oracle/contracts");
 
-require("./load-env");
+require("../load-env");
 
-const rootDir = path.join(__dirname, "..");
+const rootDir = path.join(__dirname, "../..");
 const deploymentPath = path.join(rootDir, "deployments", "sepolia.json");
 const propertyId = process.argv[2] || "PROP-001";
 

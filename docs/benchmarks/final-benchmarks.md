@@ -64,7 +64,7 @@ pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=75000
 pnpm benchmark:local --warmups=5 --runs=50 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
 ```
 
-All tables report measured runs only; warm-up iterations are excluded.
+All tables report measured runs only; warm-up iterations are excluded. Stages are timed sequentially. API requests use `write: false` and exclude chain submission and confirmation. Direct proving and API compliance use different proof invocations, so their median difference does not measure API overhead. Quantiles use nearest rank (`ceil(p*n)`); the reported median for even `n` is the lower central observation. Standard deviation uses denominator `n`.
 
 ## Workload
 
@@ -85,7 +85,7 @@ The primary principal `750000` is compliant. The boundary principal `784000` is 
 | Non-compliant | `PROP-001` | 784001 | Reject above 80% LTV | Reject, 0 failures across 30 measured runs | Skipped, `NON_COMPLIANT_OR_MISSING_PROOF_INPUTS` |
 | Invalid registry | `PROP-004` | 100000 | Reject failed registry verification | Reject, 0 failures across 30 measured runs | Skipped, `NO_ENCUMBRANCE` |
 
-The matrix separates correctness from throughput. Passing cases generate Groth16 proofs. Rejected cases return compliance failure without invoking proof generation, which is the intended behavior because there is no valid proof statement to submit on chain.
+“Failures” counts caught exceptions or non-success HTTP responses; expected policy rejection does not count as a timing failure. The harness records proof generation and skip reasons but does not independently assert every API decision or verify each generated proof on chain. Registry rejection is an oracle rule, not an LTV circuit predicate. Contract/API tests provide separate behavioral evidence.
 
 ## Primary Local Latency Results
 
@@ -99,7 +99,7 @@ Primary compliant path: `PROP-001`, principal `750000`, 5 warm-up runs and 30 me
 | Oracle `/verify` latency | 30 | 0 | 5.02 | 5.98 | 6.78 | 11.45 | 12.54 | 1.91 |
 | Oracle `/compliance` latency | 30 | 0 | 377.61 | 409.16 | 413.27 | 480.30 | 487.67 | 22.65 |
 
-Proof generation remains the dominant local latency component. Median proof generation is 399.53 ms and median `/compliance` latency is 409.16 ms, indicating that API overhead is small relative to proving time.
+Median direct proving is 399.53 ms and median read-only `/compliance` response time is 409.16 ms. Their similar scale is consistent with proving dominating the successful path. API overhead was not separately measured because these are independent proof invocations.
 
 ## Boundary and Failure-Case Latency Results
 
@@ -129,6 +129,8 @@ The 10/30/50-run results show zero failures and similar median proof-generation 
 ## Gas Snapshot
 
 Gas results use the dissertation Node 20 gas baseline recorded in `docs/evaluation-notes.md`.
+
+The 310,411-gas compliance operation includes signal checks, generated verification, storage writes, and events. Method averages aggregate test-workload calls and storage states; the approval method can include both approval and rejection paths. The additional submission regression tests do not replace this historical gas baseline.
 
 | Contract | Method | Avg gas |
 | --- | --- | ---: |

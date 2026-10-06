@@ -1,9 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 
-require("./load-env");
+require("../load-env");
 
-const rootDir = path.join(__dirname, "..");
+const rootDir = path.join(__dirname, "../..");
 const deploymentPath = path.join(rootDir, "deployments", "sepolia.json");
 const rootEnvPath = path.join(
   rootDir,

@@ -364,12 +364,11 @@ frontend/
   src/
 
 scripts/
-  deploy.js
-  sync-local-env.js
-  sync-sepolia-env.js
-  local-demo-check.js
-  local-wallet-flow.js
-  benchmark-local.mjs
+  chain/             # deployment, address synchronization, Sepolia inspection
+  local/             # local readiness, wallet workflow, timing benchmarks
+  e2e/               # browser smoke tests and layout checks
+  thesis/            # manuscript checks, Word builds, and defense slide source
+  load-env.js        # shared environment loader
   zk-build.mjs
 
 test/
@@ -379,7 +378,22 @@ docs/
   figures/
   benchmarks/
   screenshots/
+
+thesis/
+  thesis.md
+  jisa.md
+  docx/
+
+slides/
+  assets/nus-logo.png
+  proofestate-nus-defense-presentation.pptx
 ```
+
+Run scripts through the `pnpm` commands documented above. `pnpm thesis:check` checks manuscript references, captions, abstract/keyword limits, and timing summaries without writing files; it verifies the referenced archives and also accepts new benchmark runs. `pnpm thesis:docx` rebuilds both Word manuscripts in `thesis/docx` and requires Pandoc and `python-docx`. If the current Python lacks `python-docx`, the builder uses the Codex-managed document runtime when available. The two Markdown manuscripts are the content sources; keep content changes there before rebuilding Word.
+
+`pnpm thesis:slides` rebuilds the editable 15-slide defense deck from [scripts/thesis/build-slides.mjs](scripts/thesis/build-slides.mjs). The script contains slide content, layout, citations, evidence paths, and the complete read-aloud speaker Notes. Defense citations refer to the full [thesis](thesis/thesis.md) and its implementation or experimental evidence; the JISA manuscript is the separate journal version. The builder reuses the existing DApp screenshots and the NUS logo in `slides/assets`.
+
+The slide builder requires the Codex-bundled `@oai/artifact-tool` presentation runtime (version 2.7.3 or newer), which is separate from the application dependencies and is not installed by `pnpm install`. It detects the managed runtime automatically; `ARTIFACT_TOOL_PATH` can specify the package directory elsewhere. For review, use `pnpm thesis:slides --out <file.pptx> --preview-dir <directory>` to export a copy and slide previews without replacing the final deck. Keep slide edits in the source before rebuilding; rebuilding replaces direct PowerPoint edits.
 
 ## Environment Files
 
@@ -426,14 +440,13 @@ For deeper analysis, see [docs/security-evaluation-report.md](docs/security-eval
 | [docs/zk-proof-design.md](docs/zk-proof-design.md) | ZK statement, signals, circuit behavior, replay/freshness boundaries |
 | [docs/smart-contract-interface-spec.md](docs/smart-contract-interface-spec.md) | Contract interface and revert/event specification |
 | [docs/security-evaluation-report.md](docs/security-evaluation-report.md) | Threat model, mitigations, assumptions, residual risks |
-| [docs/architecture-comparison.md](docs/architecture-comparison.md) | Comparison against plaintext, off-chain, alternative ZK, and Oracle designs |
-| [docs/design-decisions.md](docs/design-decisions.md) | Architectural rationale and trade-offs |
-| [docs/limitations-and-extensions.md](docs/limitations-and-extensions.md) | Prototype boundaries and future work |
-| [docs/generalization.md](docs/generalization.md) | How the architecture can generalize to other privacy-preserving compliance applications |
+| [docs/design-decisions.md](docs/design-decisions.md) | Architecture decisions, alternatives, and qualitative comparison |
+| [docs/limitations-and-extensions.md](docs/limitations-and-extensions.md) | Prototype boundaries, future work, and candidate applications |
 | [docs/deployment-guide.md](docs/deployment-guide.md) | Local and Sepolia reproduction guide |
 | [docs/screenshots/README.md](docs/screenshots/README.md) | Local DApp screenshot evidence index |
 | [thesis/thesis.md](thesis/thesis.md) | Final Markdown thesis text using the final benchmark evidence |
-| [slides/proofestate-nus-defense-presentation.pptx](slides/proofestate-nus-defense-presentation.pptx) | Defense presentation deck and demo story |
+| [thesis/jisa.md](thesis/jisa.md) | JISA manuscript and submission security evidence |
+| [slides/proofestate-nus-defense-presentation.pptx](slides/proofestate-nus-defense-presentation.pptx) | 15-slide NUS-style defense deck with complete read-aloud speaker notes |
 
 ## Limitations
 

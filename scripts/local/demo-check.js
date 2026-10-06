@@ -1,10 +1,10 @@
-require("./load-env");
+require("../load-env");
 
 const fs = require("fs");
 const path = require("path");
 const { ethers } = require("ethers");
 
-const rootDir = path.join(__dirname, "..");
+const rootDir = path.join(__dirname, "../..");
 const deploymentPath = path.join(rootDir, "deployments", "localhost.json");
 const frontendEnvPath = path.join(rootDir, "frontend", ".env.local");
 const strict = process.argv.includes("--strict");

@@ -1,10 +1,10 @@
-require("./load-env");
+require("../load-env");
 
 const fs = require("fs");
 const path = require("path");
 const { ethers } = require("ethers");
-const { runVerificationAndCompliance } = require("../backend/oracle/service");
-const { LENDING_ABI } = require("../backend/oracle/contracts");
+const { runVerificationAndCompliance } = require("../../backend/oracle/service");
+const { LENDING_ABI } = require("../../backend/oracle/contracts");
 
 const DEFAULT_BORROWER_PRIVATE_KEY =
   "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
@@ -39,7 +39,7 @@ async function main() {
   const flowStartedAt = Date.now();
   const propertyId = process.argv[2] || "PROP-001";
   const principal = BigInt(process.argv[3] || "750000");
-  const deploymentPath = path.join(__dirname, "..", "deployments", "localhost.json");
+  const deploymentPath = path.join(__dirname, "../..", "deployments", "localhost.json");
 
   if (!fs.existsSync(deploymentPath)) {
     throw new Error("Missing deployments/localhost.json. Run pnpm demo:deploy first.");

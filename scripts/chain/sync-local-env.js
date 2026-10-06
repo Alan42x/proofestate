@@ -6,7 +6,7 @@ const HARDHAT_ACCOUNT_0_PRIVATE_KEY =
 const HARDHAT_ACCOUNT_1_PRIVATE_KEY =
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 
-const rootDir = path.join(__dirname, "..");
+const rootDir = path.join(__dirname, "../..");
 const deploymentPath = path.join(rootDir, "deployments", "localhost.json");
 const rootEnvPath = path.join(
   rootDir,

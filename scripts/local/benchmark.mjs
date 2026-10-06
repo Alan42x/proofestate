@@ -10,11 +10,11 @@ const require = createRequire(import.meta.url);
 const {
   buildVerification,
   buildCompliance
-} = require("../backend/oracle/properties.js");
-const { generateComplianceProof } = require("../zk/prover.js");
+} = require("../../backend/oracle/properties.js");
+const { generateComplianceProof } = require("../../zk/prover.js");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.join(__dirname, "..");
+const rootDir = path.join(__dirname, "../..");
 
 function parseArg(name, fallback) {
   const prefix = `--${name}=`;
