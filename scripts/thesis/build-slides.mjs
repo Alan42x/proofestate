@@ -15,6 +15,8 @@ import { parseArgs } from "node:util";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TITLE = "ProofEstate: Blockchain-Based Real Estate Lending Platform with ZK Compliance and Property Verification";
+const REPOSITORY_URL = "https://github.com/Alan42x/proofestate";
+const DEMO_URL = "https://proofestate.vercel.app/";
 const SIZE = { width: 1280, height: 720 };
 const C = {
   blue: "#003D7C", orange: "#EF7C00", ink: "#13283E", gray: "#586879",
@@ -65,7 +67,7 @@ I will explain how the proof is connected to the lending decision, show the impl
   {
     title: "Private proofs connect financial rules to public decisions",
     kicker: "RESEARCH QUESTION",
-    source: "ProofEstate thesis, §§1.1–1.3, 2.8, 7.1.",
+    source: "ProofEstate thesis, §§1.1–1.3, 2.8, 7.2.",
     evidence: [
       "docs/design-decisions.md",
     ],
@@ -159,7 +161,7 @@ The oracle remains trusted for the correctness of external facts. The contracts 
   {
     title: "The circuit proves LTV and commitment openings",
     kicker: "PROOF STATEMENT",
-    source: "ProofEstate thesis, §§4.4, 5.10, 6.1; circuit implementation.",
+    source: "ProofEstate thesis, §§4.4, 5.6, 6.1; circuit implementation.",
     evidence: [
       "circuits/ltv.circom",
       "zk/ltvCircuit.js",
@@ -312,7 +314,7 @@ These are local mock values. Their visibility here does not mean that they are p
   {
     title: "The loan ledger exposes context and lifecycle decisions",
     kicker: "PRODUCT EVIDENCE",
-    source: "ProofEstate thesis, §§4.5, 5.12 and Appendix C; local loan ledger.",
+    source: "ProofEstate thesis, §§4.5, 5.7 and Appendix C; local loan ledger.",
     evidence: [
       "docs/screenshots/04-borrower-loan-lifecycle.png",
       "contracts/Lending.sol",
@@ -339,7 +341,7 @@ The application helps users inspect and operate the workflow, while the contract
   {
     title: "Four cases test the 80% limit and registry rejection",
     kicker: "EXPERIMENT DESIGN",
-    source: "ProofEstate thesis, §§5.1, 5.4–5.5; contract tests and archived timing runs.",
+    source: "ProofEstate thesis, §§5.1–5.3; contract tests and archived timing runs.",
     evidence: [
       "docs/benchmarks/final-benchmarks.md",
       "docs/evaluation-notes.md",
@@ -387,7 +389,7 @@ The current contract suite has thirty-seven passing tests, including six securit
   {
     title: "Proving dominates the measured read-only compliance path",
     kicker: "LOCAL LATENCY",
-    source: "ProofEstate thesis, §5.6, Table 12; archived 30-run session, 25 Sep 2026.",
+    source: "ProofEstate thesis, §5.4, Table 12; archived 30-run session, 25 Sep 2026.",
     evidence: [
       "docs/benchmarks/raw/local-2026-09-25T08-40-22-730Z.json",
     ],
@@ -430,7 +432,7 @@ The results describe a small, sequential local workload. They support a bounded 
   {
     title: "Full compliance processing averages 310,411 gas",
     kicker: "ON-CHAIN COST",
-    source: "ProofEstate thesis, §5.9, Table 15; archived Node 20 gas baseline.",
+    source: "ProofEstate thesis, §5.5, Table 15; archived Node 20 gas baseline.",
     evidence: [
       "docs/evaluation-notes.md",
     ],
@@ -586,28 +588,36 @@ Broader features, such as identity policies, real settlement, and liquidation, a
 
   // 15 — CONCLUSION
   {
-    title: "Bound proofs support approval under explicit assumptions",
+    title: "Bound proofs support auditable loan approval",
     kicker: "CONCLUSION",
     source: "ProofEstate thesis, §§6.1, 9; implementation and evaluation.",
     evidence: [
       "test/proofestate.test.js",
       "docs/benchmarks/final-benchmarks.md",
     ],
-    notes: `To conclude, ProofEstate demonstrates an implemented pattern for connecting a committed loan-to-value relation to an auditable lending decision.
+    notes: `To conclude, ProofEstate connects a committed loan-to-value proof to an auditable loan approval decision. Its main contribution is an implemented binding pattern with tested security boundaries.
 
-The verifier checks that the proof belongs to the current property, valuation commitment, principal commitment, and policy threshold. Approval then checks the accepted compliance record against the request. The evidence includes thirty-seven passing contract tests and archived local measurements with a median proving time of about four hundred milliseconds.
+This result depends on the oracle, trusted setup, proof system, commitments, and role assumptions discussed earlier. Real-world property authenticity and financial settlement remain outside the scope of this prototype.
 
-The result is conditional on the oracle, setup, proof-system, commitment, and role assumptions. It omits financial plaintext from the blockchain, while leaving application confidentiality, proof freshness, real-world source authenticity, and financial settlement as open work.
+Before I close, I will play a recorded demonstration of the prototype in operation.
 
-Thank you for your attention. I am happy to take questions about the design, evaluation, and limitations.`,
+That concludes the demonstration.
+
+The GitHub link on this slide provides the source code, and the Vercel link opens the web demonstration.
+
+Thank you for your attention. I welcome your questions about the design, evaluation, and limitations.`,
     draw: ({ text, rect, image, connect }) => {
-      text("A committed LTV relation becomes a contract-checkable approval decision.", 64, 224, 1120, 106, 42, C.blue, { bold: true });
-      text("The contribution is the implemented binding pattern and its tested boundaries.", 64, 364, 1120, 77, 29, C.gray);
-      rect(64, 473, 1152, 1, C.rule);
-      text("37 contract tests", 64, 506, 542, 41, 32, C.blue, { bold: true });
-      text("399.53 ms median local proof", 64, 559, 673, 43, 30, C.blue);
-      text("Questions & discussion", 797, 512, 419, 100, 40, C.orange, { bold: true });
-      text("Under explicit oracle, proof-system, commitment and role assumptions.", 64, 627, 1152, 29, 22, C.gray);
+      text("An implemented binding pattern with tested security boundaries.", 64, 224, 1152, 44, 28, C.gray);
+      text("Under explicit oracle, proof-system, commitment and role assumptions.", 64, 276, 1152, 34, 20, C.gray);
+      text("Thank you.", 64, 365, 1152, 84, 64, C.blue, { bold: true });
+      text("Questions & discussion", 64, 461, 1152, 44, 30, C.orange);
+      rect(64, 545, 1152, 1, C.rule);
+      text("SOURCE CODE", 64, 565, 544, 24, 14, C.orange, { bold: true });
+      text("WEB DEMO", 672, 565, 544, 24, 14, C.orange, { bold: true });
+      text(REPOSITORY_URL, 64, 599, 544, 34, 23, C.blue,
+        { href: REPOSITORY_URL, name: "repository-link" });
+      text(DEMO_URL, 672, 599, 544, 34, 23, C.blue,
+        { href: DEMO_URL, name: "demo-link" });
     },
   }
 
@@ -686,7 +696,9 @@ function drawingTools(slide, jsx, assets) {
           wrap: "square", autoFit: "none",
           insets: { left: 0, right: 0, top: 0, bottom: 0 },
         },
-        children: value,
+        children: options.href
+          ? jsx("run", { link: { uri: options.href, isExternal: true, action: "" }, children: value })
+          : value,
       }, x, y, w, h);
     },
     rect(x, y, w, h, fill, options = {}) {
