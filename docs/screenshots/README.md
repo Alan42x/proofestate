@@ -1,17 +1,30 @@
 # DApp Screenshot Evidence
 
-These screenshots are the local DApp visual evidence pack for ProofEstate. They were captured against the local Hardhat and Oracle workflow and complement the CLI, test, benchmark, and gas evidence.
+These screenshots show ProofEstate's local Hardhat DApp and Oracle workflow.
+They illustrate interface states, contract records, and event inspection;
+automated behavior and performance results are documented in the
+[evaluation notes](../evaluation-notes.md) and
+[benchmark results](../benchmarks/final-benchmarks.md).
 
 | File | Evidence shown |
 | --- | --- |
-| `01-property-verification-success.png` | `PROP-001` verification completed with property data, verification rules, on-chain record, valuation commitment, and proof status |
-| `02-property-verification-rejection-case.png` | `PROP-010` inactive registry status case showing verification waiting state and unverified on-chain record |
-| `03-zk-compliance-proof-verified.png` | ZK compliance proof completed for principal `750000`, LTV `76.5%`, reusable on-chain proof, and matched proof binding |
-| `04-borrower-loan-lifecycle.png` | Borrower loan request and repayment workspace with loan details, proof binding, collateral lock, and lifecycle ledger |
-| `05-loan-officer-approval-workspace.png` | Loan officer approval workspace with loan book, approval decision, commitments, terms, and timeline |
-| `06-admin-role-access-management.png` | Admin role access management, role directory, grant/revoke controls, target inspector, and role change records |
-| `07-contract-network-operations.png` | Contract and network operations view with service metrics, contract coverage `5/5`, RPC ready, Oracle service ready, and contract matrix |
-| `08-audit-logs-overview.png` | Audit logs overview with portfolio metrics, issued exposure, on-chain activity, proof coverage, permission changes, and loan ledger |
-| `09-onchain-event-traceability.png` | On-chain event traceability with proof/property/loan events, event fields, operator role, contract address, block, and transaction hash |
+| [01-property-verification-success.png](01-property-verification-success.png) | `PROP-001` verified record, registry-rule results, valuation commitment, and recorded compliance status |
+| [02-property-verification-rejection-case.png](02-property-verification-rejection-case.png) | `PROP-010` with INACTIVE registry status, Waiting workflow labels, and an Unverified contract record |
+| [03-zk-compliance-proof-verified.png](03-zk-compliance-proof-verified.png) | Accepted compliance for principal `750000` against valuation `980000`, displayed LTV `76.5%`, and matching commitments |
+| [04-borrower-loan-lifecycle.png](04-borrower-loan-lifecycle.png) | Selected Approved loan with a held lock; ledger also shows Repaid, Cancelled, and Rejected loans |
+| [05-loan-officer-approval-workspace.png](05-loan-officer-approval-workspace.png) | Officer workspace with an Approved loan selected, commitments, terms, timeline, and decision controls |
+| [06-admin-role-access-management.png](06-admin-role-access-management.png) | Role directory, grant/revoke controls, change records, and a blocked revoke for an address without the selected role |
+| [07-contract-network-operations.png](07-contract-network-operations.png) | Five deployed contracts, RPC and Oracle readiness, and metrics from the captured UI session |
+| [08-audit-logs-overview.png](08-audit-logs-overview.png) | Loan-state and lock counts, event counts, role changes, and a loan ledger |
+| [09-onchain-event-traceability.png](09-onchain-event-traceability.png) | Selected `ComplianceProofVerified` event with commitments, proof hash, operator, contract address, block, and transaction hash |
 
-The DApp prevents borrowers from submitting a principal above the calculated maximum borrow amount. This screenshot pack includes a browser-level verification rejection case; above-limit LTV remains covered by the CLI/API failure path and contract/oracle tests.
+The inactive-registry screenshot shows a failing registry condition and an
+unverified record; it does not include a rejection dialog or transaction trace.
+Above-limit principals disable proof generation in the DApp. API rejection and
+direct circuit boundary behavior are exercised by automated tests.
+
+The UI's `5/5` contract count describes deployment availability, not test coverage.
+Its displayed timing and gas values belong to the captured session; formal
+measurements come from the benchmark harness. Valuation and principal shown in
+the interface are off-chain mock data. Repayment records a state change and
+releases the lock without transferring assets.

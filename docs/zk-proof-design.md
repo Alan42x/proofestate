@@ -12,11 +12,7 @@ The proof demonstrates that a requested principal is no more than 80% of the pro
 
 ## Circuit
 
-Source:
-
-```text
-circuits/ltv.circom
-```
+Source: [circuits/ltv.circom](../circuits/ltv.circom).
 
 The main component is:
 
@@ -54,9 +50,11 @@ propertyKeyField = uint256(propertyKey) mod SNARK_SCALAR_FIELD
 
 `ComplianceVerifier.propertyIdToField(bytes32 propertyId)` performs the same modulo mapping on-chain.
 
+Keccak hashing and the modulo conversion occur outside the circuit. The circuit receives only the resulting field element. Modulo reduction is not injective over all `bytes32` values; property separation assumes no collision in the application identifiers and their mapped field elements, together with commitment binding.
+
 ## Commitments
 
-The circuit uses `MiMCSponge(3, 220, 1)` with `k = 0`.
+The circuit uses `MiMCSponge(3, 220, 1)` with its MiMC key input fixed to zero. This key input is distinct from `propertyKeyField`, which is the first message input to each commitment.
 
 Valuation commitment:
 
@@ -70,7 +68,7 @@ Principal commitment:
 principalCommitment = MiMC(propertyKeyField, loanPrincipal, principalSalt)
 ```
 
-The property key is included in both commitments so the same value cannot be cleanly replayed as an unrelated property proof. The valuation salt is deterministic in the current MVP, derived from the mock property record. The principal salt is random by default.
+Including the property field in both commitments binds the values to that property context under the identifier and commitment assumptions above. The valuation salt is deterministic in the prototype, derived from available property context. The principal salt is random by default. Neither choice establishes confidentiality when the registry or API discloses the values and salts.
 
 ## Range Checks
 
@@ -82,11 +80,14 @@ The circuit applies:
 
 The product comparison uses `LessThan(productBits=80)`.
 
-This supports 64-bit value inputs while leaving enough room for multiplication by basis points:
+Both scaled products are below `2^78` because the values are below `2^64` and both `10000` and the 14-bit policy input are below `2^14`:
 
 ```text
-2^64 * 10000 < 2^80
+loanPrincipal * 10000 < 2^78
+propertyValue * maxLtvBps < 2^78
 ```
+
+The right-hand side plus one remains within the 80-bit comparator domain and far below the BN254 scalar-field modulus, so the comparison does not wrap around the field. The unsigned range checks permit zero; positive-principal and registry-valuation rules are separate Oracle checks.
 
 ## Inclusive LTV Comparison
 
@@ -104,11 +105,11 @@ For integer arithmetic, this is equivalent to:
 loanPrincipal * 10000 <= propertyValue * maxLtvBps
 ```
 
-With `maxLtvBps = 8000`, the proof enforces 80% maximum LTV.
+With `maxLtvBps = 8000`, the proof enforces 80% maximum LTV. The circuit accepts a 14-bit policy input; `ComplianceVerifier` fixes the application's accepted policy to `8000`.
 
 ## On-Chain Binding
 
-`ComplianceVerifier.verifyProofAndSetCompliance` checks every public signal before calling the Groth16 verifier:
+`ComplianceVerifier.verifyProofAndSetCompliance` first requires a currently verified property, then checks every public signal before calling the Groth16 verifier. Proof submission is permissionless; the wrapper holds the role required to write compliance.
 
 | Public signal index | Expected value |
 | ---: | --- |
@@ -119,7 +120,7 @@ With `maxLtvBps = 8000`, the proof enforces 80% maximum LTV.
 
 If any signal differs, the contract reverts with `InvalidPublicSignal(index, expected, actual)`.
 
-After signal checks pass, `LtvGroth16Verifier.verifyProof` verifies the Groth16 proof. The verifier then writes:
+After signal checks pass, `LtvGroth16Verifier.verifyProof` verifies the Groth16 proof. The wrapper `ComplianceVerifier` computes `proofHash = keccak256(abi.encode(a, b, c, publicSignals))` and calls:
 
 ```text
 PropertyVerification.setCompliant(propertyId, true, proofHash, principalCommitment)
@@ -131,7 +132,7 @@ The lending contract later requires:
 isCompliantFor(propertyId, principalCommitment)
 ```
 
-This prevents approving a requested loan against a different principal commitment.
+The submitted principal commitment is checked against the proof, rather than against a loan record during proof submission. At approval, `Lending` compares the stored compliance commitment with the requested loan's commitment. Compliance occupies one mutable slot per property.
 
 ## Workflow
 
@@ -149,7 +150,7 @@ Verification:
 
 1. Oracle or client submits proof and public signals to `ComplianceVerifier`.
 2. Contract checks the property is verified.
-3. Contract binds public signals to on-chain property and principal state.
+3. Contract binds public signals to the property field, current valuation commitment, submitted principal commitment, and fixed policy.
 4. Contract calls generated `LtvGroth16Verifier`.
 5. Contract stores compliance and proof hash through `PropertyVerification`.
 
@@ -167,22 +168,27 @@ It is not bound to:
 - a specific borrower address;
 - a specific loan ID;
 - a timestamp or expiry;
-- a unique nonce stored on-chain.
+- a unique nonce stored on-chain;
+- a registry version, chain ID, or deployment address.
 
-Replay across property IDs is rejected because the property field and valuation commitment must match the target property. Replay across principal commitments is rejected by the public signal check. Reuse of the same proof for the same property and principal can refresh the same compliance state, which is acceptable for the MVP but should be tightened for production with proof freshness or nonce policy.
+Property substitution is rejected when the target property field or valuation commitment differs. Changing the principal commitment is rejected by the public signal check. These checks establish context binding under the stated assumptions; they do not make a proof single-use.
 
-When `PropertyVerification.setVerified` refreshes a property record, it clears stale compliance and principal binding. A new proof must be generated against the new valuation commitment.
+Every `PropertyVerification.setVerified` call clears compliance and principal binding. If the valuation commitment is unchanged and the property remains verified, the identical proof can restore compliance. If the commitment changes, a proof matching that commitment is required. There is no proof-consumption or freshness check.
+
+Accepting another principal's proof replaces the property's compliance slot. A pending request with the old commitment remains `Requested` until an action is taken; a subsequent approval attempt rejects it and releases its lock. A refresh after approval does not change an already approved loan. Ownership is checked at request, without an approval-time recheck. See the [contract interface specification](smart-contract-interface-spec.md#lending) for lifecycle behavior.
 
 ## Trusted Setup
 
-The current Groth16 proving key and verifier are prototype artifacts under `zk/artifacts/` and `contracts/generated/`. They are suitable for local reproducibility and dissertation demonstration, not a production ceremony. A production deployment would require a documented trusted setup process or a proof system with different setup assumptions.
+The checked-in proving key, WASM, and generated Solidity verifier form the matching artifact set used for reproduction. The setup script uses local contributions with demonstration entropy strings and does not establish an independently audited ceremony. Soundness remains conditional on an uncompromised setup.
+
+Ordinary reproduction uses the checked-in artifacts. `pnpm zk:setup` and `pnpm zk:build` replace the proving key and generated verifier; using the resulting proofs requires recompilation and deployment of the matching verifier contracts. See the [deployment guide](deployment-guide.md#circuit-and-setup-rebuild) before regenerating them.
 
 ## Salt Risks
 
-Salt reuse can leak equality relationships across proofs. In the MVP:
+Reusing the same value, salt, and property context repeats the commitment, making the corresponding records linkable. In the prototype:
 
 - valuation salt is deterministic for reproducibility against the mock registry;
 - principal salt is random by default;
-- salts and witness inputs must remain off-chain.
+- salts and witness inputs are omitted from on-chain proof calldata, but compliant API responses expose them through `proofInputs`.
 
-Production work should avoid deterministic valuation salts unless the registry commitment policy deliberately accepts linkability.
+Available property context makes deterministic valuation salts reproducible and can permit offline testing of candidate valuations. Random principal blinding does not protect responses that disclose the witness. A confidentiality design would require suitable secret randomness, restricted responses, and control over the underlying data source.

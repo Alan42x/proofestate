@@ -1,117 +1,37 @@
-%%{init: {"theme": "base", "sequence": {"mirrorActors": true, "actorMargin": 58, "messageMargin": 46, "boxMargin": 10, "boxTextMargin": 6}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "primaryColor": "#ffffff", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "actorBkg": "#ffffff", "actorBorder": "#334155", "actorTextColor": "#111827", "activationBkgColor": "#e2e8f0", "activationBorderColor": "#475569", "sequenceNumberColor": "#111827"}}}%%
+%%{init: {"theme": "base", "sequence": {"mirrorActors": false, "actorMargin": 22, "width": 135, "height": 42, "messageMargin": 14, "boxMargin": 8, "boxTextMargin": 5, "noteMargin": 6, "wrap": false, "actorFontSize": 18, "messageFontSize": 18, "noteFontSize": 17, "rightAngles": true}, "themeVariables": {"fontFamily": "Arial", "fontSize": "18px", "primaryColor": "#ffffff", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "actorBkg": "#ffffff", "actorBorder": "#334155", "actorTextColor": "#111827", "activationBkgColor": "#e2e8f0", "activationBorderColor": "#475569", "sequenceNumberColor": "#111827", "noteBkgColor": "#f8fafc", "noteBorderColor": "#94a3b8", "noteTextColor": "#111827"}}}%%
 sequenceDiagram
-  actor Borrower
-  box Off-chain services
-    participant DApp
-    participant Oracle
-    participant MockRegistry as Mock Registry
-    participant Groth16Prover as Groth16 Prover
-  end
+  participant DApp as DApp / wallet
+  participant Oracle as Oracle / prover
   box On-chain contracts
-    participant ComplianceVerifier
-    participant PropertyVerification
+    participant PV
+    participant CV
     participant Lending
   end
-  actor LoanOfficer as Loan Officer
 
-  Borrower->>DApp: Connect wallet
-  DApp->>Oracle: GET /properties?owner=wallet
-  activate Oracle
-  Oracle->>MockRegistry: Load records
-  activate MockRegistry
-  MockRegistry-->>Oracle: Owner-scoped records
-  deactivate MockRegistry
-  Oracle-->>DApp: Property list
-  deactivate Oracle
-  Borrower->>DApp: Select property and principal
+  DApp->>Oracle: POST /verify<br/>(write=true)
+  Oracle->>PV: setVerified(...)
+  PV-->>Oracle: Tx receipt
+  Oracle-->>DApp: Verification result
 
-  DApp->>Oracle: POST /verify
-  activate Oracle
-  Oracle->>MockRegistry: Load registry record
-  activate MockRegistry
-  MockRegistry-->>Oracle: Registry record
-  deactivate MockRegistry
-  alt registry valid
-    Oracle->>PropertyVerification: setVerified(...)
-    activate PropertyVerification
-    PropertyVerification-->>Oracle: Transaction receipt
-    deactivate PropertyVerification
-    Oracle-->>DApp: Verification result
-  else verification failed
-    Oracle-->>DApp: Verification failed
-  end
-  deactivate Oracle
+  DApp->>Oracle: POST /compliance<br/>(write=true)
+  Oracle->>Oracle: Generate proof<br/>and public signals
+  Oracle->>CV: verifyProofAndSetCompliance(...)
+  CV->>PV: isVerified() and<br/>valuationCommitmentOf()
+  PV-->>CV: Verified flag and Cv
+  Note over CV: Bind public signals<br/>Verify Groth16 proof
+  CV->>PV: setCompliant(...)
+  CV-->>Oracle: Tx receipt
+  Oracle-->>DApp: Proof and<br/>compliance result
 
-  DApp->>Oracle: POST /compliance
-  activate Oracle
-  alt LTV compliant
-    Oracle->>Groth16Prover: Generate Groth16 proof
-    activate Groth16Prover
-    Groth16Prover-->>Oracle: Proof and public signals
-    deactivate Groth16Prover
-    Oracle->>ComplianceVerifier: verifyProofAndSetCompliance(...)
-    activate ComplianceVerifier
-    ComplianceVerifier->>PropertyVerification: isVerified(...), valuationCommitmentOf(...)
-    activate PropertyVerification
-    PropertyVerification-->>ComplianceVerifier: Verification and valuation commitment
-    deactivate PropertyVerification
-    ComplianceVerifier->>PropertyVerification: setCompliant(...)
-    activate PropertyVerification
-    PropertyVerification-->>ComplianceVerifier: Compliance state written
-    deactivate PropertyVerification
-    ComplianceVerifier-->>Oracle: true
-    deactivate ComplianceVerifier
-    Oracle-->>DApp: Compliance proof result
-  else LTV non-compliant
-    Oracle-->>DApp: Compliance failed
-  end
-  deactivate Oracle
-
-  Borrower->>DApp: Submit loan request
-  DApp->>Lending: requestLoan(...)
-  activate Lending
-  Lending->>PropertyVerification: ownerOf(propertyId)
-  activate PropertyVerification
-  PropertyVerification-->>Lending: Property owner
-  deactivate PropertyVerification
-  Lending->>Lending: Hold active property lock
-  Lending-->>DApp: loanId
-  deactivate Lending
-
-  alt borrower cancels while Requested
-    Borrower->>DApp: Cancel loan
-    DApp->>Lending: cancelLoan(loanId)
-    activate Lending
-    Lending-->>DApp: LoanCancelled
-    deactivate Lending
-  else loan officer reviews Requested loan
-    LoanOfficer->>DApp: Review loan request
-    alt approved
-      LoanOfficer->>DApp: Approve loan
-      DApp->>Lending: approveLoan(loanId)
-      activate Lending
-      Lending->>PropertyVerification: isVerified(...), isCompliantFor(...)
-      activate PropertyVerification
-      PropertyVerification-->>Lending: Verification and compliance status
-      deactivate PropertyVerification
-      alt valid verification and matching proof
-        Lending-->>DApp: LoanApproved
-      else invalid verification or proof mismatch
-        Lending-->>DApp: LoanRejected
-      end
-      deactivate Lending
-      opt approved loan
-        Borrower->>DApp: Repay loan
-        DApp->>Lending: repay(loanId)
-        activate Lending
-        Lending-->>DApp: LoanRepaid
-        deactivate Lending
-      end
-    else rejected
-      LoanOfficer->>DApp: Reject loan
-      DApp->>Lending: rejectLoan(loanId)
-      activate Lending
-      Lending-->>DApp: LoanRejected
-      deactivate Lending
-    end
+  DApp->>Lending: Borrower: requestLoan(..., Cp)
+  Lending->>PV: ownerOf(propertyId)
+  PV-->>Lending: Recorded owner
+  Lending-->>DApp: LoanRequested (lock held)
+  DApp->>Lending: Officer: approveLoan(loanId)
+  Lending->>PV: isVerified() and<br/>isCompliantFor(..., Cp)
+  PV-->>Lending: Verification / compliance
+  Lending-->>DApp: Approval / rejection event
+  opt loan approved
+    DApp->>Lending: Borrower: repay(loanId)
+    Lending-->>DApp: LoanRepaid (lock released)
   end

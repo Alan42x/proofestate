@@ -1,14 +1,14 @@
 # ProofEstate: Blockchain-Based Real Estate Lending Platform with ZK Compliance and Property Verification
 
 **Manuscript type:** Research Article  
-**Author(s):** ZHANG TIANYI  
-**Affiliation(s):** National University of Singapore, Singapore  
+**Author:** ZHANG TIANYI\
+**Affiliation:** National University of Singapore, Singapore\
 **Corresponding author:** ZHANG TIANYI, e1554005@u.nus.edu  
 **Source code:** https://github.com/Alan42x/proofestate
 
 ## Abstract
 
-Public blockchains can audit lending decisions, but direct verification of a loan-to-value (LTV) rule exposes financial inputs. A zero-knowledge proof must be bound to the relevant application state before its result can safely authorize lending. This paper presents ProofEstate, a reproducible real-estate lending prototype combining a trusted oracle, MiMC commitments, a Groth16 proof, and role-gated smart contracts. The circuit proves that a committed principal does not exceed 80% of a committed valuation. Before writing compliance, the verifier checks the property field identifier, current valuation commitment, principal commitment, and fixed policy threshold. Approval requires current verification and compliance for the request's commitment. The evaluation includes 37 passing contract tests, 12 oracle API tests, six frontend component tests, a complete local workflow, and sequential timing sessions. In the primary 30-run session, median proof generation and read-only oracle compliance response times are 399.53 ms and 409.16 ms; these timings exclude blockchain transactions. The measured average cost of proof verification and compliance update is 310,411 gas. Security-boundary tests demonstrate substitution rejection and expose limits in freshness, ownership revalidation, and mutable compliance state. The prototype omits financial plaintext from the blockchain but exposes values through its mock registry and unauthenticated API; application-wide confidentiality is not established. The result is a concrete pattern for binding private proof relations to public workflow state, conditional on oracle, setup, commitment, and role assumptions.
+Public blockchains can audit lending decisions, but direct verification of a loan-to-value (LTV) rule exposes financial inputs. A zero-knowledge proof must be bound to the relevant application state before its result can safely authorize lending. This paper presents ProofEstate, a reproducible real-estate lending prototype combining a trusted oracle, MiMC commitments, a Groth16 proof, and role-gated smart contracts. The circuit proves that a committed principal does not exceed 80% of a committed valuation. Before writing compliance, the verifier checks the property field identifier, current valuation commitment, principal commitment, and fixed policy threshold. Approval requires current verification and compliance for the request's commitment. The evaluation includes 37 passing contract and circuit tests, 12 oracle API tests, six frontend component tests, a complete local workflow, and sequential timing sessions. In the primary 30-run session, median proof generation and read-only oracle compliance response times are 399.53 ms and 409.16 ms; these timings exclude blockchain transactions. The measured average cost of proof verification and compliance update is 310,411 gas. Security-boundary tests demonstrate substitution rejection and expose limits in freshness, ownership revalidation, and mutable compliance state. The prototype omits financial plaintext from the blockchain but exposes values through its mock registry and unauthenticated API; application-wide confidentiality is not established. The result is a concrete pattern for binding private proof relations to public workflow state, conditional on oracle, setup, commitment, and role assumptions.
 
 ## Keywords
 
@@ -37,11 +37,11 @@ The remainder of the paper is organized as follows. Section 2 reviews related wo
 
 ### 2.1 Smart contracts and blockchain lending
 
-Ethereum-compatible smart contracts provide deterministic state machines whose execution can be independently verified by blockchain participants [1--3]. This property is useful for lending workflows because contract state can encode requests, approvals, repayment status, and role-restricted administrative operations. Decentralized finance protocols have demonstrated that collateralized lending can be automated through smart contracts [4,5]. Existing DeFi lending systems, however, usually operate over liquid on-chain assets whose values and balances are either public or obtained from price feeds. Real-estate lending differs because the collateral is an off-chain asset and the valuation is a sensitive value derived from external records.
+Blockchains provide a shared ledger whose transactions can be independently checked [1]. Ethereum-compatible smart contracts extend this model with programmable state machines [2,3]. Contract state can encode loan requests, approvals, repayment status, and role-restricted administrative operations. Decentralized finance protocols have demonstrated that collateralized lending can be automated through smart contracts [4,5]. Existing DeFi lending systems, however, usually operate over liquid on-chain assets whose values and balances are either public or obtained from price feeds. Real-estate lending differs because the collateral is an off-chain asset and the valuation is a sensitive value derived from external records.
 
 ### 2.2 Oracles and off-chain facts
 
-Smart contracts cannot directly inspect property registries, appraisal records, credit documents, or other off-chain facts. Oracle systems bridge this gap by importing external data into contract execution. Prior work has studied authenticated data feeds and oracle networks, including Town Crier, DECO, and decentralized oracle-network architectures [6--8]. ProofEstate follows this line of work but focuses on a narrower application-security boundary: the oracle is trusted to observe the property registry and private values, while the contract verifies that the proof and on-chain state are consistently bound before updating compliance. The prototype therefore exposes a clear trust boundary instead of assuming that oracle decentralization has already been solved.
+Smart contracts cannot directly inspect property registries, appraisal records, credit documents, or other off-chain facts. Oracle systems bridge this gap by importing external data into contract execution. Prior work has studied authenticated data feeds and oracle networks, including Town Crier, DECO, and decentralized oracle-network architectures [6–8]. ProofEstate follows this line of work but focuses on a narrower application-security boundary: the oracle is trusted to observe the property registry and private values, while the contract verifies that the proof and on-chain state are consistently bound before updating compliance. The prototype therefore exposes a clear trust boundary instead of assuming that oracle decentralization has already been solved.
 
 ### 2.3 Commitments and zero-knowledge proofs
 
@@ -66,7 +66,7 @@ ProofEstate models four operational roles.
 | Loan officer | Approves or rejects requested loans through a role-gated function. |
 | Protocol administrator | Grants and revokes privileged protocol roles. |
 
-The public blockchain records verification state, commitments, compliance state, proof hashes, loan state, and role-governed actions. It does not record plaintext valuation, plaintext principal, witness values, salts, or proof-generation inputs.
+The public blockchain records verification state, commitments, compliance state, proof hashes, loan state, and role-governed actions. Plaintext valuation, principal, and private witness material, including salts, are kept off chain.
 
 ### 3.2 Design requirements
 
@@ -167,9 +167,9 @@ The `ComplianceVerifier` contract is the critical binding component. Before call
 
 Only after these checks pass does the contract call the generated verifier and write compliance state through the property-verification contract. This ordering prevents a valid proof from being detached from the property, valuation commitment, principal commitment, or policy threshold it was meant to authorize. Figure 2 places these checks within the end-to-end workflow.
 
-![End-to-end data flow](../docs/figures/05-end-to-end-data-flow.png){width=6.2in}
+![End-to-end interaction sequence](../docs/figures/05-end-to-end-data-flow.png){width=6.2in}
 
-*Figure 2. End-to-end data and control flow from registry verification and proving to borrower requests and loan-officer decisions. Ownership is checked at request time; verification and matching compliance are checked at approval.*
+*Figure 2. Representative end-to-end sequence with write-enabled API calls. PV denotes PropertyVerification; CV, ComplianceVerifier; Cv and Cp, the valuation and principal commitments. The oracle/prover groups registry lookup and proving; CV summarizes binding and generated-verifier execution. Section 4.5 describes loan-state alternatives.*
 
 ### 4.5 Lending-state enforcement
 
@@ -268,7 +268,7 @@ The bounded repeated-run stability commands use the compliant path with 10, 30, 
 
 Each iteration measures stages sequentially. Direct proving and API compliance generate separate proofs. API requests use `write: false`, excluding transaction submission and confirmation. Medians and P95 use nearest-rank quantiles (`ceil(p*n)`), and standard deviation uses denominator `n`. For even `n`, this median is the lower central observation. P95 is omitted for `n < 20`. No confidence intervals or inferential comparison are reported.
 
-The six raw JSON files retain environment, commands, observations, and source commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true`. Their recorded untracked paths concern benchmark/documentation artifacts; the dirty snapshot is not an immutable executable release. The evaluation notes map each result to its raw file. Automated functional suites were executed under Node v22.22.1; latency and gas measurements use Node 20 and their recorded workloads. Each evidence type is reported with its own runtime and measurement scope.
+The six raw JSON files retain environment, workload parameters, observations, and source commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true`. Their recorded untracked paths concern benchmark/documentation artifacts; the dirty snapshot is not an immutable executable release. The evaluation notes map each result to its raw file. Automated functional suites were executed under Node v22.22.1; latency and gas measurements use Node 20 and their recorded workloads. Each evidence type is reported with its own runtime and measurement scope.
 
 *Table 3. Local performance-measurement environment.*
 
@@ -450,7 +450,7 @@ The security-boundary evaluation also examines accepted proof-lifecycle behavior
 | --- | --- | --- |
 | Refresh retains the valuation commitment | The same proof restores cleared compliance | Reset does not enforce freshness |
 | Owner changes after a request; the valuation commitment is retained | The original borrower's request can be approved after proof resubmission | Ownership is not rechecked at approval |
-| Another principal's proof replaces compliance | The old pending request is rejected and its lock released | Compliance is one mutable slot per property |
+| Another principal's proof replaces compliance | On approval, the old request becomes Rejected and its lock is released | Compliance is one mutable slot per property |
 | Refresh clears compliance after approval | Approved state and active lock remain | Approval is a snapshot decision |
 
 These are deterministic security-boundary observations from the contract suite in `test/proofestate.test.js`. The ownership test explicitly allows the trusted oracle to change the owner while retaining the valuation commitment; it demonstrates a contract boundary, not a bypass of the oracle-role check. Coverage is limited to these deterministic scenarios under the stated trust assumptions.
@@ -524,23 +524,23 @@ Local evidence comprises functional tests, a complete local workflow, circuit an
 
 [3] G. Wood, Ethereum: A Secure Decentralised Generalised Transaction Ledger, Ethereum Yellow Paper. https://github.com/ethereum/yellowpaper.
 
-[4] F. Schaer, Decentralized finance: On blockchain- and smart contract-based financial markets, Federal Reserve Bank of St. Louis Review 103(2) (2021) 153--174. https://doi.org/10.20955/r.103.153-74.
+[4] F. Schär, Decentralized finance: On blockchain- and smart contract-based financial markets, Federal Reserve Bank of St. Louis Review 103(2) (2021) 153–174. https://doi.org/10.20955/r.103.153-74.
 
 [5] Aave, Aave V3 Technical Paper. https://github.com/aave/aave-v3-core/blob/master/techpaper/Aave_V3_Technical_Paper.pdf.
 
-[6] F. Zhang, E. Cecchetti, K. Croman, A. Juels, E. Shi, Town Crier: An authenticated data feed for smart contracts, in: Proceedings of ACM CCS, 2016, pp. 270--282. https://doi.org/10.1145/2976749.2978326.
+[6] F. Zhang, E. Cecchetti, K. Croman, A. Juels, E. Shi, Town Crier: An authenticated data feed for smart contracts, in: Proceedings of ACM CCS, 2016, pp. 270–282. https://doi.org/10.1145/2976749.2978326.
 
-[7] F. Zhang, D. Maram, H. Malvai, S. Goldfeder, A. Juels, DECO: Liberating web data using decentralized oracles for TLS, in: Proceedings of ACM CCS, 2020, pp. 1919--1938. https://doi.org/10.1145/3372297.3417239.
+[7] F. Zhang, D. Maram, H. Malvai, S. Goldfeder, A. Juels, DECO: Liberating web data using decentralized oracles for TLS, in: Proceedings of ACM CCS, 2020, pp. 1919–1938. https://doi.org/10.1145/3372297.3417239.
 
 [8] Chainlink, Chainlink 2.0 and the Future of Decentralized Oracle Networks. https://chain.link/whitepaper.
 
-[9] J. Groth, On the size of pairing-based non-interactive arguments, in: Advances in Cryptology - EUROCRYPT 2016, LNCS 9666, 2016, pp. 305--326. https://doi.org/10.1007/978-3-662-49896-5_11.
+[9] J. Groth, On the size of pairing-based non-interactive arguments, in: Advances in Cryptology - EUROCRYPT 2016, LNCS 9666, 2016, pp. 305–326. https://doi.org/10.1007/978-3-662-49896-5_11.
 
-[10] M.R. Albrecht, L. Grassi, C. Rechberger, A. Roy, T. Tiessen, MiMC: Efficient encryption and cryptographic hashing with minimal multiplicative complexity, in: Advances in Cryptology - ASIACRYPT 2016, 2016, pp. 191--219. https://doi.org/10.1007/978-3-662-53887-6_7.
+[10] M.R. Albrecht, L. Grassi, C. Rechberger, A. Roy, T. Tiessen, MiMC: Efficient encryption and cryptographic hashing with minimal multiplicative complexity, in: Advances in Cryptology - ASIACRYPT 2016, 2016, pp. 191–219. https://doi.org/10.1007/978-3-662-53887-6_7.
 
-[11] E. Ben-Sasson, A. Chiesa, C. Garman, M. Green, I. Miers, E. Tromer, M. Virza, Zerocash: Decentralized anonymous payments from Bitcoin, in: Proceedings of IEEE Symposium on Security and Privacy, 2014, pp. 459--474. https://doi.org/10.1109/SP.2014.36.
+[11] E. Ben-Sasson, A. Chiesa, C. Garman, M. Green, I. Miers, E. Tromer, M. Virza, Zerocash: Decentralized anonymous payments from Bitcoin, in: Proceedings of IEEE Symposium on Security and Privacy, 2014, pp. 459–474. https://doi.org/10.1109/SP.2014.36.
 
-[12] A. Kosba, A. Miller, E. Shi, Z. Wen, C. Papamanthou, Hawk: The blockchain model of cryptography and privacy-preserving smart contracts, in: Proceedings of IEEE Symposium on Security and Privacy, 2016, pp. 839--858. https://doi.org/10.1109/SP.2016.55.
+[12] A. Kosba, A. Miller, E. Shi, Z. Wen, C. Papamanthou, Hawk: The blockchain model of cryptography and privacy-preserving smart contracts, in: Proceedings of IEEE Symposium on Security and Privacy, 2016, pp. 839–858. https://doi.org/10.1109/SP.2016.55.
 
 [13] A. Gabizon, Z.J. Williamson, O. Ciobotaru, PLONK: Permutations over Lagrange-bases for Oecumenical Noninteractive arguments of Knowledge, IACR Cryptology ePrint Archive, Report 2019/953, 2019. https://eprint.iacr.org/2019/953.
 

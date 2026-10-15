@@ -17,34 +17,38 @@ ProofEstate implements:
 
 ## Current Limitations
 
-| Limitation | Explanation | Dissertation treatment |
+| Limitation | Observed boundary | Implication |
 | --- | --- | --- |
-| Mock registry | Property records are JSON files, not production land-title data | State clearly as an experimental data source |
-| Centralized Oracle | One service interprets registry facts and submits writes | Treat as trusted component in threat model |
-| Prototype trusted setup | Groth16 artifacts are suitable for demonstration, not production ceremony | Discuss setup risk and future alternatives |
-| No KYC/AML/DID | Borrower identity compliance is not implemented | Mark as outside lending-rule proof scope |
-| No real disbursement | Loan approval does not transfer ETH or ERC20 tokens | Avoid claiming financial settlement |
-| No liquidation | Delinquency, auctions, and collateral recovery are absent | Future work, not MVP functionality |
-| No credit risk engine | The only compliance rule is LTV | Explain narrow rule as intentional |
-| No production monitoring | No indexer, alerting, incident response, or operations tooling | Suitable for prototype only |
-| Limited wallet UX | The frontend handles expected demo states, not all wallet edge cases | Demo limitation |
-| No proof freshness | Proofs are not bound to nonce, expiry, borrower, or loan ID | Residual replay/freshness risk |
+| Mock registry | Property records are JSON files, not production land-title data | The evaluation does not establish the authenticity of real property records |
+| Centralized Oracle | One service interprets registry facts and submits writes | Proof verification does not independently establish the truth of external facts |
+| Prototype trusted setup | The local setup script uses demonstration contributions; no audited ceremony is established | Proof soundness remains conditional on an uncompromised setup |
+| No KYC/AML/DID | Borrower identity compliance is not implemented | The LTV proof establishes no identity or credential predicate |
+| No real disbursement | Loan approval does not transfer ETH or ERC20 tokens | State transitions provide no evidence of financial settlement |
+| No liquidation | Delinquency, auctions, and collateral recovery are absent | Default handling is outside the evaluated loan lifecycle |
+| No credit risk engine | The only compliance rule is LTV | Passing the rule is not a creditworthiness assessment |
+| No production monitoring | No indexer, alerting, incident response, or operations tooling | Operational resilience is outside the evaluation |
+| Limited wallet UX | The frontend handles expected demo states, not all wallet edge cases | Component tests do not establish complete browser/wallet coverage |
+| No proof freshness | No nonce, expiry, borrower, loan ID, registry version, chain ID, or deployment-address binding | An identical proof can restore compliance after a refresh retaining the valuation commitment |
 | Deterministic valuation salt | Public context can permit candidate valuation testing | Commitment hiding is not established |
-| Registry and API disclosure | Mock records and unauthenticated responses expose values and salts | Claim only omission of plaintext from the blockchain |
-| Approval ownership continuity | Ownership is checked at request, not approval | Owner-change regression records this limit |
-| Mutable compliance slot | Another principal can replace compliance and invalidate a pending request | Separate loan attestations would require lifecycle rules |
+| Registry and API disclosure | Mock records and unauthenticated responses expose values and salts | The demonstrated disclosure property is omission of financial plaintext from the blockchain |
+| Approval ownership continuity | Ownership is checked at request, without an approval-time recheck | An original borrower's pending request can still be approved after an authorized owner change and proof resubmission |
+| Mutable compliance slot | Another principal can replace the property's single compliance record | A subsequent approval attempt rejects an old mismatched request and releases its lock; replacement alone does not transition the loan |
 | Post-approval refresh | Refresh does not revalidate approved loans | Approval is a snapshot, not continuous collateral monitoring |
+
+The [functional test suite](evaluation-notes.md#functional-evaluation) exercises the lifecycle boundaries. The [security evaluation](security-evaluation-report.md#lifecycle-security-boundaries) describes their trust and disclosure implications.
 
 ## Future Extensions
 
-| Extension | Purpose | Likely complexity |
+The following items are proposed research and engineering work. Complexity labels are qualitative estimates, not measured delivery effort.
+
+| Extension | Purpose | Estimated complexity |
 | --- | --- | --- |
-| Signed registry attestations | Replace mock registry trust with verifiable source data | Medium |
+| Signed registry attestations | Authenticate source records instead of relying on local JSON files | Medium |
 | Threshold Oracle network | Reduce trust in one Oracle service | High |
-| Proof freshness | Add nonce, expiry, loan ID, or registry version binding | Medium |
+| Proof freshness | Prove and validate a nonce, expiry, loan ID, registry version, and deployment domain as required by the application | Medium |
 | Production identity layer | Add KYC, AML, DID, or credential proofing | High |
 | Additional compliance rules | Prove borrower, property, jurisdiction, or exposure constraints | Medium to high |
-| Alternative ZK systems | Evaluate PLONK, universal setup, or STARK-style proofs | Medium |
+| Alternative ZK systems | Compare Groth16 with a PLONK-style universal/updatable SRS or a transparent STARK-style system | Medium |
 | Real settlement | Add ETH/ERC20 disbursement and repayment accounting | High |
 | Liquidation and risk engine | Model delinquency, auctions, loan-to-value changes, and risk monitoring | High |
 | Governance hardening | Add multisig, timelock, pause, and operational roles | Medium |
@@ -60,11 +64,11 @@ For a research continuation, the highest-value extensions are:
 4. matched baselines and measurements of proof-to-state binding costs;
 5. additional policies, threshold attestations, or alternative proof systems after the current boundaries are addressed.
 
-These directly strengthen the research contribution without turning the prototype into a full lending platform.
+The priorities address the observed disclosure and lifecycle boundaries before expanding policy scope.
 
 ## Generalization
 
-ProofEstate is intentionally scoped to one real-estate lending rule, but the architecture can generalize to other privacy-preserving compliance and verification applications.
+The proof-to-state binding pattern provides a basis for investigating other compliance and verification applications.
 
 These candidate applications are proposals, not implemented or evaluated capabilities. ProofEstate's current disclosure and lifecycle limitations must be addressed before claiming confidentiality in another application. The reusable pattern is:
 
@@ -85,7 +89,7 @@ private facts
 | Oracle | Reads property data and builds proof inputs | Bridges external facts into verifiable commitments |
 | Commitment | Refers to valuation and principal; hiding is not established for current valuation salts | Binds attributes; hiding requires suitable secret randomness and restricted interfaces |
 | ZK circuit | Proves 80% LTV compliance | Proves threshold, membership, eligibility, or policy satisfaction |
-| Verifier contract | Checks Groth16 proof and public signals | Enforces private compliance result on chain |
+| Verifier contract | Checks Groth16 proof and public signals | Enforces a proof-backed policy result on chain |
 | Application contract | Controls loan lifecycle | Controls access, approval, payout, audit, or credential state |
 | DApp | Demo surface for lending flow | User-facing portal for proof submission and status tracking |
 
@@ -171,8 +175,10 @@ ProofEstate's current MVP would need several hardening steps before reuse in hig
 
 ### Generalization Claim
 
-ProofEstate should not be presented as a production-ready lending system. Its stronger general contribution is the architecture pattern:
+The reusable contribution is the proof-to-state binding pattern:
 
 ```text
-Sensitive external facts can be committed off chain, proven against a narrow compliance rule in zero knowledge, and used to drive auditable smart-contract state without revealing the underlying facts on chain.
+Sensitive external facts can be committed off chain, proven against a narrow compliance rule in zero knowledge, and used to drive auditable smart-contract state without publishing the plaintext inputs on chain.
 ```
+
+Confidentiality beyond the blockchain requires authenticated data handling, suitable secret blinding, and restricted interfaces. Those properties are not established by the current mock-registry and API implementation.

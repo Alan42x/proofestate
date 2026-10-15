@@ -1,6 +1,8 @@
 # ProofEstate
 
-ProofEstate is an Ethereum prototype for privacy-preserving real-estate lending. It combines a mock property registry, an Oracle service, Groth16 zero-knowledge proof generation, role-gated Solidity contracts, and a React DApp.
+ProofEstate is an Ethereum research prototype for real-estate lending with commitment-bound zero-knowledge compliance. It combines a mock property registry, an Oracle service, Groth16 zero-knowledge proof generation, role-gated Solidity contracts, and a React DApp.
+
+[Hosted DApp](https://proofestate.vercel.app/) · [Capstone report](thesis/docx/ProofEstate_FT5007_Capstone_Report.docx) · [Defense slides](slides/proofestate-nus-defense-presentation.pptx)
 
 The prototype demonstrates one core lending rule:
 
@@ -40,7 +42,7 @@ ProofEstate models a lending workflow with four operational roles:
 | --- | --- |
 | Protocol admin | Manages privileged protocol roles |
 | Oracle operator | Writes property verification and proof-related data to chain |
-| Borrower | Requests a loan against a verified owned property |
+| Borrower | Requests loans and manages cancellation and repayment |
 | Loan officer | Approves or rejects loan requests |
 
 The end-to-end workflow is:
@@ -55,20 +57,22 @@ Property registry data
   -> Borrower repayment
 ```
 
-The important boundary is that the browser never receives private Oracle credentials. In both local and Sepolia modes, the frontend calls the Oracle API, and the Oracle API signs privileged writes with its configured private key.
+In both local and Sepolia modes, the frontend calls the Oracle API for verification and compliance; the API signs those writes with its server-side key. Borrowers and loan officers sign loan transactions with their own wallets and call `Lending` directly.
+
+Loan requests check the recorded owner, nonzero property ID and principal commitment, and absence of an active loan. Approval checks current verification and compliance for the request's commitment. Failed verification or compliance at approval changes the request to Rejected and releases its lock; authorization and loan-state errors revert.
 
 ## Current Evidence Snapshot
 
-Latest local functional and benchmark evidence was revalidated on 2026-09-25 with Node `v20.20.2`. The gas snapshot remains the Node 20 Hardhat gas-reporter baseline recorded in [docs/evaluation-notes.md](docs/evaluation-notes.md).
+The automated evaluation comprises 37 contract and circuit tests, 12 Oracle API tests, and six frontend component tests, revalidated on 2026-10-15 under Node `v22.22.1`. Performance and gas results retain their recorded Node 20 environments and workloads in [docs/evaluation-notes.md](docs/evaluation-notes.md) and [docs/benchmarks/final-benchmarks.md](docs/benchmarks/final-benchmarks.md).
 
 | Evidence | Status |
 | --- | --- |
-| Contract tests | 28 passing |
+| Contract and circuit tests | 37 passing |
 | Oracle API tests | 12 passing |
-| Frontend tests | 6 passing |
+| Frontend component tests | 6 passing in jsdom |
 | Frontend production build | Passing |
-| Security and adversarial testing | Covered by contract, Oracle API, frontend, and benchmark-matrix evidence |
-| Gas snapshot | Passing Node 20 baseline |
+| Security-boundary tests | Proof substitution, arithmetic limits, reuse, ownership changes, and mutable compliance state |
+| Gas snapshot | Recorded Node 20 test workload; 310,411 gas for proof verification and compliance update |
 | ZK compile | Passing with circom `2.2.3` |
 | Local readiness check | Passing |
 | Local CLI happy path | Passing, final state `Repaid` |
@@ -85,6 +89,9 @@ See:
 
 ![System architecture](docs/figures/01-system-architecture.png)
 
+<details>
+<summary>Business, technical, proof, interaction, and state diagrams</summary>
+
 ### Business Workflow
 
 ![Business workflow](docs/figures/02-business-workflow.png)
@@ -97,23 +104,25 @@ See:
 
 ![ZK proof workflow](docs/figures/04-zk-proof-workflow.png)
 
-### End-to-End Data Flow
+### End-to-End Interaction Sequence
 
-![End-to-end data flow](docs/figures/05-end-to-end-data-flow.png)
+![End-to-end interaction sequence](docs/figures/05-end-to-end-data-flow.png)
 
 ### Loan State Machine
 
 ![Loan state machine](docs/figures/06-loan-state-machine.png)
 
-The Mermaid and PlantUML source files live in [docs/figures](docs/figures/).
+</details>
+
+The Mermaid and PlantUML sources, rendering instructions, and manuscript figure mapping are in [docs/figures/README.md](docs/figures/README.md).
 
 ## Quick Start
 
-Use Node 20 from `.nvmrc`:
+Run commands from the repository root using Node 20 from `.nvmrc` and pnpm `10.9.0` from `package.json`:
 
 ```bash
 nvm use
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 Compile contracts:
@@ -122,11 +131,15 @@ Compile contracts:
 pnpm compile
 ```
 
-Optional ZK rebuild:
+The matching witness WASM, proving key, and generated Solidity verifier are checked in, so the local demo does not require a new Groth16 setup.
+
+To rebuild the ZK artifacts after changing the circuit:
 
 ```bash
 pnpm zk:build
 ```
+
+This command recompiles the circuit, creates new setup artifacts and a proving key, exports a matching Solidity verifier, and verifies a sample proof. Recompile and redeploy the contracts before using the new key for on-chain verification. To recompile only the witness WASM and constraint files, use `pnpm zk:compile`.
 
 The ZK build script auto-detects `$HOME/.cargo/bin/circom` when present. If needed, set:
 
@@ -166,7 +179,13 @@ Expected final state:
 Repaid
 ```
 
+`pnpm demo:deploy` synchronizes the deployment addresses into `.env.local` and `frontend/.env.local`; these environment files are generated for the local demo. The CLI flow uses local borrower/officer signers and calls the Oracle service functions directly. The HTTP API is exercised separately by API tests, browser requests, and API benchmarks.
+
+For the browser workflow, run `pnpm frontend:dev:local`, open `http://localhost:5173/`, and connect the local borrower account for `PROP-001`. Switch to the loan-officer account for approval. Account addresses are listed in the [deployment guide](docs/deployment-guide.md#local-demo-accounts).
+
 Screenshot evidence for the browser workflow is indexed in [docs/screenshots/README.md](docs/screenshots/README.md).
+
+The [recorded demo video](demo/proofestate-demo.mp4) is stored with Git LFS. With Git LFS installed, `git lfs pull --include="demo/*.mp4"` fetches it. The video is optional for running the application.
 
 ## Sepolia Validation
 
@@ -176,26 +195,27 @@ The detailed Sepolia, Vercel, and deployment instructions live in [docs/deployme
 
 ### Deploy Or Inspect
 
-Deploy or inspect the Sepolia contracts:
+Set `SEPOLIA_RPC_URL` in the ignored `.env.sepolia` file, then inspect the recorded Sepolia deployment:
 
 ```bash
-pnpm deploy:sepolia
 pnpm sepolia:inspect
 ```
 
-If contracts are already deployed, prefer `pnpm sepolia:inspect` before sending new transactions. It checks contract bytecode, roles, selected property state, and recent loan state.
+Inspection checks contract bytecode, roles, selected property state, and recent loan state. To create your own deployment, configure the deployment/Oracle signers and role addresses as described in the [deployment guide](docs/deployment-guide.md#sepolia-deployment), then run `pnpm deploy:sepolia`.
+
+For an existing deployment, `pnpm sepolia:sync` generates the matching frontend environment file without redeploying contracts. Set `VITE_ORACLE_API_URL` in `frontend/.env.sepolia` to the API you intend to use; the synchronization default is `http://localhost:8787`.
 
 ### Sepolia Validation Flow
 
 ```text
 1. Start Oracle API with pnpm oracle:api:sepolia
 2. Start frontend with pnpm frontend:dev:sepolia
-3. Connect borrower wallet on Sepolia
+3. Connect the PROP-011 registry owner's wallet on Sepolia
 4. Select PROP-011
 5. Run property verification
 6. Generate compliance proof with principal 600000
 7. Request loan as borrower
-8. Switch to loan officer wallet
+8. Switch to an account with the loan-officer role
 9. Approve loan
 10. Optionally switch back to borrower and repay
 ```
@@ -260,6 +280,7 @@ The main contract suite covers:
 - stale compliance clearing;
 - Groth16 proof acceptance and tampering rejection;
 - public signal mismatch rejection;
+- exact 80% LTV, maximum 64-bit values, and overflow rejection;
 - proof replay boundaries;
 - loan request, approval, rejection, cancellation, and repayment;
 - duplicate active-loan locking;
@@ -288,19 +309,21 @@ Primary compliant-path summary:
 | Build verification input | 3.05 ms | 3.22 ms | 4.77 ms |
 | Build compliance inputs | 3.73 ms | 4.01 ms | 5.31 ms |
 | Generate Groth16 proof | 399.53 ms | 407.55 ms | 469.53 ms |
-| Oracle `/verify` latency | 5.98 ms | 6.78 ms | 11.45 ms |
-| Oracle `/compliance` latency | 409.16 ms | 413.27 ms | 480.30 ms |
+| Read-only Oracle `/verify` | 5.98 ms | 6.78 ms | 11.45 ms |
+| Read-only Oracle `/compliance` | 409.16 ms | 413.27 ms | 480.30 ms |
 
 Correctness matrix summary:
 
 | Case | Property | Principal | Result |
 | --- | --- | ---: | --- |
-| Compliant | `PROP-001` | 750000 | Pass, proof generated |
-| Boundary | `PROP-001` | 784000 | Pass at exactly 80% LTV, proof generated |
-| Non-compliant | `PROP-001` | 784001 | Reject, proof skipped |
-| Invalid registry | `PROP-004` | 100000 | Reject, proof skipped |
+| Compliant | `PROP-001` | 750000 | Proof generated |
+| Boundary | `PROP-001` | 784000 | Proof generated at exactly 80% LTV |
+| Non-compliant | `PROP-001` | 784001 | Oracle rejection; proof skipped |
+| Invalid registry | `PROP-004` | 100000 | Registry-rule rejection; proof skipped |
 
-Proof generation dominates local latency. See [docs/benchmarks/final-benchmarks.md](docs/benchmarks/final-benchmarks.md) for methodology, raw-data reference, gas snapshot, circuit size, and frontend bundle size.
+API timings use `write: false` and exclude transaction submission and confirmation. Direct proving and API compliance use separate proof invocations; their similar latency scale is consistent with proving dominating the successful path, but their median difference does not measure API overhead. Functional tests assert policy behavior; the timing harness records generation and skip outcomes for these workloads.
+
+See [docs/benchmarks/final-benchmarks.md](docs/benchmarks/final-benchmarks.md) for quantile definitions, raw data, the gas workload, circuit size, and frontend bundle size. `pnpm test:gas` measures the current test suite; its aggregate method costs can differ from the recorded gas table when the exercised paths or call counts differ.
 
 ## Core Contracts
 
@@ -330,7 +353,7 @@ The private inputs are:
 - `valuationSalt`;
 - `principalSalt`.
 
-The circuit uses `MiMCSponge(3, 220, 1)` with `k = 0`, 64-bit range checks for value inputs, a 14-bit range check for `maxLtvBps`, and an 80-bit product comparison.
+The circuit uses `MiMCSponge(3, 220, 1)` with its MiMC key fixed to zero, 64-bit range checks for valuation and principal, a 14-bit range check for `maxLtvBps`, and an 80-bit product comparison. The property identifier is mapped to the scalar field outside the circuit. The deployed wrapper fixes `maxLtvBps = 8000` and binds the public signals to the property, current valuation commitment, and submitted principal commitment before calling the generated verifier.
 
 Detailed proof design is documented in [docs/zk-proof-design.md](docs/zk-proof-design.md).
 
@@ -350,6 +373,10 @@ backend/oracle/
   contracts.js
   server.js
   cli.js
+
+data/
+  properties.localhost.json
+  properties.sepolia.json
 
 circuits/
   ltv.circom
@@ -420,11 +447,15 @@ zk/build/
 zk/artifacts/
 ```
 
+The witness files under `zk/build/` and `zk/artifacts/ltv_final.zkey` are checked-in reproduction assets, alongside `contracts/generated/LtvGroth16Verifier.sol`. Other setup artifacts are generated locally.
+
 Do not commit private keys, RPC secrets, or ignored deployment state.
 
 ## Security Notes
 
 - The Oracle is centralized and trusted in this prototype.
+- Plaintext valuation, principal, and salts are omitted from the chain but exposed through the mock registry and compliant API responses. The implementation does not establish application-wide confidentiality.
+- The API has no caller authentication. Client-supplied owner/role filters do not authorize privileged signer use.
 - The browser never needs private keys beyond the user's connected wallet.
 - `ORACLE_PRIVATE_KEY` must remain server-side only.
 - Hardhat default accounts are public and must not be funded on public networks.
@@ -445,9 +476,13 @@ For deeper analysis, see [docs/security-evaluation-report.md](docs/security-eval
 | [docs/design-decisions.md](docs/design-decisions.md) | Architecture decisions, alternatives, and qualitative comparison |
 | [docs/limitations-and-extensions.md](docs/limitations-and-extensions.md) | Prototype boundaries, future work, and candidate applications |
 | [docs/deployment-guide.md](docs/deployment-guide.md) | Local and Sepolia reproduction guide |
+| [docs/figures/README.md](docs/figures/README.md) | Diagram sources, rendering commands, and manuscript figure mapping |
 | [docs/screenshots/README.md](docs/screenshots/README.md) | Local DApp screenshot evidence index |
 | [thesis/thesis.md](thesis/thesis.md) | Final Markdown thesis text using the final benchmark evidence |
 | [thesis/jisa.md](thesis/jisa.md) | JISA manuscript and submission security evidence |
+| [thesis/docx/ProofEstate_Thesis_Full_Version.docx](thesis/docx/ProofEstate_Thesis_Full_Version.docx) | Editable full thesis |
+| [thesis/docx/ProofEstate_JISA_Manuscript.docx](thesis/docx/ProofEstate_JISA_Manuscript.docx) | Editable JISA manuscript |
+| [thesis/docx/ProofEstate_FT5007_Capstone_Report.docx](thesis/docx/ProofEstate_FT5007_Capstone_Report.docx) | Capstone report with cover, deployment link, and contents |
 | [slides/proofestate-nus-defense-presentation.pptx](slides/proofestate-nus-defense-presentation.pptx) | 15-slide NUS-style defense deck with complete read-aloud speaker notes |
 
 ## Limitations
@@ -459,6 +494,9 @@ For deeper analysis, see [docs/security-evaluation-report.md](docs/security-eval
 - No production KYC/AML/DID is implemented.
 - No liquidation, delinquency, or risk engine is implemented.
 - Proof freshness is not bound to expiry, borrower, nonce, or loan ID.
+- Ownership is checked at request time, without approval-time revalidation.
+- Each property has one mutable compliance record; another principal's accepted proof replaces it.
+- Approved loans retain their state and lock after later verification or compliance changes.
 - Sepolia support is testnet validation only.
 
 See [docs/limitations-and-extensions.md](docs/limitations-and-extensions.md) for the full limitations and future-work discussion.

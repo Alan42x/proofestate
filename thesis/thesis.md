@@ -121,13 +121,13 @@ Loan-to-value ratio compares a loan amount with collateral value:
 LTV = loanPrincipal / propertyValue
 ```
 
-ProofEstate implements an 80 percent maximum LTV policy. Instead of division, the circuit and contracts use integer multiplication in basis points:
+ProofEstate implements an 80 percent maximum LTV policy. The circuit expresses the rule using integer multiplication in basis points:
 
 ```text
 loanPrincipal * 10000 <= propertyValue * 8000
 ```
 
-This avoids decimal arithmetic and gives the circuit a precise integer constraint.
+This avoids decimal arithmetic and gives the circuit a precise integer constraint. On chain, the contracts enforce the proved relation through proof verification and public-signal binding.
 
 ### 2.7 Related Systems
 
@@ -135,7 +135,7 @@ Compound and Aave implement collateralized borrowing, interest, liquidity pools,
 
 Chainlink connects external data and off-chain computation to contracts [12]. Town Crier and DECO study source assurance through trusted execution, authenticated web data, and zero-knowledge statements [14], [15]. ProofEstate uses a centralized mock-registry oracle to isolate proof and state integration; external data authenticity remains a separate trust assumption.
 
-Groth16 offers compact proofs and efficient verification with circuit-specific setup [4]. PLONK supports universal or updatable setup [8], while STARK-style systems offer transparency with different proof-size and verification-cost trade-offs [9]. These choices affect artifact maintenance as well as runtime cost.
+Groth16 offers compact proofs and efficient verification with circuit-specific setup [4]. PLONK supports a universal, updatable structured reference string [8], while STARK-style systems offer transparency with different proof-size and verification-cost trade-offs [9]. These choices affect artifact maintenance as well as runtime cost.
 
 Zerocash uses zk-SNARKs to protect currency transaction metadata [16], while Hawk studies private smart contracts [17].
 
@@ -196,28 +196,20 @@ The main actors are:
 
 *Figure 1. ProofEstate architecture and the registry, oracle/prover, client, and contract boundaries. The API handles plaintext witness data; the on-chain layer receives commitments, proofs, and public signals.*
 
-![End-to-end data flow](../docs/figures/05-end-to-end-data-flow.png){width=6.2in}
+![End-to-end interaction sequence](../docs/figures/05-end-to-end-data-flow.png){width=6.2in}
 
-*Figure 2. End-to-end data and control flow from registry verification and proving to borrower requests and loan-officer decisions. Ownership is checked at request time; verification and matching compliance are checked at approval.*
+*Figure 2. Representative end-to-end sequence with write-enabled API calls. PV denotes PropertyVerification; CV, ComplianceVerifier; Cv and Cp, the valuation and principal commitments. The oracle/prover groups registry lookup and proving; CV summarizes binding and generated-verifier execution. Figure 3 details loan transitions; Figure 4 expands proving and verification.*
 
 ### 3.4 Workflow
 
 The workflow in Figure 2 proceeds as follows:
 
-1. The borrower connects a wallet to the DApp.
-2. The DApp requests property verification from the oracle API.
-3. The oracle reads the mock registry and checks eligibility rules.
-4. The oracle writes a verified property record with a valuation commitment.
-5. The borrower requests compliance proof generation for a principal.
-6. The oracle constructs witness inputs and public signals.
-7. The oracle generates a Groth16 proof.
-8. `ComplianceVerifier` checks all public signals against on-chain state.
-9. The generated verifier validates the proof.
-10. `PropertyVerification` records compliance and the principal commitment.
-11. The borrower requests a loan with the property ID and principal commitment.
-12. `Lending.requestLoan` checks the recorded owner, a nonzero principal commitment, and the active-loan lock; verification and compliance are checked later.
-13. A loan officer approves or rejects the loan. Approval checks the current verification flag and matching compliance commitment, but does not recheck the owner.
-14. The borrower marks the approved loan as repaid, releasing the active collateral lock; no funds are transferred.
+1. **Verification.** The oracle checks the registry, then records the owner, result, and valuation commitment, clearing prior compliance.
+2. **Proving.** For the requested principal, the oracle prepares commitments and witness inputs and generates a Groth16 proof.
+3. **Compliance.** The wrapper checks current verification, binds all four public signals, verifies the proof, and records compliance for the principal commitment.
+4. **Request.** `Lending` checks the recorded owner, nonzero property ID and commitment, and absence of an active loan, then creates Requested state and holds the lock.
+5. **Decision.** Officer approval requires current verification and matching compliance, without rechecking ownership. Failed checks or manual rejection release the lock.
+6. **Closure.** Borrowers cancel Requested loans or repay Approved loans. Both release the lock; repayment changes state without transferring funds.
 
 ### 3.5 Data Visibility Boundary
 
@@ -323,9 +315,9 @@ The contract requires the caller to be the recorded property owner when requesti
 
 Figure 3 summarizes the loan lifecycle. The contract enforces one active loan per property, preventing duplicate active borrowing against the same collateral within the prototype model.
 
-![Loan state machine](../docs/figures/06-loan-state-machine.png)
+![Loan state machine](../docs/figures/06-loan-state-machine.png){width=5.7in}
 
-*Figure 3. Loan lifecycle state machine. Requested loans may become Approved, Rejected, or Cancelled. Only Approved loans may become Repaid; repayment records a state change without asset settlement.*
+*Figure 3. Loan lifecycle and property-lock states; Cp is the principal commitment. Authorization or loan-state errors revert without a transition. At approval, an unverified property or absent/mismatched compliance causes rejection. Repayment records a state change without asset settlement.*
 
 Ownership is checked at request time only. A later oracle ownership update can coexist with approval of the original borrower's pending request if valid compliance is restored. Moreover, only one principal commitment is stored per property: submitting compliance for another principal replaces the previous record and can cause a pending request to be rejected. Once a loan is approved, later verification or compliance changes do not automatically alter its state. These behaviors are verified by the security-boundary tests and are limitations of approval as a snapshot decision.
 
@@ -364,11 +356,7 @@ It proves:
 loanPrincipal * 10000 <= propertyValue * maxLtvBps
 ```
 
-with `maxLtvBps = 8000`. Figure 4 traces proof generation and verification.
-
-![ZK proof workflow](../docs/figures/04-zk-proof-workflow.png){width=3.25in}
-
-*Figure 4. Zero-knowledge proof workflow showing witness construction, commitment generation, Groth16 proof generation, public-signal binding, and on-chain verification.*
+The threshold is a public circuit input; the deployed wrapper fixes `maxLtvBps = 8000`. Figure 4 traces input preparation, proving, and on-chain verification.
 
 The public inputs are:
 
@@ -406,20 +394,13 @@ For integer arithmetic, this is equivalent to:
 loanPrincipal * 10000 <= propertyValue * maxLtvBps
 ```
 
+![ZK proof workflow](../docs/figures/04-zk-proof-workflow.png){width=6.2in}
+
+*Figure 4. Proof workflow. Field mapping and commitment preparation occur outside the circuit; H denotes MiMC Sponge and r is the BN254 scalar-field modulus. The circuit checks commitment openings, ranges, and LTV; contracts check the statement and proof before recording compliance.*
+
 ### 4.5 React DApp
 
-The React DApp supports the end-to-end inspection workflow. It includes:
-
-- wallet readiness;
-- property browsing;
-- property verification;
-- compliance proof generation;
-- loan request;
-- loan officer approval;
-- repayment;
-- role administration;
-- contract readiness;
-- event and audit views.
+The React DApp provides borrower, loan-officer, and administrator workspaces. Borrowers connect a wallet, browse properties, request verification and compliance proofs, and manage loan requests, cancellation, and repayment. Officers review, approve, or reject requests; administrators manage roles. Contract-readiness checks, commitment records, events, and audit views support inspection of the workflow.
 
 The DApp improves usability and observability, but it does not replace contract validation. The contracts and oracle API remain responsible for enforcing security-critical checks. Figures 5 and 6 use local mock values for evaluation visibility; they do not show plaintext valuation or principal stored on chain.
 
@@ -457,7 +438,7 @@ The measured metrics are selected to match the prototype's security and performa
 | Functional correctness | Passing contract, oracle, and frontend tests | Whether implementation behavior matches intended role, proof, API, and UI assumptions |
 | Boundary correctness | Compliant, exact-boundary, non-compliant, and invalid-registry cases | Whether the policy accepts and rejects the intended input classes |
 | Proof performance | Groth16 proof-generation latency | Main off-chain cryptographic cost of the compliance path |
-| API performance | `/verify` and `/compliance` latency | End-user visible oracle-service latency in the local path |
+| API performance | `/verify` and `/compliance` latency | Local read-only oracle-service response time |
 | On-chain cost | Gas for verification, compliance, and loan lifecycle methods | Cost distribution across proof verification and ordinary lending state transitions |
 | Circuit complexity | Wires, constraints, public/private inputs | Size of the implemented proof statement and likely direction of scaling pressure |
 | Reproducibility | Raw benchmark JSON, command, environment, git commit, dirty flag | Whether another evaluator can inspect and rerun the evidence path |
@@ -685,7 +666,7 @@ The principal threats concern registry realism, local execution, workload covera
 
 **Construct validity.** The matrix covers policy acceptance, exact-boundary behavior, two rejection paths, and sequential proving sessions. Concurrent users, sustained throughput, and complete browser transaction flows remain outside the measured workload.
 
-**Reproducibility and statistical scope.** Raw files retain commands, environment, observations, source commit, and `dirty: true` metadata, including untracked benchmark and manuscript artifacts. This records the measurement context without supplying an immutable release snapshot. Hardware, scheduling, session order, warm-up, and dependency versions can affect latency. Small sequential sessions support descriptive statistics; rare failure rates, availability, and comparative speedups require broader experiments and matched baselines.
+**Reproducibility and statistical scope.** Raw files retain workload parameters, environment, observations, source commit, and `dirty: true` metadata, including untracked benchmark and manuscript artifacts. This records the measurement context without supplying an immutable release snapshot. Hardware, scheduling, session order, warm-up, and dependency versions can affect latency. Small sequential sessions support descriptive statistics; rare failure rates, availability, and comparative speedups require broader experiments and matched baselines.
 
 ### 5.9 Summary of Findings
 
@@ -751,7 +732,7 @@ The attacker is not assumed to break Ethereum execution, break Groth16 soundness
 | Public signal mismatch | `ComplianceVerifier` checks all four public signals |
 | Tampered proof | Generated verifier must return true |
 | Proof for wrong property | Property field and valuation commitment must match on-chain state |
-| Proof for wrong principal | Principal commitment must match submitted loan commitment |
+| Proof for wrong principal | Public signal 2 must match the submitted principal commitment |
 | Stale compliance after property refresh | `setVerified` clears compliance and principal binding |
 | Duplicate active borrowing | `Lending` enforces one active loan per property |
 | Unauthorized loan approval | Approval/rejection requires `LOAN_OFFICER_ROLE` |
@@ -802,7 +783,7 @@ The security-boundary evaluation also examines accepted proof-lifecycle behavior
 | --- | --- | --- |
 | Verification refresh retains the valuation commitment | Stored compliance clears; the same proof can restore it | State reset does not imply proof freshness |
 | Owner changes after request, with the valuation commitment retained | Original borrower's request can still be approved after proof resubmission | Ownership is not bound into the proof or rechecked at approval |
-| Another compliant principal is submitted before approval | The old pending request is rejected and its lock released | The property has one mutable compliance slot, not independent loan attestations |
+| Another compliant principal is submitted before approval | On approval, the old request becomes Rejected and its lock is released | The property has one mutable compliance slot, not independent loan attestations |
 | Verification refresh occurs after approval | Approved loan and active lock remain | Approval is a snapshot; later compliance does not trigger servicing actions |
 
 These deterministic tests characterize the implemented controls and accepted lifecycle behavior under the stated trust assumptions. Their coverage is limited to the specified scenarios.
@@ -845,7 +826,7 @@ The evaluation establishes local behavior and measured costs, while the security
 
 **Binding the proof to the lending context.** The wrapper checks the property field, current valuation commitment, submitted principal commitment, and fixed LTV threshold before the generated verifier is called. Approval then checks compliance against the request's principal commitment. The public-signal mismatch and substitution tests support this link between proof validity and application state. The mechanism establishes binding under the commitment, identifier-mapping, setup, and role assumptions in Section 6.1.
 
-**Current compliance and proof freshness.** An absent or mismatched compliance record cannot authorize approval, and a verification refresh clears the stored record. This is current-state enforcement rather than proof-age enforcement: when the valuation commitment is unchanged, an earlier proof can restore compliance. Ownership is checked at request time, and the approved loan is not automatically revalidated after later changes. Table 23 identifies the additional context required for single-use, expiring, or loan-specific proofs.
+**Current compliance and proof freshness.** An absent or mismatched compliance record cannot authorize approval, and a verification refresh clears the stored record. This is current-state enforcement rather than proof-age enforcement: when the valuation commitment is unchanged, an earlier proof can restore compliance. Ownership is checked at request time, and the approved loan is not automatically revalidated after later changes. Table 23 records the observed lifecycle limits; Section 6.7 explains the additional context needed for single-use, expiring, or loan-specific proofs.
 
 **Measured implementation costs.** The primary local session reports median direct proving of 399.53 ms and read-only compliance response latency of 409.16 ms. The complete compliance operation averages 310,411 gas, including binding checks, verification, writes, and events. Circuit and frontend footprint measurements document the artifact. These results answer the cost question for the selected local implementation; independent invocations and the absence of matched baselines prevent conclusions about API overhead, comparative efficiency, public-chain latency, or production capacity.
 
@@ -973,6 +954,7 @@ Run the following from the repository root with the recorded dependency versions
 
 ```bash
 nvm use
+pnpm install --frozen-lockfile
 pnpm compile
 pnpm test:all
 pnpm test:gas

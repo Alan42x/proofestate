@@ -1,7 +1,6 @@
 @startuml
 
-skinparam nodesep 45
-skinparam ranksep 55
+scale 2
 
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontName Arial
@@ -21,83 +20,65 @@ skinparam PartitionFontColor #111827
 
 start
 
-partition "1. Property Verification" {
-
-  :Select property;
-
-  if (<color:#eff6ff>................</color>Wallet owns property?<color:#eff6ff>................</color>) then ([owns property])
-
-    :Read Mock Registry record;
-    :Validate registry data;
-
-    if (<color:#eff6ff>................</color>Registry rules pass?<color:#eff6ff>................</color>) then ([registry valid])
-
-      :setVerified();
-
-    else ([registry invalid])
-
-      :Verification Failed;
-      stop
-
-    endif
-
-  else ([does not own property])
-
-    :Verification Failed;
+partition "1. Property verification (write-enabled API)" {
+  :Select property and read mock registry;
+  :Evaluate registry rules;
+  :setVerified(result)\nRecord owner and clear prior compliance;
+  if (Registry rules pass?) then (yes)
+  else (no)
+    :Verification recorded as false;
     stop
-
   endif
 }
 
-
-partition "2. ZK Compliance" {
-
-  :Enter principal;
-
-  if (<color:#eff6ff>............</color>loanPrincipal * 10000 <= propertyValue * maxLtvBps?<color:#eff6ff>............</color>) then ([LTV compliant])
-
+partition "2. ZK compliance" {
+  :Enter principal and evaluate LTV;
+  if (Inputs satisfy ranges and LTV?) then (yes)
     :Generate Groth16 proof;
-    :verifyProofAndSetCompliance();
-
-  else ([LTV non-compliant])
-
-    :Compliance Failed;
+    :Submit verifyProofAndSetCompliance();
+    if (Contract bindings and proof valid?) then (yes)
+      :Record compliance for principal commitment;
+    else (no)
+      :Revert transaction\nNo compliance state change;
+      stop
+    endif
+  else (no)
+    :Compliance request fails;
     stop
-
   endif
 }
 
-
-partition "3. Loan Processing" {
-
-  :requestLoan();
-  :Hold active property lock;
-
-  if (<color:#eff6ff>................</color>Requested-state event?<color:#eff6ff>................</color>) then ([borrower cancels])
-
-    :cancelLoan();
-    :Release property lock;
+partition "3. Loan processing" {
+  :Borrower submits requestLoan();
+  if (Recorded owner, nonzero principal commitment,\nnonempty property ID and no active loan?) then (yes)
+    :Create Requested loan and hold property lock;
+  else (no)
+    :Revert request\nNo loan or lock created;
     stop
+  endif
 
-  else ([loan officer reviews])
-
-    :Review loan request;
-
-    if (<color:#eff6ff>................</color>Loan officer decision?<color:#eff6ff>................</color>) then ([approved])
-
-      :Approve loan;
+  if (Borrower cancels?) then (yes)
+    :cancelLoan()\nSet Cancelled and release lock;
+    stop
+  else (no)
+    :Loan officer reviews request;
+    if (Officer selects approval?) then (yes)
       :approveLoan();
-      :repay();
-      :Release property lock;
+      if (Property currently verified and compliance\nmatches the requested principal commitment?) then (yes)
+        :Set Approved and retain lock;
+        :Borrower calls repay()\nSet Repaid and release lock;
+        note right
+          Repayment records a state change;
+          no asset settlement is implemented.
+        end note
+        stop
+      else (no)
+        :Set Rejected and release lock;
+        stop
+      endif
+    else (no)
+      :rejectLoan()\nSet Rejected and release lock;
       stop
-
-    else ([rejected])
-
-      :Reject loan;
-      :rejectLoan();
-      :Release property lock;
-      stop
-
     endif
   endif
 }

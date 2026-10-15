@@ -337,6 +337,7 @@ def format_document(filename, kind, metadata=None):
             font(doc.styles[name], 9.5, mono=True)
     if "Source Code" in doc.styles:
         child(doc.styles["Source Code"].element.get_or_add_pPr(), "w:wordWrap", {"w:val": "1"})
+        doc.styles["Source Code"].paragraph_format.keep_together = True
 
     design_overview = False
     for paragraph in doc.paragraphs:
@@ -385,6 +386,11 @@ def format_document(filename, kind, metadata=None):
         # Explicit reusable patterns; numeric tables give the stage label more room.
         header = [cell.text for cell in table.rows[0].cells]
         compact_actors = kind in ("thesis", "report") and header == ["Actor", "Responsibility"]
+        compact_inputs = header == ["Input", "Meaning"]
+        compact_invariants = header == ["Invariant", "Enforcement point"]
+        compact_table = compact_actors or compact_inputs or compact_invariants
+        primary_latency = kind == "jisa" and header[:2] == ["Stage", "Median"]
+        keep_table_together = keep_table_together or compact_inputs or compact_invariants or primary_latency
         if count == 2:
             weights = [0.33, 0.67]
         elif count == 3 and header[0] == "Asset":
@@ -428,14 +434,14 @@ def format_document(filename, kind, metadata=None):
                 tc_pr = cell._tc.get_or_add_tcPr()
                 child(tc_pr, "w:tcW", {"w:w": widths[index], "w:type": "dxa"})
                 margins = child(tc_pr, "w:tcMar")
-                vertical_margin = 40 if compact_actors else 80
+                vertical_margin = 40 if compact_table else 80
                 for side, value in {"top": vertical_margin, "bottom": vertical_margin, "start": 120, "end": 120}.items():
                     child(margins, f"w:{side}", {"w:w": value, "w:type": "dxa"})
                 if row_index == 0:
                     child(tc_pr, "w:shd", {"w:fill": "F2F2F2"})
                 for paragraph in cell.paragraphs:
                     p = paragraph.paragraph_format
-                    p.space_before, p.space_after, p.line_spacing = Pt(0), Pt(1 if compact_actors else 3), 1.0
+                    p.space_before, p.space_after, p.line_spacing = Pt(0), Pt(1 if compact_table else 3), 1.0
                     # Keep at least two data rows with the header and prevent
                     # a lone final row; a table's last row must not bind the
                     # following prose to the table.

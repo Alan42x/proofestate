@@ -1,83 +1,46 @@
-%%{init: {"theme": "base", "flowchart": {"defaultRenderer": "elk", "curve": "linear", "nodeSpacing": 54, "rankSpacing": 76, "wrappingWidth": 170, "diagramPadding": 18}, "elk": {"mergeEdges": false, "nodePlacementStrategy": "NETWORK_SIMPLEX", "nodePlacementAlignment": "BALANCED"}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "primaryColor": "#ffffff", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
+%%{init: {"theme": "base", "flowchart": {"defaultRenderer": "elk", "curve": "linear", "nodeSpacing": 22, "rankSpacing": 26, "wrappingWidth": 185, "diagramPadding": 18}, "elk": {"mergeEdges": false, "nodePlacementStrategy": "NETWORK_SIMPLEX", "nodePlacementAlignment": "BALANCED"}, "themeVariables": {"fontFamily": "Arial", "fontSize": "16px", "primaryColor": "#ffffff", "primaryTextColor": "#111827", "primaryBorderColor": "#64748b", "lineColor": "#475569", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TB
-  subgraph OffChain["Off-chain Boundary"]
-    direction TB
-
-    subgraph Users["User and Role Layer"]
-      direction LR
-      Borrower["Borrower Wallet"]
-      Officer["Loan Officer Wallet"]
-      Admin["Admin Wallet"]
-    end
-
-    subgraph DApp["Frontend Boundary: React DApp"]
-      direction TB
-      WalletGate["Wallet and Network Checks"]
-      Workspace["Workflow Workspace"]
-      AdminViews["Admin and Audit Views"]
-    end
-
-    subgraph OracleZK["Backend Boundary: Oracle and ZK Layer"]
-      direction TB
-      API["Express API"]
-      subgraph RegistryPath["Registry Validation"]
-        direction TB
-        RegistryRules["Registry Validation Rules"]
-        MockRegistry[("Mock Registry")]
-      end
-      subgraph ProofPath["ZK Proof Generation"]
-        direction TB
-        Prover["Groth16 Proof Generation"]
-        Circuit["LTV Circuit"]
-        Wasm["WASM"]
-        ProvingKey["Proving Key"]
-      end
-    end
+  subgraph Client["Client boundary"]
+    direction LR
+    Wallets["Borrower / officer / admin<br/>wallets"]
+    DApp["React DApp<br/>Role-based workspaces"]
+    Wallets -->|connect and sign| DApp
   end
 
-  subgraph OnChain["On-chain Boundary: Smart Contracts"]
-    direction TB
+  subgraph OffChain["Trusted off-chain boundary"]
+    direction LR
+    Registry[("Mock property registry")]
+    Oracle["Oracle API<br/>Rules and commitments"]
+    Prover["Groth16 prover<br/>WASM + proving key"]
+    Oracle -->|read| Registry
+    Oracle -->|prove| Prover
+  end
+
+  subgraph OnChain["On-chain contract boundary"]
+    direction LR
     RoleAdminManager["RoleAdminManager"]
-    Lending["Lending"]
-    PropertyVerification["PropertyVerification"]
-    ComplianceVerifier["ComplianceVerifier"]
-    LtvGroth16Verifier["LtvGroth16Verifier"]
+    Lending["Lending<br/>Loan state and locks"]
+    PropertyVerification["PropertyVerification<br/>Owner, Cv, Cp, status"]
+    ComplianceVerifier["ComplianceVerifier<br/>Signal binding"]
+    LtvGroth16Verifier["LtvGroth16Verifier<br/>Proof verification"]
+    Lending -->|read state| PropertyVerification
+    ComplianceVerifier -->|read / write| PropertyVerification
+    ComplianceVerifier -->|verifyProof| LtvGroth16Verifier
+    RoleAdminManager -->|roles| PropertyVerification
+    RoleAdminManager -->|roles| Lending
   end
 
-  Borrower -->|connect wallet| WalletGate
-  Officer -->|connect wallet| WalletGate
-  Admin -->|connect wallet| WalletGate
-  WalletGate --> Workspace
-  WalletGate --> AdminViews
-
-  Workspace -->|"POST /verify; POST /compliance"| API
-  Workspace -->|"requestLoan(); repay(); cancelLoan()"| Lending
-  Workspace -->|read status| PropertyVerification
-  AdminViews -->|read audit state| Lending
-  AdminViews -->|grant roles| RoleAdminManager
-
-  API --> RegistryRules
-  RegistryRules --> MockRegistry
-  API --> Prover
-  Prover --> Circuit
-  Prover --> Wasm
-  Prover --> ProvingKey
-
-  API -->|"setVerified()"| PropertyVerification
-  API -->|submit proof and public signals| ComplianceVerifier
-  ComplianceVerifier -->|"verifyProof()"| LtvGroth16Verifier
-  ComplianceVerifier -->|"setCompliant()"| PropertyVerification
-  Lending -->|"ownerOf(); isVerified(); isCompliantFor()"| PropertyVerification
-  RoleAdminManager -->|"grantRole(); revokeRole()"| PropertyVerification
-  RoleAdminManager -->|"grantRole(); revokeRole()"| Lending
+  Client -->|Registry and compliance requests| OffChain
+  Client -->|Wallet: loan / admin actions and state reads| OnChain
+  OffChain -->|Oracle: setVerified and proof submission| OnChain
 
   classDef actor fill:#ffffff,stroke:#334155,stroke-width:1.3px,color:#111827;
   classDef app fill:#eff6ff,stroke:#2563eb,stroke-width:1.2px,color:#111827;
   classDef service fill:#ffffff,stroke:#475569,stroke-width:1.2px,color:#111827;
   classDef data fill:#f8fafc,stroke:#64748b,stroke-width:1.2px,color:#111827;
   classDef contract fill:#ecfeff,stroke:#0891b2,stroke-width:1.2px,color:#111827;
-  class Borrower,Officer,Admin actor;
-  class WalletGate,Workspace,AdminViews app;
-  class API,RegistryRules,Prover,Circuit,Wasm,ProvingKey service;
-  class MockRegistry data;
+  class Wallets actor;
+  class DApp app;
+  class Oracle,Prover service;
+  class Registry data;
   class RoleAdminManager,Lending,PropertyVerification,ComplianceVerifier,LtvGroth16Verifier contract;

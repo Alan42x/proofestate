@@ -1,5 +1,7 @@
 # Smart Contract Interface Spec
 
+This specification describes the protocol methods and their state semantics in the [Solidity sources](../contracts). The method tables list application operations; Solidity also generates getters for public constants and variables. `PropertyVerification`, `Lending`, and `RoleAdminManager` inherit OpenZeppelin `AccessControl`, including `hasRole`, `getRoleAdmin`, `grantRole`, `revokeRole`, `renounceRole`, and `supportsInterface`.
+
 ## PropertyVerification
 
 Purpose: stores Oracle-written property verification records and verifier-written compliance records.
@@ -16,7 +18,9 @@ Constructor:
 constructor(address admin)
 ```
 
-If `admin` is zero, `msg.sender` becomes admin and initial oracle.
+The selected admin receives both `DEFAULT_ADMIN_ROLE` and `ORACLE_ROLE`. If `admin` is zero, `msg.sender` is selected.
+
+`getRecord` returns fields in this order: `bool verified`, `bool compliant`, `address owner`, `bytes32 evidenceHash`, `bytes32 complianceHash`, `uint256 valuationCommitment`, `uint256 principalCommitment`, `uint64 lastUpdated`. An unwritten property returns the zero-initialized record.
 
 Public/external methods:
 
@@ -30,6 +34,10 @@ Public/external methods:
 | `valuationCommitmentOf(bytes32 propertyId)` | public view | `uint256` | none |
 | `ownerOf(bytes32 propertyId)` | public view | `address` | none |
 | `getRecord(bytes32 propertyId)` | public view | `VerificationRecord` | none |
+
+Every `setVerified` call clears `compliant`, `complianceHash`, and `principalCommitment`, including a refresh that preserves the valuation commitment. A false verification stores a zero valuation commitment. `setCompliant` requires a verified property even when clearing compliance; a false compliance value clears the stored proof hash and principal commitment. Its event retains the supplied `proofHash` argument.
+
+`isCompliant` requires both verification and compliance. `isCompliantFor` additionally compares the stored principal commitment with the argument. `ownerOf` returns the recorded address independently of verification status.
 
 Events:
 
@@ -47,7 +55,8 @@ Custom errors and revert conditions:
 Demo limitations:
 
 - Verification data comes from a mock JSON registry.
-- Compliance is a single stored status per property and principal commitment.
+- Each property has one compliance slot tagged with one principal commitment; a later write replaces it.
+- Administrators can grant `COMPLIANCE_ROLE` to additional writers. Proof-backed compliance therefore depends on maintaining the designated-verifier role configuration.
 
 Production considerations:
 
@@ -82,6 +91,10 @@ Public signal expectations:
 - `publicSignals[2] == principalCommitment`.
 - `publicSignals[3] == 8000`.
 
+The property must already be verified. Any caller may submit a proof; only the wrapper needs `COMPLIANCE_ROLE` on `PropertyVerification`. Signal 2 is compared with the method argument, without looking up a pending loan. On success, the wrapper stores `keccak256(abi.encode(a, b, c, publicSignals))` as the proof hash and returns `true`; a failed check reverts.
+
+Generated getters expose `propertyVerification`, `ltvVerifier`, `MAX_LTV_BPS`, and `SNARK_SCALAR_FIELD`.
+
 Events:
 
 - `ComplianceProofVerified(propertyId, proofHash, valuationCommitment, principalCommitment)`.
@@ -110,7 +123,7 @@ Production considerations:
 
 ## Lending
 
-Purpose: stores loan lifecycle state and enforces ownership, compliance, loan officer approval, and one active loan per property.
+Purpose: stores loan lifecycle state, checks recorded ownership at request, checks verification and principal-matched compliance at approval, and holds one active loan lock per property.
 
 Roles:
 
@@ -123,7 +136,7 @@ Constructor:
 constructor(address verificationAddress, address admin)
 ```
 
-If `admin` is zero, `msg.sender` becomes admin and initial loan officer.
+The selected admin receives both `DEFAULT_ADMIN_ROLE` and `LOAN_OFFICER_ROLE`. If `admin` is zero, `msg.sender` is selected.
 
 Constants:
 
@@ -132,18 +145,20 @@ Constants:
 
 Loan states:
 
-- `Requested`
-- `Approved`
-- `Repaid`
-- `Rejected`
-- `Cancelled`
+- `Requested = 0`
+- `Approved = 1`
+- `Repaid = 2`
+- `Rejected = 3`
+- `Cancelled = 4`
+
+`getLoan` returns fields in this order: `address borrower`, `bytes32 propertyId`, `uint256 principalCommitment`, `uint256 interestRateBps`, `uint256 termDays`, `LoanState state`, `uint256 requestedAt`, `uint256 approvedAt`, `uint256 repaidAt`. Loan IDs start at zero; use the `exists` flag from `activeLoanIdOf` to distinguish an unlocked property from active loan 0.
 
 Public/external methods:
 
 | Method | Access | Returns | State changes |
 | --- | --- | --- | --- |
-| `requestLoan(bytes32 propertyId, uint256 principalCommitment)` | property owner | `uint256 loanId` | Creates requested loan, locks property |
-| `approveLoan(uint256 loanId)` | `LOAN_OFFICER_ROLE` | `bool approved` | Approves valid loan or auto-rejects invalid verification/compliance/proof binding |
+| `requestLoan(bytes32 propertyId, uint256 principalCommitment)` | recorded property owner | `uint256 loanId` | Creates requested loan, locks property |
+| `approveLoan(uint256 loanId)` | `LOAN_OFFICER_ROLE` | `bool approved` | Approves a requested loan if verification and stored principal-matched compliance hold; otherwise rejects it and releases its lock |
 | `rejectLoan(uint256 loanId)` | `LOAN_OFFICER_ROLE` | none | Rejects requested loan and releases lock |
 | `cancelLoan(uint256 loanId)` | borrower | none | Cancels requested loan and releases lock |
 | `repay(uint256 loanId)` | borrower | none | Marks approved loan repaid and releases lock |
@@ -151,23 +166,31 @@ Public/external methods:
 | `activeLoanIdOf(bytes32 propertyId)` | public view | `(uint256 loanId, bool exists)` | none |
 | `loanIdsOfProperty(bytes32 propertyId)` | public view | `uint256[]` | none |
 
+Request requires a nonzero property ID, nonzero principal commitment, the recorded owner as caller, and no active property lock. It does not require verified or compliant state. The DApp's guided order does not add a contract guard.
+
+Approval requires an existing `Requested` loan and the officer role. Invalid role, ID, or lifecycle state reverts without a transition. An unverified property, missing compliance, or mismatched principal instead moves the loan to `Rejected`, releases the lock, emits its specific rejection event, and returns `false`. Successful approval retains the lock and returns `true`; no Groth16 verification or ownership recheck occurs in `approveLoan` itself.
+
+Changing compliance does not immediately transition a pending loan. If another principal replaces the compliance slot, a subsequent approval attempt rejects the old request. Verification refreshes do not change an already approved loan or release its lock.
+
+Generated getters expose `propertyVerification`, `nextLoanId`, `LOAN_OFFICER_ROLE`, and the term constants.
+
 Events:
 
-- `LoanRequested`.
-- `LoanApproved`.
-- `LoanRejected`.
-- `LoanRejectedDueToVerification`.
-- `LoanRejectedDueToCompliance`.
-- `LoanRejectedDueToProofMismatch`.
-- `LoanRepaid`.
-- `LoanCancelled`.
+- `LoanRequested(loanId, borrower, propertyId, principalCommitment)`.
+- `LoanApproved(loanId, propertyId)`.
+- `LoanRejected(loanId, propertyId)`.
+- `LoanRejectedDueToVerification(loanId, propertyId)`.
+- `LoanRejectedDueToCompliance(loanId, propertyId)`.
+- `LoanRejectedDueToProofMismatch(loanId, propertyId, principalCommitment)`.
+- `LoanRepaid(loanId, borrower)`.
+- `LoanCancelled(loanId, propertyId, borrower)`.
 
 Custom errors and revert conditions:
 
 - `InvalidVerificationAddress()` for zero constructor verification address.
 - `EmptyPropertyId()` for zero property key.
 - `InvalidPrincipalCommitment()` for zero principal commitment.
-- `NotPropertyOwner(propertyId, caller, owner)` if caller does not own the verified property record.
+- `NotPropertyOwner(propertyId, caller, owner)` if caller differs from the recorded owner, regardless of verification status.
 - `ActiveLoanExists(propertyId, loanId)` if the property is already locked.
 - `InvalidLoanId(loanId)` if the ID has not been created.
 - `InvalidLoanState(loanId, expected, actual)` for invalid lifecycle transitions.
@@ -182,7 +205,7 @@ Cross-contract calls:
 Demo limitations:
 
 - No ETH/ERC20 disbursement.
-- Interest rate and term are fixed constants.
+- Interest rate and term are recorded constants; no interest accrual or repayment accounting is implemented.
 - Repayment is a state transition only.
 
 Production considerations:
@@ -191,13 +214,15 @@ Production considerations:
 
 ## RoleAdminManager
 
-Purpose: coordinates protocol admin grants/revocations across `PropertyVerification`, `Lending`, and itself, with last-admin protection.
+Purpose: coordinates atomic admin grants/revocations across `PropertyVerification`, `Lending`, and itself, while retaining at least one administrator on the manager.
 
 Constructor:
 
 ```text
 constructor(address propertyVerificationAddress, address lendingAddress, address admin)
 ```
+
+If `admin` is zero, `msg.sender` becomes the initial manager admin. The manager must hold the admin role on both managed contracts for coordinated role changes to succeed.
 
 Public/external methods:
 
@@ -207,6 +232,8 @@ Public/external methods:
 | `revokeProtocolAdmin(address account)` | `DEFAULT_ADMIN_ROLE` | none | Revokes admin on property verification, lending, and manager |
 | `hasProtocolAdmin(address account)` | public view | `(managerAdmin, propertyAdmin, lendingAdmin, complete)` | none |
 
+`complete` is the conjunction of the three returned role memberships. Generated getters expose `propertyVerification`, `lending`, and `protocolAdminCount`; the count covers manager administrators only. If any cross-contract operation fails, the whole grant/revoke transaction rolls back.
+
 Events:
 
 - `ProtocolAdminGranted(account, sender)`.
@@ -215,7 +242,7 @@ Events:
 Custom errors and revert conditions:
 
 - `InvalidManagedContract()` for zero managed contract address.
-- `InvalidAccount()` for zero account or revoking the manager itself.
+- `InvalidAccount()` for a zero admin grant, or for zero account/manager-self removal through `revokeProtocolAdmin`.
 - `LastProtocolAdmin()` when revocation would remove the final manager admin.
 - OpenZeppelin `AccessControlUnauthorizedAccount` for unauthorized calls.
 
@@ -226,6 +253,7 @@ Cross-contract calls:
 Demo limitations:
 
 - Coordinates two managed contracts only.
+- Final-manager-admin protection also applies to inherited `revokeRole` and `renounceRole`. Direct role operations can still leave partial administration across contracts; the manager count does not guarantee a remaining account with all three admin roles.
 
 Production considerations:
 

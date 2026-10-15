@@ -1,28 +1,36 @@
 # ProofEstate Evaluation Notes
 
-Updated: 2026-10-06; historical measurements below retain their original dates.
+Updated: 2026-10-15. Measurement records retain their collection dates and environments.
 
 ## Environment
 
-This evidence file aggregates the Node 20 functional, gas, benchmark, and security-evaluation evidence used by the thesis and manuscript.
+The evaluation covers functional correctness, security boundaries, circuit arithmetic, local latency, and gas consumption. Functional results describe the complete current test suite. Performance results retain the environment and workload in which they were measured.
 
-## Submission Revision Evidence
+## Functional Evaluation
 
-The submission revision extended `test/proofestate.test.js` with six security and three arithmetic regression tests, reusing its deployment fixture and proof cache without changing protocol contracts, circuit, or oracle behavior. `pnpm test` passed with **37 tests** under Node **v22.22.1**. The archived 28-test Node 20 results and all historical performance measurements below remain separate evidence.
+The complete functional suite passed on 2026-10-15 under Node **v22.22.1**:
 
-| Added scenario | Observed result |
+| Command | Coverage | Result |
+| --- | --- | --- |
+| `pnpm test` | Registry logic, deployment/roles, contract lifecycle, proof binding, security boundaries, and circuit arithmetic | 37 passing |
+| `pnpm test:oracle` | Oracle API input validation and selected rejection paths | 12 passing |
+| `pnpm frontend:test` | Frontend components in Vitest/jsdom | 6 passing |
+
+Security and arithmetic cases form part of the same 37-test contract/circuit suite in [test/proofestate.test.js](../test/proofestate.test.js). Selected boundary cases are summarized below; the table is not a separate test suite.
+
+| Scenario | Observed result |
 | --- | --- |
 | Valid proof offered for another verified property | Rejected at public signal 0 |
 | Threshold signal changed from 8000 to 9000 | Rejected at public signal 3 |
 | Refresh retains the valuation commitment | Compliance clears; the identical proof can restore it |
 | Owner changes after request, with valuation commitment retained | Original borrower's pending request can still be approved |
-| Another principal's proof replaces current compliance | Pending request for the old commitment is rejected and lock released |
+| Another principal's proof replaces current compliance | On a subsequent approval attempt, the pending request for the old commitment is rejected and its lock released |
 | Verification refresh after approval | Approved loan and active lock remain |
 | Exact 80% boundary and one unit above | Boundary proof accepted on chain; over-limit witness fails a circuit constraint |
 | Largest 64-bit valuation | Maximum compliant principal proves and verifies; its next integer fails |
 | Valuation and principal at `2^64` | Both overflow witnesses fail despite valid commitments and a satisfied inequality |
 
-The four accepted workflow observations delimit freshness, ownership continuity, the shared compliance slot, and approval as a snapshot. They are not production guarantees. The owner-change test deliberately uses the authorized oracle to preserve the valuation commitment while changing the owner.
+The accepted workflow observations delimit freshness, ownership continuity, the shared compliance slot, and approval as a snapshot. The owner-change test deliberately uses the authorized Oracle to preserve the valuation commitment while changing the owner. Frontend component tests do not constitute full browser or wallet-transaction coverage.
 
 The arithmetic tests call the prover directly with consistently computed commitments, independently of API validation. To isolate the principal range constraint, that overflow case uses a policy input of 10001, which satisfies the raw circuit's 14-bit policy range and the inequality; the application wrapper still requires 8000. Expected failures must contain a witness assertion failure, so missing proving artifacts do not count as policy rejections.
 
@@ -30,7 +38,7 @@ The arithmetic tests call the prover directly with consistently computed commitm
 
 For the archived timing files, API requests use `write: false`; direct and API proving are separate invocations. Quantiles use nearest rank, population standard deviation uses denominator `n`, and “failures” means caught exceptions or failed HTTP status. Each timing sample is not an independent correctness assertion or on-chain proof verification.
 
-## Archived Benchmark Environment
+## Measurement Environment
 
 | Item | Value |
 | --- | --- |
@@ -53,7 +61,12 @@ For the archived timing files, API requests use `write: false`; direct and API p
 - Public inputs: 4.
 - Outputs: 0.
 
-## Verification Status
+## Measurement Provenance
+
+The following dated records describe the checkout used for the gas, build, and workflow measurements. The functional evaluation above is the current test result; earlier suite counts remain here as measurement provenance.
+
+<details>
+<summary>Validation records for the measurement checkout (July–September 2026)</summary>
 
 Baseline commands run on 2026-07-30:
 
@@ -97,13 +110,13 @@ Revalidation results:
 - README local Markdown links/images: passing.
 - README `pnpm` script references: passing.
 
-Latest functional revalidation run on 2026-09-25 under Node v20.20.2:
+Measurement-checkout validation run on 2026-09-25 under Node v20.20.2:
 
 ```bash
 pnpm test:all
 ```
 
-Latest revalidation results:
+Measurement-checkout validation results:
 
 - `pnpm test:all`: passing.
 - Contract tests: 28 passing.
@@ -117,15 +130,19 @@ Notes:
 
 - Oracle API tests and gas reporter require local port access; they were run outside the filesystem sandbox after sandboxed runs failed with local networking `EPERM`.
 - The frontend build emits a Vite chunk-size warning for the main JS bundle; it does not fail the build.
-- The current `circom` CLI is installed at `$HOME/.cargo/bin/circom`, which is the path used by `scripts/zk-build.mjs` when present. It is not on the default shell PATH, so a bare `circom --version` fails unless that directory is added to PATH or `CIRCOM_BIN` is set.
+- The recorded `circom` CLI was installed at `$HOME/.cargo/bin/circom`, which is the path used by `scripts/zk-build.mjs` when present. A shell that omits this directory from PATH needs the full path or `CIRCOM_BIN` for a circuit rebuild.
+
+</details>
 
 ## Gas Snapshot
 
 Generated with:
 
 ```bash
-REPORT_GAS=true hardhat test
+pnpm test:gas
 ```
+
+These averages describe the dated Node 20 test workload, including its call counts and storage states. Running the current suite can produce different aggregate averages because the path mix differs. `verifyProofAndSetCompliance` measures the complete transaction, including binding checks, generated proof verification, state writes, and events. `approveLoan` includes successful and automatic-rejection paths.
 
 | Contract | Method | Min gas | Max gas | Avg gas | Calls |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -153,7 +170,7 @@ Deployment gas:
 
 ## Local Demo Evidence
 
-Fresh local deployment:
+Deployment addresses recorded for the local measurement run:
 
 | Contract / Account | Address |
 | --- | --- |
@@ -175,6 +192,8 @@ Fresh local deployment:
 - Borrower: `0x90F79bf6EB2c4f870365E785982E1f101E93b906`.
 - Final state: `2` / `Repaid`.
 - Flow duration: 1.82s.
+
+This is one observed CLI run on Hardhat, including local transaction waits. The CLI calls Oracle service functions directly; it does not measure the HTTP API, browser wallet interaction, or public-chain confirmation latency. The readiness check covers RPC, API liveness, bytecode at four core contract addresses, and frontend environment keys; it does not exercise proof generation or role permissions.
 
 ## Frontend Build Size
 
@@ -201,7 +220,7 @@ The current benchmark set includes a 30-run compliant path, boundary and failure
 
 ## Experiment Matrix Revalidation
 
-Additional local benchmark runs were collected on 2026-09-25 under Node v20.20.2 to cover correctness boundary and failure cases in addition to the original compliant path. The Oracle API was run locally on `http://127.0.0.1:8787`. Local port access required running the Oracle API and benchmark commands outside the filesystem sandbox.
+The local benchmark matrix was collected on 2026-09-25 under Node v20.20.2. It covers the compliant path, exact boundary, above-limit rejection, invalid-registry rejection, and repeated-run stability. The Oracle API was run locally on `http://127.0.0.1:8787`. Local port access required running the Oracle API and benchmark commands outside the filesystem sandbox.
 
 Raw files:
 
@@ -230,7 +249,7 @@ Bounded stability results for repeated compliant proof generation:
 | 30 | 0 | 399.53 | 469.53 |
 | 50 | 0 | 406.01 | 440.06 |
 
-These runs characterize local repeated proof-generation stability and selected correctness/failure cases. They do not claim public-chain throughput or concurrent production scalability. The raw files record git commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true` because manuscript and documentation updates were in progress.
+These runs characterize local repeated proof-generation stability and selected rejection paths. The primary 30-run file also supplies the 30-run stability row: the matrix contains six raw files, rather than seven independent experiments. They do not measure public-chain throughput or concurrent production scalability. The raw files record git commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true`; their metadata identifies the base commit and recorded changes, without providing an immutable snapshot of the complete measured checkout.
 
 ## Sensitive and Runtime File Check
 
@@ -248,7 +267,7 @@ The checked-in deployment manifests `deployments/localhost.json` and `deployment
 
 ## Re-entrancy Assessment
 
-Re-entrancy is not an active risk in the current MVP because `Lending` does not transfer ETH, transfer ERC20 tokens, or call borrower-controlled contracts. Repayment is modeled as a state transition only, and the loan state is updated without external calls.
+`Lending` performs no ETH/ERC20 transfers or borrower-controlled callbacks. Repayment is a state transition without an external call. Request and approval do make read-only external calls to the immutable `PropertyVerification` dependency. The current execution path therefore lacks an asset-transfer callback, but should not be described as having no external calls or as a general proof of re-entrancy safety.
 
 If the MVP later adds real asset disbursement, repayment transfers, ERC20 collateral, or liquidation callbacks, then `Lending` should add a dedicated re-entrancy test suite and use a standard guard pattern around functions that perform external calls.
 

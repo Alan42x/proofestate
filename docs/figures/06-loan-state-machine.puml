@@ -4,27 +4,27 @@ scale 3
 
 skinparam backgroundColor #FFFFFF
 skinparam defaultFontName "Arial"
-skinparam defaultFontSize 13
+skinparam defaultFontSize 14
 skinparam defaultTextAlignment center
 skinparam shadowing false
 skinparam linetype ortho
 skinparam roundcorner 4
 
-skinparam nodesep 110
-skinparam ranksep 70
+skinparam nodesep 100
+skinparam ranksep 100
 
 skinparam ArrowColor #374151
 skinparam ArrowThickness 1.1
 skinparam ArrowFontColor #111827
-skinparam ArrowFontSize 11
+skinparam ArrowFontSize 12
 
 skinparam StateBorderColor #334155
 skinparam StateBackgroundColor #FFFFFF
 skinparam StateFontColor #111827
-skinparam StateFontSize 13
+skinparam StateFontSize 14
 skinparam StateFontStyle bold
 
-skinparam StateAttributeFontSize 11
+skinparam StateAttributeFontSize 12
 skinparam StateAttributeFontStyle plain
 skinparam StateAttributeFontColor #475569
 
@@ -35,91 +35,36 @@ skinparam state {
   BackgroundColor #FFFFFF
   BorderColor #334155
   FontColor #111827
-  FontSize 13
+  FontSize 14
   FontStyle bold
-  AttributeFontSize 11
+  AttributeFontSize 12
   AttributeFontStyle plain
   AttributeFontColor #475569
   RoundCorner 4
 }
 
-skinparam note {
-  BackgroundColor transparent
-  BorderColor transparent
-  FontColor #111827
-  FontName "Arial"
-  FontSize 11
-}
-
 top to bottom direction
-
-state Final <<end>>
-
 state Requested
 Requested : Lock: Held
-
-state Rejected
-Rejected : Lock: Released
-
 state Approved
 Approved : Lock: Held
-
-state Cancelled
-Cancelled : Lock: Released
-
 state Repaid
 Repaid : Lock: Released
-
+state Rejected
+Rejected : Lock: Released
+state Cancelled
+Cancelled : Lock: Released
+state Final <<end>>
 
 Rejected -[hidden]right-> Approved
 Approved -[hidden]right-> Cancelled
 
-Requested -[hidden]down-> Approved
-Approved -[hidden]down-> Repaid
-Repaid -[hidden]down-> Final
-
-
-[*] -down-> Requested : requestLoan()\n/ hold lock
-
-
-Requested -down-> Approved
-note right on link
-approveLoan()
-[checks pass]
-end note
-
-
-Requested -down-> Rejected
-note left on link
-approveLoan()
-[checks fail]
-/ release lock
-end note
-
-
-Requested -[norank]-> Rejected
-note left on link
-rejectLoan()
-/ release lock
-end note
-
-
-Requested -[norank]-> Cancelled
-note right on link
-cancelLoan()
-/ release lock
-end note
-
-
-Approved -down-> Repaid
-note right on link
-repay()
-/ release lock
-end note
-
-
-Rejected -[norank]-> Final
+[*] -down-> Requested : requestLoan()\n[recorded owner; nonzero ID;\nnonzero Cp; no active loan]\n/ hold lock
+Requested -down-> Approved : approveLoan()\n[officer; verified and\nmatching compliance]
+Approved -down-> Repaid : repay()\n[borrower]\n/ release lock
+Requested -down-> Rejected : rejectLoan() [officer]\nor approveLoan()\n[officer; verification or\ncompliance fails]\n/ release lock
+Requested -down-> Cancelled : cancelLoan()\n[borrower]\n/ release lock
 Repaid -down-> Final
-Cancelled -[norank]-> Final
-
+Rejected -down[norank]-> Final
+Cancelled -down[norank]-> Final
 @enduml

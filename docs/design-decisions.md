@@ -7,10 +7,10 @@ This document records ProofEstate's architectural decisions, alternatives, and t
 | Decision | Selected approach | Main rationale |
 | --- | --- | --- |
 | Execution environment | Ethereum-compatible smart contracts | Mature verifier tooling, reproducible local chain, public testnet path |
-| Proof system | Groth16 | Small proof size and low verifier gas |
+| Proof system | Groth16 | Compact proofs and an available Solidity verifier; measured gas is reported for the full compliance transaction |
 | Circuit language | Circom | Mature educational tooling and snarkjs integration |
 | Commitment hash | MiMC Sponge | Efficient inside arithmetic circuits |
-| Registry integration | Centralized Oracle over mock dataset | Keeps project focused on privacy-preserving compliance, not registry infrastructure |
+| Registry integration | Centralized Oracle over mock dataset | Makes the external-data, proof, and contract-state integration reproducible |
 | Compliance scope | One LTV rule | Narrow, auditable, and defensible proof statement |
 | Deployment evidence | Localhost first, Sepolia optional | Deterministic functional tests and repeatable local measurements |
 | Collateral model | One active loan per property | Prevents duplicate active borrowing with minimal state |
@@ -42,25 +42,25 @@ ProofEstate uses Groth16 for the LTV compliance proof.
 
 Rationale:
 
-- Groth16 has compact proofs and low on-chain verification cost.
+- Groth16 provides compact proofs and a Solidity verifier supported by the selected toolchain.
 - Circom and snarkjs provide a complete prototype toolchain.
 - The generated Solidity verifier is small enough to deploy in the MVP.
-- The proof statement is fixed and narrow, making a circuit-specific setup acceptable for dissertation demonstration.
+- The narrow proof statement permits a fixed circuit and a matching circuit-specific proving key and verifier.
 
 Alternatives considered:
 
-- PLONK-style systems offer more flexible setup assumptions, but add tooling and verifier complexity.
-- STARK-style systems avoid trusted setup, but typically have larger proofs and more complex verifier integration for this MVP.
+- PLONK-style systems can use a universal, updatable structured reference string, while still requiring circuit-specific keys and verifier integration. This repository does not implement a PLONK baseline.
+- STARK-style systems offer transparent setup, but require a different proof/verifier stack. Proof size and verification cost were not compared experimentally here.
 - Plaintext on-chain verification would be much simpler, but would reveal valuation and principal.
 - An off-chain-only service could keep inputs private with appropriate access controls, but would not provide on-chain proof enforcement.
 
 Trade-off:
 
-Groth16 supports efficient on-chain verification, but it introduces a trusted setup assumption. This is documented as a limitation and is not presented as production security.
+Groth16 introduces a circuit-specific trusted setup assumption. The local setup script uses demonstration contributions and does not establish an audited ceremony. The reported 310,411-gas average covers the entire compliance transaction, rather than isolated Groth16 verification; no matched proof-system comparison establishes a relative cost advantage.
 
 ## MiMC Commitments
 
-The circuit uses MiMC Sponge commitments:
+The circuit uses `MiMCSponge(3, 220, 1)` commitments with the MiMC key input fixed to zero:
 
 ```text
 valuationCommitment = MiMC(propertyKeyField, propertyValue, valuationSalt)
@@ -103,15 +103,17 @@ Alternatives considered:
 
 Trade-off:
 
-The MVP accepts centralized oracle trust to keep the dissertation focused on zero-knowledge compliance and smart contract enforcement.
+The prototype trusts the Oracle for external facts and gives it access to proving inputs. Its API has no caller authentication and exposes values and salts. Contract role checks constrain the configured signer, but do not authenticate callers asking the service to use that signer. The implemented result is proof-to-state binding with financial plaintext omitted from the chain.
 
 ## Single LTV Rule
 
-The circuit proves exactly:
+The application accepts the following rule:
 
 ```text
 loanPrincipal * 10000 <= propertyValue * 8000
 ```
+
+The circuit takes `maxLtvBps` as a 14-bit public input; the wrapper fixes the accepted value to `8000`. Unsigned 64-bit valuation and principal ranges are circuit constraints. Positive principal and mock-registry eligibility are Oracle checks, rather than additional circuit predicates.
 
 Rationale:
 
@@ -140,12 +142,12 @@ The system is intentionally narrow. Production compliance would require more rul
 Rationale:
 
 - A valid proof is not enough by itself; it must be valid for the target on-chain property record.
-- Binding prevents proof reuse across property IDs, valuation commitments, principal commitments, or LTV thresholds.
+- Signal checks reject a proof when the target property field, valuation commitment, submitted principal commitment, or accepted policy differs. Property separation assumes noncolliding identifier/field contexts and commitment binding.
 - The lending contract later checks `isCompliantFor(propertyId, principalCommitment)`, preserving the binding into loan approval.
 
 Trade-off:
 
-The verifier becomes more application-specific, but the security argument becomes much stronger.
+The wrapper enforces the application context, while proof freshness remains a separate requirement. The same proof can restore cleared compliance after a refresh that retains the valuation commitment. No borrower, loan ID, nonce, expiry, registry version, chain ID, or deployment address is bound into the statement. See the [ZK proof design](zk-proof-design.md#replay-and-freshness-boundaries).
 
 ## One Active Loan Per Property
 
@@ -164,7 +166,7 @@ Alternatives considered:
 
 Trade-off:
 
-The lock is simple and defensible, but it does not model complex production lending products.
+The lock enforces one active request or approved loan per property. Request checks the recorded owner; approval checks current verification and the request's principal against the property's single compliance slot. Replacing that slot does not immediately change a pending loan, but a subsequent approval attempt rejects a mismatched request. Approval does not recheck ownership, and later verification refreshes do not revalidate approved loans. These behaviors are covered by the [functional evaluation](evaluation-notes.md#functional-evaluation).
 
 ## Local Reproducibility First
 
@@ -190,7 +192,7 @@ The following comparison concerns disclosure and enforcement capabilities. Alter
 | --- | --- | --- | --- |
 | Plaintext on chain | Values appear in public calldata or storage | Contract evaluates the inequality | Correct and authentic source values |
 | Off-chain only | Backend confidentiality depends on access controls | Backend decision; no independent on-chain proof | Backend operator and database |
-| ProofEstate Groth16 | Plaintext omitted from chain; registry/API disclose values and valuation hiding is not established | Contract verifies the proof and application binding | Honest oracle, uncompromised setup, commitment binding, maintained roles |
+| ProofEstate Groth16 | Plaintext omitted from chain; registry/API disclose values and valuation hiding is not established | Contract verifies the proof and application binding | Honest oracle, uncompromised setup, noncolliding property-field contexts, commitment binding, maintained roles |
 | PLONK-style proof | Can omit witness values; commitment and interface disclosure still require analysis | Requires an integrated verifier and binding checks | Specific setup model, source authenticity, verifier implementation |
 | STARK-style proof | Can omit witness values; surrounding disclosure still requires analysis | Requires an integrated verifier and binding checks | Specific hash/proof assumptions and verifier implementation |
 | Threshold oracle | Oracle distribution alone does not protect witness values | Depends on attestation and contract integration | Honest threshold, committee governance, coordination and disputes |

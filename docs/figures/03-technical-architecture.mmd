@@ -7,12 +7,14 @@ flowchart TB
     Vite["Vite"]
     Vitest["Vitest"]
     Snarkjs["snarkjs"]
+    Jsdom["jsdom + Testing Library<br/>Component tests"]
   end
 
   subgraph Runtime["Runtime"]
     direction LR
     NodeRuntime["Node.js >=20 <23"]
     ExpressAPI["Node.js Express API"]
+    Prover["Groth16 prover<br/>snarkjs + WASM / proving key"]
     BrowserWallet["Browser + Injected Wallet"]
     HardhatRPC["Hardhat Localhost"]
     SepoliaRPC["Sepolia RPC"]
@@ -29,24 +31,18 @@ flowchart TB
     LtvGroth16Verifier["LtvGroth16Verifier"]
   end
 
-  subgraph Legend["Relationship Legend"]
-    direction LR
-    BuildA["Build dependency"] -.-> BuildB["Tool or artifact"]
-    RuntimeA["Runtime communication"] --> RuntimeB["Runtime endpoint"]
-    CallA["Smart contract call"] ==> CallB["Contract"]
-    AccessA["Inheritance"] --> AccessB["Base contract"]
-  end
-
   PNPM -.->|workspace scripts| Hardhat
   PNPM -.->|frontend dev and build| Vite
   PNPM -.->|frontend tests| Vitest
   PNPM -.->|proof build and calldata| Snarkjs
-  Hardhat -.->|compile, test, deploy| Solidity
-  Snarkjs -.->|generated verifier artifact| LtvGroth16Verifier
-  Vite -.->|serves DApp bundle| BrowserWallet
-  Vitest -.->|executes UI tests| BrowserWallet
+  Vitest -.->|executes component tests| Jsdom
+
+  Tooling -.->|Vite serves client; Node.js runs API and prover| Runtime
+  Tooling -.->|Hardhat: compile / test / deploy; snarkjs: verifier export| Solidity
+  Runtime ==>|JSON-RPC transactions and calls| Solidity
 
   NodeRuntime --> ExpressAPI
+  ExpressAPI -->|fullProve| Prover
   BrowserWallet -->|"HTTP: /verify; /compliance"| ExpressAPI
   BrowserWallet -->|wallet JSON-RPC| HardhatRPC
   BrowserWallet -->|wallet JSON-RPC| SepoliaRPC
@@ -54,11 +50,6 @@ flowchart TB
   ExpressAPI -->|ethers JSON-RPC| SepoliaRPC
   HardhatRPC --> ContractAccess
   SepoliaRPC --> ContractAccess
-
-  ContractAccess ==>|transactions and calls| RoleAdminManager
-  ContractAccess ==>|transactions and calls| Lending
-  ContractAccess ==>|transactions and calls| PropertyVerification
-  ContractAccess ==>|transactions and calls| ComplianceVerifier
 
   ComplianceVerifier ==>|"verifyProof()"| LtvGroth16Verifier
   ComplianceVerifier ==>|"setCompliant(); read valuation"| PropertyVerification
@@ -70,11 +61,9 @@ flowchart TB
   Lending -->|inherits| AccessControl
   PropertyVerification -->|inherits| AccessControl
 
-  classDef legend fill:#ffffff,stroke:#94a3b8,stroke-width:1.1px,color:#111827;
   classDef tool fill:#ffffff,stroke:#334155,stroke-width:1.2px,color:#111827;
   classDef runtime fill:#eff6ff,stroke:#2563eb,stroke-width:1.2px,color:#111827;
   classDef contract fill:#ecfeff,stroke:#0891b2,stroke-width:1.2px,color:#111827;
-  class BuildA,BuildB,RuntimeA,RuntimeB,CallA,CallB,AccessA,AccessB legend;
-  class PNPM,Hardhat,Vite,Vitest,Snarkjs tool;
-  class NodeRuntime,ExpressAPI,BrowserWallet,HardhatRPC,SepoliaRPC,ContractAccess runtime;
+  class PNPM,Hardhat,Vite,Vitest,Snarkjs,Jsdom tool;
+  class NodeRuntime,ExpressAPI,Prover,BrowserWallet,HardhatRPC,SepoliaRPC,ContractAccess runtime;
   class AccessControl,RoleAdminManager,Lending,PropertyVerification,ComplianceVerifier,LtvGroth16Verifier contract;

@@ -1,12 +1,13 @@
 # Final Benchmarks
 
-This document records the final local benchmark snapshot for ProofEstate after adding a correctness matrix and bounded repeated-run stability evaluation.
+This document records ProofEstate's local latency, gas, scenario, and repeated-run stability results. The complete functional evaluation is documented in the [evaluation notes](../evaluation-notes.md#functional-evaluation). Measurement dates, workloads, and runtime versions are retained with their results.
 
 ## Evidence Status
 
 | Evidence type | Status |
 | --- | --- |
-| Node 20 test/gas snapshot | Available in `docs/evaluation-notes.md` |
+| Functional evaluation | 37 contract/circuit, 12 Oracle API, and 6 frontend component tests passing; see evaluation notes |
+| Node 20 gas snapshot | Dated workload and call counts in [evaluation notes](../evaluation-notes.md#gas-snapshot) |
 | Primary compliant 30-run benchmark | Collected on 2026-09-25 |
 | Correctness matrix benchmarks | Collected on 2026-09-25 |
 | Bounded 10/30/50 repeated-run stability benchmarks | Collected on 2026-09-25 |
@@ -23,7 +24,7 @@ Raw benchmark files:
 | Stability path, 10 measured runs | `docs/benchmarks/raw/local-2026-09-25T08-33-01-512Z.json` |
 | Stability path, 50 measured runs | `docs/benchmarks/raw/local-2026-09-25T08-33-59-578Z.json` |
 
-The raw files are schema-version-2 benchmark runs. They include per-sample `ok` values, top-level failure lists, summary statistics, and git metadata. The September 2026 runs were collected while the worktree was intentionally dirty because manuscript, DOCX, and benchmark documentation updates were in progress. The results are therefore final experiment-matrix evidence, not a clean-release tag.
+The raw files are schema-version-2 benchmark runs. They include per-sample `ok` values, top-level failure lists, summary statistics, and git metadata. Their metadata records `dirty: true`, including manuscript and documentation paths. It identifies the base commit and recorded changes, without preserving an immutable snapshot of the complete measured checkout. The primary 30-run file also supplies the 30-run stability row; there are six raw files.
 
 ## Environment
 
@@ -42,13 +43,13 @@ The raw files are schema-version-2 benchmark runs. They include per-sample `ok` 
 
 ## Benchmark Protocol
 
-The primary compliant-path benchmark command was:
+The command reproducing the recorded primary workload is:
 
 ```bash
 pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
 ```
 
-Correctness-matrix commands were:
+Commands reproducing the recorded scenario workloads are:
 
 ```bash
 pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=784000 --api=http://127.0.0.1:8787
@@ -56,7 +57,7 @@ pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-001 --principal=78400
 pnpm benchmark:local --warmups=5 --runs=30 --property=PROP-004 --principal=100000 --api=http://127.0.0.1:8787
 ```
 
-Bounded repeated-run stability commands were:
+Commands reproducing the recorded stability workloads are:
 
 ```bash
 pnpm benchmark:local --warmups=5 --runs=10 --property=PROP-001 --principal=750000 --api=http://127.0.0.1:8787
@@ -130,7 +131,7 @@ The 10/30/50-run results show zero failures and similar median proof-generation 
 
 Gas results use the dissertation Node 20 gas baseline recorded in `docs/evaluation-notes.md`.
 
-The 310,411-gas compliance operation includes signal checks, generated verification, storage writes, and events. Method averages aggregate test-workload calls and storage states; the approval method can include both approval and rejection paths. The additional submission regression tests do not replace this historical gas baseline.
+The 310,411-gas compliance operation includes signal checks, generated verification, storage writes, and events. Method averages aggregate the recorded test-workload calls and storage states; the approval method can include both approval and rejection paths. A gas report from the current functional suite can have different aggregate averages because its call counts and path mix differ.
 
 | Contract | Method | Avg gas |
 | --- | --- | ---: |
@@ -186,7 +187,7 @@ Final benchmark checkout local CLI flow from `docs/evaluation-notes.md`:
 | --- | --- | ---: | --- |
 | Happy path | `pnpm demo:flow PROP-001 750000` | 1.82s | `Repaid` |
 
-This duration includes Oracle verification, compliance proof generation, on-chain verification, loan request, approval, and repayment on the local Hardhat chain.
+This single observed duration includes Oracle service verification, compliance proof generation, on-chain verification, loan request, approval, and repayment on the local Hardhat chain. The CLI calls service functions directly. It does not measure HTTP round trips, browser wallet interaction, or public-chain confirmation latency, and is not a repeated-run end-to-end latency estimate.
 
 ## Reporting Rules
 
@@ -195,5 +196,5 @@ This duration includes Oracle verification, compliance proof generation, on-chai
 - Warm-up runs are excluded from all summary statistics.
 - Median is p50.
 - Raw data is preserved for reproducibility.
-- The September 2026 benchmark metadata records git commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true` because manuscript and documentation updates were in progress.
+- The benchmark metadata records base git commit `5f512070cbfc8c0b40d50d2be50d6595b17f29a7` with `dirty: true`; it does not identify an immutable complete checkout.
 - The bounded scalability table reports repeated local proof-generation stability, not concurrent production throughput.

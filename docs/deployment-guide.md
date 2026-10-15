@@ -6,10 +6,10 @@ This guide describes how to reproduce the local ProofEstate prototype and how to
 
 | Requirement | Expected value |
 | --- | --- |
-| Node.js | Node 20 from `.nvmrc` |
-| pnpm | 10.x or the project lockfile-compatible version |
+| Node.js | Node 20 from `.nvmrc`; package engine range is `>=20 <23` |
+| pnpm | 10.9.0, matching `packageManager` and the lockfile |
 | Hardhat | Installed through project dependencies |
-| circom | `$HOME/.cargo/bin/circom`, `circom` on PATH, or `CIRCOM_BIN` |
+| circom | Required only for circuit rebuilds; `$HOME/.cargo/bin/circom`, `circom` on PATH, or `CIRCOM_BIN` |
 | snarkjs | Installed through project dependencies |
 | Wallet | Hardhat local accounts for local demo; funded wallet for Sepolia |
 
@@ -17,20 +17,16 @@ Recommended setup:
 
 ```bash
 nvm use
-pnpm install
+pnpm install --frozen-lockfile
 node -v
 pnpm -v
 ```
 
-If `circom` is not on PATH, either rely on `scripts/zk-build.mjs` auto-detecting `~/.cargo/bin/circom`, or set:
-
-```bash
-export CIRCOM_BIN="$HOME/.cargo/bin/circom"
-```
+The repository includes the matching circuit WASM, proving key, and generated Solidity verifier needed for the existing demo. No new trusted setup or `circom` installation is needed for ordinary reproduction. See [Circuit and Setup Rebuild](#circuit-and-setup-rebuild) when intentionally changing these artifacts.
 
 ## Local Reproduction Path
 
-The local path is the canonical dissertation demo because it is deterministic and does not depend on external RPC or faucet state.
+The local path is the canonical demo environment. Hardhat provides controlled chain execution without public RPC or faucet dependencies; wall-clock proof and workflow times still vary between runs.
 
 1. Compile contracts:
 
@@ -38,45 +34,27 @@ The local path is the canonical dissertation demo because it is deterministic an
 pnpm compile
 ```
 
-2. Optional: rebuild ZK circuit artifacts:
-
-```bash
-pnpm zk:compile
-pnpm zk:setup
-pnpm zk:prove
-```
-
-For a full ZK rebuild:
-
-```bash
-pnpm zk:build
-```
-
-3. Start local chain:
+2. Start the local chain and keep its terminal running:
 
 ```bash
 pnpm chain:local
 ```
 
-4. In a second terminal, deploy contracts and sync local env files:
+3. In a second terminal, deploy contracts and sync local env files:
 
 ```bash
 pnpm demo:deploy
 ```
 
-This writes ignored runtime files:
+This deploys five contracts and updates the tracked public manifest `deployments/localhost.json`. It also creates or updates the ignored runtime files `.env.local` and `frontend/.env.local` with local defaults.
 
-- `deployments/localhost.json`
-- `.env.local`
-- `frontend/.env.local`
-
-5. Start Oracle API:
+4. Start the Oracle API in a separate terminal and keep it running:
 
 ```bash
 pnpm oracle:api
 ```
 
-6. Confirm readiness:
+5. Confirm readiness from another terminal:
 
 ```bash
 pnpm demo:ready
@@ -86,10 +64,12 @@ Expected readiness:
 
 - local RPC returns a block number;
 - Oracle API returns `proofestate-oracle`;
-- deployed contract addresses contain code;
+- four core contract addresses contain code (`PropertyVerification`, `LtvGroth16Verifier`, `ComplianceVerifier`, and `Lending`);
 - frontend local environment variables are present.
 
-7. Run the end-to-end CLI demo:
+The API `/health` response is a process-liveness check. `demo:ready` does not exercise proof generation, role permissions, browser wallets, or the fifth contract, `RoleAdminManager`.
+
+6. Run the end-to-end CLI demo:
 
 ```bash
 pnpm demo:flow PROP-001 750000
@@ -103,6 +83,31 @@ Expected result:
 - loan officer approves;
 - borrower repays;
 - final state is `Repaid`.
+
+The CLI calls the Oracle service functions directly and submits the loan actions through local signers. Its workflow duration does not measure HTTP response time or browser wallet interaction. Repayment changes contract state without transferring funds.
+
+## Circuit and Setup Rebuild
+
+Use these commands only when intentionally rebuilding the proof artifacts:
+
+| Command | Effect |
+| --- | --- |
+| `pnpm zk:compile` | Recompiles the circuit into R1CS, WASM, and symbol files; leaves the existing proving key and verifier unchanged |
+| `pnpm zk:setup` | Recreates setup artifacts, proving/verification keys, and the Solidity verifier from the compiled circuit |
+| `pnpm zk:prove` | Generates and checks a sample proof; expects the matching `verification_key.json` produced by setup |
+| `pnpm zk:build` | Runs circuit compilation, setup, and sample proof verification |
+
+`zk:setup` and `zk:build` replace the existing proving key and generated verifier. The resulting proofs do not match a verifier deployed from the previous key. Recompile contracts and deploy the matching verifier and wrapper before using the new artifacts. If the circuit changes, recompile it before setup. Retain the checked-in artifact set when using the recorded public deployment.
+
+For an intentional full rebuild before a new local deployment:
+
+```bash
+pnpm zk:build
+pnpm compile
+pnpm demo:deploy
+```
+
+The local chain must already be running for the deployment step. Circuit compilation uses `CIRCOM_BIN`, auto-detects `~/.cargo/bin/circom`, or falls back to `circom` on PATH. For a compiler at another path, set `CIRCOM_BIN` to that executable. The local setup script uses demonstration contributions and does not establish an audited ceremony.
 
 ## Frontend Local Demo
 
@@ -120,9 +125,12 @@ pnpm frontend:build:local
 
 The local DApp expects:
 
+- a development server, normally at `http://localhost:5173`;
 - Hardhat RPC on `http://127.0.0.1:8545`;
 - Oracle API on `http://localhost:8787`;
 - deployment addresses in `frontend/.env.local`.
+
+For the `PROP-001` flow, connect the borrower account below, complete verification and compliance, and request the loan. Switch to the loan-officer account to approve, then return to the original borrower to mark repayment. Verification/compliance writes use the backend Oracle signer; borrower and officer actions call `Lending` directly from their wallets.
 
 ## Local Demo Accounts
 
@@ -139,36 +147,38 @@ These are public Hardhat accounts. Do not fund them on public networks.
 
 Sepolia is optional validation. It should not be the primary dependency for dissertation evidence.
 
-Required ignored file:
+To inspect the recorded deployment, set `SEPOLIA_RPC_URL` in the ignored root `.env.sepolia`, then run:
 
-```text
-.env.sepolia
+```bash
+pnpm sepolia:inspect PROP-011
 ```
 
-Required values typically include:
+Inspection reads the tracked [Sepolia manifest](../deployments/sepolia.json) and chain state. It does not submit transactions or require private keys.
+
+For a new deployment, configure these values in `.env.sepolia`:
 
 | Variable | Purpose |
 | --- | --- |
 | `SEPOLIA_RPC_URL` | RPC endpoint |
 | `DEPLOYER_PRIVATE_KEY` | Deployment signer |
-| `ORACLE_PRIVATE_KEY` | Oracle write signer |
+| `ORACLE_PRIVATE_KEY` | Backend Oracle write signer; must match the account granted `ORACLE_ROLE` |
 | `ADMIN_ADDRESS` | Protocol admin |
 | `ORACLE_ADDRESS` | Account granted Oracle role |
 | `LOAN_OFFICER_ADDRESS` | Account granted loan officer role |
 
-Deploy:
+Deploy from a funded Sepolia signer:
 
 ```bash
 pnpm deploy:sepolia
 ```
 
-Inspect:
+The deployment command updates the public manifest and synchronizes addresses into `.env.sepolia` and `frontend/.env.sepolia`. Inspect the result:
 
 ```bash
-pnpm sepolia:inspect
+pnpm sepolia:inspect PROP-011
 ```
 
-Current public Sepolia deployment:
+Recorded Sepolia deployment and hosted-service links:
 
 | Field | Address | Sepolia explorer |
 | --- | --- | --- |
@@ -183,13 +193,23 @@ Current public Sepolia deployment:
 | Lending | `0x5D7bcf02E3969B3e7cDD021407812710D96599DC` | [Etherscan](https://sepolia.etherscan.io/address/0x5D7bcf02E3969B3e7cDD021407812710D96599DC) |
 | RoleAdminManager | `0xd3E9331b10DF04Cf84d128f9b5e499dd5D8d88Db` | [Etherscan](https://sepolia.etherscan.io/address/0xd3E9331b10DF04Cf84d128f9b5e499dd5D8d88Db) |
 
-This deployment was generated on `2026-08-26T07:52:02.900Z`. Only public addresses and public service URLs are documented here; private keys and RPC secrets must remain in ignored environment files.
+The manifest records deployment time `2026-08-26T07:52:02.900Z`; the addresses above match that file. Use inspection to establish chain state at the time of a demonstration. Only public addresses and service URLs are documented here; private keys and RPC secrets remain in ignored environment files.
 
-Run Oracle API against Sepolia:
+To synchronize the recorded manifest without deploying:
+
+```bash
+pnpm sepolia:sync
+```
+
+This writes address configuration without sending transactions. Set `VITE_ORACLE_API_URL` in `frontend/.env.sepolia` to the intended API: synchronization retains an existing value or defaults to `http://localhost:8787`.
+
+Run a local Oracle API against Sepolia:
 
 ```bash
 pnpm oracle:api:sepolia
 ```
+
+The Oracle host needs the matching `zk/build/ltv_js/ltv.wasm` and `zk/artifacts/ltv_final.zkey`, Sepolia RPC configuration, contract addresses, and the signer used for write-enabled requests. The server uses `PORT`, then `ORACLE_PORT`, then `8787`. Its health endpoint does not verify RPC access, roles, or proving artifacts. The API currently has no authentication or rate limiting, and compliant responses include witness values and salts; public reachability does not establish protected access.
 
 Build Sepolia frontend configuration:
 
@@ -200,6 +220,8 @@ pnpm frontend:build:sepolia
 Document Sepolia transaction hashes only after inspection. Label them as public validation, not local performance evidence.
 
 ## Hosted Frontend on Vercel
+
+Hosted DApp: [proofestate.vercel.app](https://proofestate.vercel.app/).
 
 Vite `VITE_*` variables are embedded at build time. Updating contract addresses or the Oracle API URL in Vercel requires updating the Vercel environment variables and redeploying the frontend; refreshing the browser is not enough.
 
@@ -215,17 +237,17 @@ Required public Vercel environment variables:
 
 | Variable | Value source |
 | --- | --- |
-| `VITE_ORACLE_API_URL` | Hosted Oracle API URL from the current public deployment table |
+| `VITE_ORACLE_API_URL` | The intended hosted Oracle API URL; the recorded service link appears above |
 | `VITE_SEPOLIA_RPC_URL` | Browser-safe Sepolia RPC URL |
 | `VITE_DEFAULT_NETWORK` | `sepolia` |
-| `VITE_ADMIN_ADDRESS` | Current public deployment table |
-| `VITE_ORACLE_ADDRESS` | Current public deployment table |
-| `VITE_LOAN_OFFICER_ADDRESS` | Current public deployment table |
-| `VITE_PROPERTY_VERIFICATION_ADDRESS` | Current public deployment table |
-| `VITE_LTV_GROTH16_VERIFIER_ADDRESS` | Current public deployment table |
-| `VITE_COMPLIANCE_VERIFIER_ADDRESS` | Current public deployment table |
-| `VITE_LENDING_ADDRESS` | Current public deployment table |
-| `VITE_ROLE_ADMIN_MANAGER_ADDRESS` | Current public deployment table |
+| `VITE_ADMIN_ADDRESS` | Inspected target deployment manifest |
+| `VITE_ORACLE_ADDRESS` | Inspected target deployment manifest |
+| `VITE_LOAN_OFFICER_ADDRESS` | Inspected target deployment manifest |
+| `VITE_PROPERTY_VERIFICATION_ADDRESS` | Inspected target deployment manifest |
+| `VITE_LTV_GROTH16_VERIFIER_ADDRESS` | Inspected target deployment manifest |
+| `VITE_COMPLIANCE_VERIFIER_ADDRESS` | Inspected target deployment manifest |
+| `VITE_LENDING_ADDRESS` | Inspected target deployment manifest |
+| `VITE_ROLE_ADMIN_MANAGER_ADDRESS` | Inspected target deployment manifest |
 
 Never set `DEPLOYER_PRIVATE_KEY`, `ORACLE_PRIVATE_KEY`, or backend-only RPC secrets in Vercel frontend variables. After changing any `VITE_*` value, trigger a fresh redeploy. If the DApp still shows old contract addresses, redeploy without the old build cache and confirm the deployment was built after the environment variable update.
 
@@ -245,13 +267,13 @@ Tracked public deployment manifests:
 
 These manifests are imported by the frontend build and must contain public addresses only. They may be regenerated by deployment scripts; commit changes only after inspecting the target network and confirming that no private key or RPC secret has been written.
 
-Generated build files:
+Ignored build outputs include:
 
 - `artifacts/`
 - `cache/`
 - `frontend/dist/`
-- `zk/build/`
-- `zk/artifacts/`
+
+The circuit files in `zk/build/`, proving key `zk/artifacts/ltv_final.zkey`, and verifier `contracts/generated/LtvGroth16Verifier.sol` are tracked reproduction assets. Other files created under `zk/artifacts/`, such as setup contributions and `verification_key.json`, are ignored. Git LFS is configured for `demo/*.mp4`; it is not used for the proving key.
 
 Public documentation should cite inspected deployment addresses from tracked documents or tracked deployment manifests, with the inspection date and network clearly labeled.
 
@@ -262,7 +284,8 @@ Public documentation should cite inspected deployment addresses from tracked doc
 | `demo:ready` fails local RPC | Hardhat node is not running | Start `pnpm chain:local` |
 | `demo:ready` fails Oracle API | Oracle server is not running | Start `pnpm oracle:api` |
 | Deployment addresses have no code | Chain was restarted after deploy | Rerun `pnpm demo:deploy` |
-| `circom --version` fails | `~/.cargo/bin` not on PATH | Set `CIRCOM_BIN` or add cargo bin to PATH |
+| `circom --version` fails during an intentional rebuild | Compiler missing or not on PATH | Install the compiler and set `CIRCOM_BIN`, or use the checked-in artifacts for the existing demo |
+| Proof fails against an existing deployment after setup | New proving key does not match deployed verifier | Restore its matching artifact set or deploy the rebuilt verifier and wrapper |
 | Oracle write fails | Missing signer/private key or wrong role | Rerun env sync and confirm deployment roles |
 | Frontend shows missing address | `frontend/.env.local` stale | Rerun `pnpm demo:sync` or `pnpm demo:deploy` |
 | Hosted frontend shows old Sepolia address | Vercel `VITE_*` variables or build cache are stale | Update Vercel env values and redeploy without the old build cache |
