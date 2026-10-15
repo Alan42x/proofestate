@@ -6,7 +6,7 @@ supply the style reference. Academic overrides
 preserve Times New Roman and black headings: A4, 1-inch margins, 12pt body at
 1.15 spacing, 20pt title, 16/13/12pt headings, 10pt tables/captions. Tables have
 fixed page-width DXA geometry and repeated headers; images stay with captions.
-Journal bibliography entries use 11pt to avoid a single-entry final page.
+Bibliography entries use 11pt hanging indents and compact paragraph spacing.
 The separate capstone report adds an editorial cover, roman-numbered front
 matter and a populated Word TOC field to the thesis text. LibreOffice and pypdf
 resolve its cached page numbers without modifying either manuscript.
@@ -45,6 +45,7 @@ TARGETS = {"thesis.md": "ProofEstate_Thesis_Full_Version.docx", "jisa.md": "Proo
 COVER_KEYS = ("Author", "Student ID", "Course", "Supervisor", "Institution", "Submission date")
 REPORT_FILENAME = "ProofEstate_FT5007_Capstone_Report.docx"
 REPORT_REPOSITORY = "https://github.com/Alan42x/proofestate"
+REPORT_DEMO_URL = "https://proofestate.vercel.app/"
 REPORT_COVER = {
     "Author": "ZHANG TIANYI",
     "Student ID": "A0329678H",
@@ -117,6 +118,8 @@ def front_matter(doc, metadata, width):
         "Cover Date": (12, False, 0, 0),
         "Cover Repository Label": (11, True, 24, 4),
         "Cover Repository": (11, False, 0, 0),
+        "Cover Demo Label": (11, True, 12, 4),
+        "Cover Demo": (11, False, 0, 0),
     }
     for name, (size, bold, before, after) in tokens.items():
         style = doc.styles[name] if name in doc.styles else doc.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
@@ -145,16 +148,20 @@ def front_matter(doc, metadata, width):
             text = text.replace("ProofEstate: ", "ProofEstate:\n", 1).replace(" with ZK ", "\nwith ZK ", 1)
         abstract._p.addprevious(doc.add_paragraph(text, style)._p)
 
-    abstract._p.addprevious(doc.add_paragraph("Project repository", "Cover Repository Label")._p)
-    repository = doc.add_paragraph(style="Cover Repository")
-    hyperlink = OxmlElement("w:hyperlink")
-    hyperlink.set(qn("r:id"), repository.part.relate_to(REPORT_REPOSITORY, RT.HYPERLINK, is_external=True))
-    run = OxmlElement("w:r")
-    child(child(run, "w:rPr"), "w:u", {"w:val": "single"})
-    child(run, "w:t").text = REPORT_REPOSITORY
-    hyperlink.append(run)
-    repository._p.append(hyperlink)
-    abstract._p.addprevious(repository._p)
+    for label, label_style, link_style, url in (
+        ("Project repository", "Cover Repository Label", "Cover Repository", REPORT_REPOSITORY),
+        ("Deployed demo (Vercel)", "Cover Demo Label", "Cover Demo", REPORT_DEMO_URL),
+    ):
+        abstract._p.addprevious(doc.add_paragraph(label, label_style)._p)
+        paragraph = doc.add_paragraph(style=link_style)
+        hyperlink = OxmlElement("w:hyperlink")
+        hyperlink.set(qn("r:id"), paragraph.part.relate_to(url, RT.HYPERLINK, is_external=True))
+        run = OxmlElement("w:r")
+        child(child(run, "w:rPr"), "w:u", {"w:val": "single"})
+        child(run, "w:t").text = url
+        hyperlink.append(run)
+        paragraph._p.append(hyperlink)
+        abstract._p.addprevious(paragraph._p)
 
     # Section properties on a boundary paragraph describe the preceding section.
     # Separate footer parts prevent cover/front-matter numbering from leaking.
@@ -331,13 +338,25 @@ def format_document(filename, kind, metadata=None):
     if "Source Code" in doc.styles:
         child(doc.styles["Source Code"].element.get_or_add_pPr(), "w:wordWrap", {"w:val": "1"})
 
+    design_overview = False
     for paragraph in doc.paragraphs:
         text = paragraph.text.strip()
+        if kind in ("thesis", "report") and text == "3. System Design":
+            design_overview = True
+        if paragraph._p.xpath(".//w:drawing"):
+            design_overview = False
+        if design_overview and paragraph.style.name not in ("Heading 1", "Heading 2", "Heading 3"):
+            # Keep the architecture overview and actors together before the
+            # full-page diagrams, preserving the existing 12pt body type.
+            paragraph.paragraph_format.space_after = Pt(2)
         if text.startswith("[") and text[1:2].isdigit():
             paragraph.paragraph_format.keep_together = True
-            if kind == "jisa":
-                for run in paragraph.runs:
-                    run.font.size = Pt(11)
+            paragraph.paragraph_format.space_after = Pt(4)
+            paragraph.paragraph_format.line_spacing = 1.0
+            paragraph.paragraph_format.left_indent = Inches(0.25)
+            paragraph.paragraph_format.first_line_indent = Inches(-0.25)
+            for run in paragraph.runs:
+                run.font.size = Pt(11)
         if re.match(r"^(?:Figure|Table) \d+\.", text):
             paragraph.style = caption_style
             paragraph.paragraph_format.keep_together = True
@@ -360,9 +379,12 @@ def format_document(filename, kind, metadata=None):
 
     for table in doc.tables:
         count = len(table.columns)
-        keep_table_together = kind in ("thesis", "report") and len(table.rows) <= 8
+        # Keep genuinely small tables intact; longer tables flow by whole rows
+        # with repeated headers instead of leaving a mostly empty prior page.
+        keep_table_together = len(table.rows) <= 4
         # Explicit reusable patterns; numeric tables give the stage label more room.
         header = [cell.text for cell in table.rows[0].cells]
+        compact_actors = kind in ("thesis", "report") and header == ["Actor", "Responsibility"]
         if count == 2:
             weights = [0.33, 0.67]
         elif count == 3 and header[0] == "Asset":
@@ -406,13 +428,14 @@ def format_document(filename, kind, metadata=None):
                 tc_pr = cell._tc.get_or_add_tcPr()
                 child(tc_pr, "w:tcW", {"w:w": widths[index], "w:type": "dxa"})
                 margins = child(tc_pr, "w:tcMar")
-                for side, value in {"top": 80, "bottom": 80, "start": 120, "end": 120}.items():
+                vertical_margin = 40 if compact_actors else 80
+                for side, value in {"top": vertical_margin, "bottom": vertical_margin, "start": 120, "end": 120}.items():
                     child(margins, f"w:{side}", {"w:w": value, "w:type": "dxa"})
                 if row_index == 0:
                     child(tc_pr, "w:shd", {"w:fill": "F2F2F2"})
                 for paragraph in cell.paragraphs:
                     p = paragraph.paragraph_format
-                    p.space_before, p.space_after, p.line_spacing = Pt(0), Pt(3), 1.0
+                    p.space_before, p.space_after, p.line_spacing = Pt(0), Pt(1 if compact_actors else 3), 1.0
                     # Keep at least two data rows with the header and prevent
                     # a lone final row; a table's last row must not bind the
                     # following prose to the table.
@@ -423,8 +446,8 @@ def format_document(filename, kind, metadata=None):
                         run.font.name, run.font.size = "Times New Roman", Pt(10)
 
     if kind in ("thesis", "report"):
-        # Keep a short table's introducing paragraph with its caption and rows.
-        # Long evidence tables can flow across pages with repeated headers.
+        # Bind a short lead-in to the first table rows, without dragging a long
+        # explanatory paragraph onto the following page with the table.
         for paragraph in doc.paragraphs:
             caption = paragraph._p.getnext()
             if caption is None or caption.tag != qn("w:p"):
@@ -432,7 +455,7 @@ def format_document(filename, kind, metadata=None):
             caption_text = "".join(caption.xpath(".//w:t/text()"))
             table = caption.getnext()
             if (re.match(r"^Table \d+\.", caption_text) and table is not None
-                    and table.tag == qn("w:tbl") and len(table.xpath("w:tr")) <= 8):
+                    and table.tag == qn("w:tbl") and len(paragraph.text) <= 180):
                 paragraph.paragraph_format.keep_with_next = True
 
     # Pandoc supplies real lists. Make their geometry explicit and consistent.

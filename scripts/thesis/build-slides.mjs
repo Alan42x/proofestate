@@ -28,21 +28,23 @@ const LOGO = "slides/assets/nus-logo.png"; // Unmodified NUS mark from the exist
 // Slide content, layout, evidence pointers and spoken Notes are maintained together.
 // Coordinates and font sizes are in pixels on a 1280 × 720 canvas.
 const DECK = [
-  // 01 — DISSERTATION DEFENSE
+  // 01 — CAPSTONE PROJECT DEFENSE
   {
     title: TITLE,
-    kicker: "DISSERTATION DEFENSE",
+    kicker: "CAPSTONE PROJECT DEFENSE",
     source: "ProofEstate thesis, Chs. 5–6; local prototype evaluation.",
     evidence: [
       "test/proofestate.test.js",
       "docs/benchmarks/final-benchmarks.md",
       "docs/evaluation-notes.md",
     ],
-    notes: `Good morning, everyone. My name is Zhang Tianyi. Today I will present my project, ProofEstate: Blockchain-Based Real Estate Lending Platform with ZK Compliance and Property Verification.
+    notes: `Good morning, everyone. I am Zhang Tianyi, and today I will present ProofEstate, a real-estate lending prototype with zero-knowledge compliance and property verification.
 
-The question behind this project is simple: can a public smart contract enforce a lending rule without publishing the property's valuation or the requested loan amount? To investigate this, I built an end-to-end prototype that combines a property registry, an oracle service, a zero-knowledge circuit, smart contracts, and a web application.
+The project asks how a public smart contract can enforce a lending rule while keeping the property's valuation and requested loan amount out of blockchain transactions and storage.
 
-I will explain how the proof is connected to the lending decision, show the implementation and evaluation results, and then discuss the boundaries that the tests reveal. The main contribution is a concrete and reproducible integration, with clearly stated assumptions and limitations.`,
+I implemented a complete workflow connecting a mock property registry, an oracle, a zero-knowledge circuit, smart contracts, and a React application. The central contribution is the connection between a valid private proof and the public state that authorizes a loan.
+
+I will explain the design, show the application and evaluation results, and finish with the security boundaries and future work.`,
     draw: ({ text, rect, image, connect }) => {
       text("ProofEstate:", 64, 145, 1130, 73, 56, C.blue, { bold: true });
       text("Blockchain-Based Real Estate Lending Platform", 64, 236, 1130, 46, 38, C.blue, { bold: true });
@@ -52,14 +54,14 @@ I will explain how the proof is connected to the lending decision, show the impl
       text("Zhang Tianyi", 64, 431, 430, 38, 26, C.blue, { bold: true });
       text("Supervisor: Nicholas Mac Gregor GARCIA", 64, 473, 1060, 34, 21, C.gray);
       text("37", 64, 531, 330, 65, 46, C.blue, { bold: true });
-      text("contract tests", 64, 601, 330, 30, 22, C.blue, { bold: true });
-      text("Current revision · Node 22.22.1", 64, 639, 330, 24, 17, C.gray);
+      text("contract + circuit tests", 64, 601, 330, 30, 22, C.blue, { bold: true });
+      text("12 API + 6 frontend tests", 64, 639, 330, 24, 17, C.gray);
       text("399.53 ms", 452, 531, 340, 65, 46, C.blue, { bold: true });
       text("median local proof", 452, 601, 340, 30, 22, C.blue, { bold: true });
-      text("Archived 30-run session", 452, 639, 340, 24, 17, C.gray);
+      text("30 measured local runs", 452, 639, 340, 24, 17, C.gray);
       text("310,411 gas", 870, 531, 346, 65, 46, C.blue, { bold: true });
       text("compliance operation", 870, 601, 346, 30, 22, C.blue, { bold: true });
-      text("Archived whole-call average", 870, 639, 346, 24, 17, C.gray);
+      text("Measured transaction workload", 870, 639, 346, 24, 17, C.gray);
     },
   },
 
@@ -71,13 +73,13 @@ I will explain how the proof is connected to the lending decision, show the impl
     evidence: [
       "docs/design-decisions.md",
     ],
-    notes: `The central challenge is connecting a private compliance calculation to a public decision.
+    notes: `The research problem is the link between a private calculation and a public lending decision.
 
-A plaintext on-chain design can check the loan-to-value ratio directly, but it publishes the financial inputs. An off-chain service can keep those inputs outside the blockchain, but its decision depends on the backend operator and does not provide an independently verified on-chain proof.
+A plaintext contract can check the loan-to-value ratio directly, but it publishes the financial inputs. An off-chain service can make the calculation privately, but the blockchain then relies on that service's decision.
 
-ProofEstate takes a third approach. It commits to the valuation and principal, proves that they satisfy the lending rule, and checks that the proof matches the current contract state before approval.
+ProofEstate commits to the valuation and principal, proves the lending rule, and checks the proof against the current property and loan context before approval.
 
-This does not automatically make the entire application confidential. The current prototype API still exposes these values. The demonstrated result is more specific: the blockchain can enforce the relation without directly publishing the valuation or principal.`,
+This gives the chain verifiable evidence without supplying those financial values as plaintext. Privacy across the rest of the application also depends on how the registry, API, and proving service handle the inputs. I will return to that distinction in the security findings.`,
     draw: ({ text, rect, image, connect }) => {
       text("Can a public contract approve a loan without publishing valuation or principal?", 64, 213, 1144, 76, 30, C.blue, { bold: true });
       rect(64, 316, 1152, 52, C.blue);
@@ -112,15 +114,13 @@ This does not automatically make the entire application confidential. The curren
       "contracts/Lending.sol",
       "backend/oracle/service.js",
     ],
-    notes: `This diagram shows how that approach is implemented.
+    notes: `The architecture has three parts: the registry and client, the oracle and prover, and the public contracts.
 
-On the left are the mock property registry and the React application. The registry supplies ownership, valuation, and eligibility data. The application lets borrowers and loan officers interact with the system.
+The mock registry supplies ownership, valuation, and eligibility records. The React application submits verification requests and lets borrowers and officers operate the loan workflow.
 
-In the middle, the trusted oracle validates the registry record and prepares the proving inputs. The Groth16 prover then generates a proof and its public signals.
+The oracle validates the registry record, prepares commitments and witness inputs, and invokes the Groth16 prover. PropertyVerification stores the property record. ComplianceVerifier checks the public signals, calls the generated verifier, and writes compliance. Lending reads the stored verification and principal commitment at approval.
 
-On the right, PropertyVerification stores the verified property record. ComplianceVerifier checks the proof's bindings, calls the generated verifier, and records compliance. Lending uses that record when deciding whether to approve a request.
-
-The oracle remains trusted for the correctness of external facts. The contracts enforce the proof and state checks, but they cannot establish whether a real-world appraisal or land-title record is authentic.`,
+The contracts enforce these checks on chain. The oracle remains responsible for the accuracy of the external record and handles the plaintext proving inputs.`,
     draw: ({ text, rect, image, connect }) => {
       text("Registry / client", 64, 212, 320, 31, 22, C.blue, { bold: true });
       text("Trusted oracle / prover", 456, 212, 360, 31, 22, C.blue, { bold: true });
@@ -151,6 +151,7 @@ The oracle remains trusted for the correctness of external facts. The contracts 
       connect("oracle", "prover", "bottom", "top", "straight");
       connect("prover", "compliance", "right", "left", "elbow");
       connect("compliance", "property-state", "top", "bottom", "straight");
+      connect("lending", "property-state", "right", "right", "elbow");
       connect("dapp", "oracle", "right", "left", "elbow");
       text("Witness inputs", 650, 422, 166, 30, 18, C.gray);
       text("Current API exposes witness values and salts.", 64, 409, 344, 62, 21, C.orange, { bold: true });
@@ -166,13 +167,13 @@ The oracle remains trusted for the correctness of external facts. The contracts 
       "circuits/ltv.circom",
       "zk/ltvCircuit.js",
     ],
-    notes: `The circuit proves two things together: the loan-to-value rule and the openings of the public commitments.
+    notes: `The circuit checks the lending inequality and the openings of both commitments.
 
-Here, v represents the property valuation, p the requested principal, and t the policy threshold in basis points. The inequality is: ten thousand times the principal must be no greater than the threshold times the valuation. The contract fixes the threshold at eight thousand, which means an eighty percent limit.
+Here, v is the property valuation, p is the principal, and t is the threshold in basis points. Ten thousand times the principal must be no greater than the threshold times the valuation. The contract fixes t at eight thousand, giving an inclusive eighty percent limit.
 
-The public statement contains the property identifier, two commitments, and the threshold. The witness contains the valuation, principal, and salts. The circuit recomputes both MiMC commitments and checks the inequality.
+The public statement contains the property field identifier, valuation commitment, principal commitment, and threshold. The witness contains the valuation, principal, and their salts. Both MiMC Sponge commitments include the property identifier.
 
-Range constraints keep this calculation in integer arithmetic rather than allowing field wraparound. The circuit has four thousand, one hundred and ninety-six constraints. These inputs are private to the circuit, but the trusted oracle still handles them.`,
+Range constraints make the comparison behave as an integer inequality. The circuit contains four thousand, one hundred and ninety-six constraints. Its witness is private to the proof system, while the oracle handles those values during proving.`,
     draw: ({ text, rect, image, connect }) => {
       text("10000p ≤ tv", 64, 224, 594, 91, 64, C.blue, { bold: true, font: "Georgia" });
       text("t = 8000 in the contract wrapper", 64, 335, 603, 39, 25, C.orange, { bold: true });
@@ -182,7 +183,7 @@ Range constraints keep this calculation in integer arithmetic rather than allowi
       text("4,196 constraints · BN254 / bn-128", 64, 599, 630, 38, 23, C.gray);
       rect(746, 223, 1, 409, C.rule);
       text("PUBLIC STATEMENT", 790, 225, 426, 32, 18, C.orange, { bold: true });
-      text("k   Property identifier", 790, 269, 426, 37, 25, C.ink, { font: "Courier New" });
+      text("k   Property field ID", 790, 269, 426, 37, 25, C.ink, { font: "Courier New" });
       text("Cv  Valuation commitment", 790, 308, 426, 37, 25, C.ink, { font: "Courier New" });
       text("Cp  Principal commitment", 790, 347, 426, 37, 25, C.ink, { font: "Courier New" });
       text("t   Policy threshold", 790, 386, 426, 37, 25, C.ink, { font: "Courier New" });
@@ -203,13 +204,13 @@ Range constraints keep this calculation in integer arithmetic rather than allowi
       "contracts/PropertyVerification.sol",
       "contracts/Lending.sol",
     ],
-    notes: `A valid mathematical proof is not sufficient by itself. It must refer to the correct application state.
+    notes: `A valid proof must also match the state used by the lending application.
 
-ProofEstate checks four public signals before calling the Groth16 verifier. The property field must match the selected property identifier. The valuation commitment must match the current stored record. The principal commitment must match the one submitted to the wrapper. Finally, the threshold must equal the fixed policy value of eight thousand.
+The wrapper checks four signals before invoking the generated verifier. The property field must match the selected property identifier. The valuation commitment must match the current stored record. The principal commitment must match the value supplied to the wrapper, and the threshold must equal eight thousand.
 
-Only after those bindings match and the proof verifies does the contract write compliance state. Lending then performs a separate check at approval: the accepted principal commitment must match the loan request.
+Once all four checks pass and the proof verifies, the contract records compliance. Approval then checks that the stored principal commitment matches the loan request.
 
-This prevents substitution across these contexts. However, it does not provide single-use freshness or bind the proof to a particular borrower, loan identifier, expiry, or deployment domain.`,
+These checks reject substitution of the property, valuation, principal, or policy threshold. Freshness and loan-specific use require additional context, because the present statement contains no borrower, loan identifier, expiry, or deployment domain.`,
     draw: ({ text, rect, image, connect }) => {
       rect(64, 217, 1152, 52, C.blue);
       text("Public signal", 78, 231, 288, 24, 20, C.white, { bold: true });
@@ -224,7 +225,7 @@ This prevents substitution across these contexts. However, it does not provide s
       text("Different valuation context", 873, 360, 329, 43, 22, C.ink);
       rect(64, 419, 1152, 1, C.rule);
       text("Cp · principalCommitment", 78, 435, 288, 43, 22, C.blue, { bold: true });
-      text("Principal submitted to the wrapper", 394, 435, 451, 43, 22, C.ink);
+      text("Submitted principal commitment", 394, 435, 451, 43, 22, C.ink);
       text("Different principal context", 873, 435, 329, 43, 22, C.ink);
       rect(64, 494, 1152, 1, C.rule);
       text("t · maxLtvBps", 78, 510, 288, 43, 22, C.blue, { bold: true });
@@ -244,16 +245,16 @@ This prevents substitution across these contexts. However, it does not provide s
     evidence: [
       "contracts/Lending.sol",
     ],
-    notes: `The normal demonstration follows this sequence: verify the property, generate the proof, verify it on chain, submit the loan request, obtain approval, and then repay.
+    notes: `The demonstration follows property verification, proving, on-chain compliance, a loan request, approval, and repayment.
 
-The contract distinguishes the checks at each stage. A request checks the recorded owner, a valid principal commitment, and the absence of an active loan for that property. Approval checks the loan officer's role, the requested state, current property verification, and matching compliance.
+The contract checks different conditions at request and approval. A request requires the recorded owner, a nonzero principal commitment, and an available property lock. Approval requires the officer role, Requested state, current verification, and matching compliance.
 
-If verification or compliance fails during approval, the request becomes rejected and the property lock is released. The requested and approved states hold the lock; rejected, cancelled, and repaid states release it.
+Requested and approved loans hold the lock. Rejection, cancellation, and repayment release it. If verification or compliance fails during approval, the request becomes rejected and its lock is released.
 
-This prevents concurrent active borrowing against the same property within the prototype. Repayment records a state change only. It does not transfer Ether or tokens, and ownership is not checked again at approval.`,
+This implements one active loan per property within the prototype. Repayment records the state change and releases the lock. Financial asset settlement and ownership revalidation at approval are future extensions.`,
     draw: ({ text, rect, image, connect }) => {
       text("Normal flow: verify property → prove → record compliance → request → approve → repay", 64, 196, 1152, 34, 21, C.gray);
-      text("Request: recorded owner + valid Cp + no active loan", 64, 242, 1152, 34, 24, C.blue, { bold: true });
+      text("Request: recorded owner + nonzero Cp + no active loan", 64, 242, 1152, 34, 24, C.blue, { bold: true });
       text("Approval: officer role + Requested state + verified property + matching compliance", 64, 286, 1152, 34, 23, C.orange, { bold: true });
       rect(64, 359, 268, 104, C.white, { border: C.rule, name: "requested" });
       text("Requested", 82, 374, 232, 30, 23, C.blue, { bold: true });
@@ -291,13 +292,13 @@ This prevents concurrent active borrowing against the same property within the p
     evidence: [
       "docs/screenshots/03-zk-compliance-proof-verified.png",
     ],
-    notes: `This is the original local compliance workspace captured in the repository.
+    notes: `This is the compliance workspace from the local application.
 
-The selected property is PROP-001. Its mock valuation is nine hundred and eighty thousand, and the requested principal is seven hundred and fifty thousand. That gives a displayed loan-to-value ratio of approximately seventy-six point five percent, below the eighty percent cap.
+The selected property is PROP-001, with a mock valuation of nine hundred and eighty thousand. The principal is seven hundred and fifty thousand, producing a displayed loan-to-value ratio of approximately seventy-six point five percent.
 
-The screen shows successful proof generation and matched binding information. The application therefore makes the proof workflow inspectable instead of requiring the user to assemble calldata manually.
+The workspace shows proof generation, the principal commitment, and whether the proof's public signals match the selected context. Users can inspect these results before proceeding with the loan workflow.
 
-These are local mock values. Their visibility here does not mean that they are published as financial plaintext in the contracts. It also reminds us that the current application interface itself is not confidential. The screenshot supports the product demonstration; contract tests provide separate evidence for enforcement.`,
+The displayed amounts are local mock inputs. They remain visible in the application even though the contracts omit financial plaintext. The contract and circuit tests separately verify the enforcement behavior behind this interface.`,
     draw: ({ text, rect, image, connect }) => {
       image("docs/screenshots/03-zk-compliance-proof-verified.png", 103.193, 209, 788.615, 439);
       text("76.5%", 968, 232, 248, 65, 44, C.blue, { bold: true });
@@ -319,13 +320,13 @@ These are local mock values. Their visibility here does not mean that they are p
       "docs/screenshots/04-borrower-loan-lifecycle.png",
       "contracts/Lending.sol",
     ],
-    notes: `The loan workspace exposes the lending lifecycle and its recorded outcomes.
+    notes: `The loan workspace presents each request together with its property, principal commitment, and lifecycle state.
 
-The selected loan remains connected to a property and a principal commitment, while the ledger shows several local requests and terminal states. This makes approval, rejection, cancellation, and repayment visible to the user.
+This ledger contains several local loans and illustrates approval, rejection, cancellation, and repayment outcomes. Selecting a loan exposes its own details and proof binding.
 
-It is important to read this screenshot correctly. The ledger contains multiple loans; it is not a single image proving one uninterrupted sequence across every row. The separate archived local command-line workflow is the end-to-end observation that finishes in the repaid state.
+The local command-line workflow separately exercises one complete sequence through to Repaid. Together, the interface and workflow evidence show how the implemented contracts can be operated and inspected.
 
-The application helps users inspect and operate the workflow, while the contracts enforce roles and state transitions. In the current prototype, repayment releases the active lock and records the result, without transferring financial assets.`,
+Borrowers and officers use the application to submit actions, while the contracts enforce permissions and transitions. Repayment updates the recorded state and releases the property lock; asset transfer remains outside this implementation.`,
     draw: ({ text, rect, image, connect }) => {
       image("docs/screenshots/04-borrower-loan-lifecycle.png", 102.797, 209, 789.407, 439);
       text("Loan context", 968, 236, 248, 34, 26, C.blue, { bold: true });
@@ -341,19 +342,19 @@ The application helps users inspect and operate the workflow, while the contract
   {
     title: "Four cases test the 80% limit and registry rejection",
     kicker: "EXPERIMENT DESIGN",
-    source: "ProofEstate thesis, §§5.1–5.3; contract tests and archived timing runs.",
+    source: "ProofEstate thesis, §§5.1–5.3; automated suites and local timing runs.",
     evidence: [
       "docs/benchmarks/final-benchmarks.md",
       "docs/evaluation-notes.md",
       "test/proofestate.test.js",
     ],
-    notes: `The evaluation separates behavioral correctness from performance measurement.
+    notes: `The evaluation covers functional correctness, security and arithmetic boundaries, and local performance.
 
-For PROP-001, the valuation of nine hundred and eighty thousand gives an exact eighty percent boundary of seven hundred and eighty-four thousand. The experiment includes a compliant principal of seven hundred and fifty thousand, the exact boundary, one unit above the boundary, and an encumbered property that fails registry validation.
+The automated suites contain thirty-seven contract and circuit tests, twelve oracle API tests, and six frontend component tests. They cover permissions, proof binding, loan transitions, input validation, and selected interface components.
 
-Each timing case uses five warm-up iterations and thirty measured iterations. Passing cases generate proofs; rejected cases skip proving. Zero recorded timing exceptions are not the same as independently verifying every proof or asserting every decision.
+The performance matrix uses four cases. PROP-001 has a valuation of nine hundred and eighty thousand, giving an exact eighty percent boundary of seven hundred and eighty-four thousand. We test a below-limit principal, the exact boundary, one unit above it, and an encumbered property.
 
-The current contract suite has thirty-seven passing tests, including six security regressions and three arithmetic regressions. Those results use Node twenty-two. The archived timing and gas measurements retain their original Node twenty baseline.`,
+Each timing case excludes five warm-ups and retains thirty measured iterations. Passing cases generate proofs; rejected cases skip proving. Direct circuit tests independently reject an over-limit witness. Functional suites use Node twenty-two, while the recorded performance environment uses Node twenty.`,
     draw: ({ text, rect, image, connect }) => {
       text("PROP-001 valuation: 980,000 → maximum principal: 784,000", 64, 207, 1152, 36, 26, C.blue, { bold: true });
       rect(64, 274, 1152, 52, C.blue);
@@ -378,10 +379,10 @@ The current contract suite has thirty-seven passing tests, including six securit
       rect(64, 574, 1152, 1, C.rule);
       rect(64, 592, 1152, 1, C.rule);
       text("37", 64, 608, 110, 50, 40, C.blue, { bold: true });
-      text("contract tests", 187, 603, 280, 26, 20, C.ink);
-      text("Current Node 22 revision", 187, 631, 280, 26, 20, C.ink);
+      text("contract + circuit tests", 187, 603, 300, 26, 20, C.ink);
+      text("12 API + 6 frontend tests", 187, 631, 280, 26, 20, C.ink);
       text("5 warmups + 30 measured iterations per case", 518, 608, 698, 22, 19, C.gray);
-      text("Archived Node 20 timing; no exceptions ≠ exhaustive correctness", 518, 632, 698, 22, 19, C.gray);
+      text("Node 20 timing; functional suites use Node 22.22.1", 518, 632, 698, 22, 19, C.gray);
     },
   },
 
@@ -389,21 +390,19 @@ The current contract suite has thirty-seven passing tests, including six securit
   {
     title: "Proving dominates the measured read-only compliance path",
     kicker: "LOCAL LATENCY",
-    source: "ProofEstate thesis, §5.4, Table 12; archived 30-run session, 25 Sep 2026.",
+    source: "ProofEstate thesis, §5.4, Table 12; 30-run local measurement, 25 Sep 2026.",
     evidence: [
       "docs/benchmarks/raw/local-2026-09-25T08-40-22-730Z.json",
     ],
-    notes: `Proof generation dominates the measured local compliance path.
+    notes: `The main local cost is proof generation.
 
-The median direct proving time is three hundred and ninety-nine point five three milliseconds. The read-only compliance endpoint has a median response time of four hundred and nine point one six milliseconds. Ordinary verification is much lighter, with a median of five point nine eight milliseconds.
+Median direct proving takes three hundred and ninety-nine point five three milliseconds. The read-only compliance endpoint takes four hundred and nine point one six milliseconds, and read-only property verification takes five point nine eight milliseconds.
 
-The ninety-fifth percentile is approximately four hundred and seventy milliseconds for direct proving and four hundred and eighty milliseconds for the compliance endpoint.
+The ninety-fifth percentiles are four hundred and sixty-nine point five three milliseconds for proving and four hundred and eighty point three milliseconds for compliance.
 
-Warm-up iterations are excluded. The median and ninety-fifth percentile use nearest-rank statistics; for thirty observations, the reported median is the lower central value.
+These summaries use thirty measured observations after warm-up, with nearest-rank quantiles. Blockchain submission and confirmation are excluded.
 
-These timings exclude blockchain submission and confirmation. Also, direct proving and API compliance generate separate proofs in separate invocations. Therefore, the difference between their medians is not a measurement of API overhead.
-
-The results describe a small, sequential local workload. They support a bounded feasibility observation, rather than a claim about production throughput or public-chain latency.`,
+Direct proving and the compliance endpoint invoke the prover separately, so subtracting their medians would not isolate API overhead. The results characterize sequential execution in the local measurement environment; concurrency and public-chain latency are future evaluation targets.`,
     draw: ({ text, rect, image, connect }) => {
       text("Read-only /compliance", 64, 223, 652, 31, 24, C.blue, { bold: true });
       rect(64, 266, 534, 29, C.orange);
@@ -432,19 +431,17 @@ The results describe a small, sequential local workload. They support a bounded 
   {
     title: "Full compliance processing averages 310,411 gas",
     kicker: "ON-CHAIN COST",
-    source: "ProofEstate thesis, §5.5, Table 15; archived Node 20 gas baseline.",
+    source: "ProofEstate thesis, §5.5, Table 15; measured transaction workload, Node 20.",
     evidence: [
       "docs/evaluation-notes.md",
     ],
-    notes: `This slide shows the on-chain cost of the archived workload.
+    notes: `The complete compliance operation averages three hundred and ten thousand, four hundred and eleven gas in the measured workload.
 
-The complete compliance operation averages three hundred and ten thousand, four hundred and eleven gas. That includes the public-signal checks, the generated verifier call, state writes, and events. It is not the cost of the cryptographic verifier alone.
+That includes public-signal checks, the generated verifier call, state writes, and events. Requesting a loan averages two hundred and thirty-three thousand, six hundred and nine gas. Approval averages eighty-one thousand, four hundred and sixty-four, and repayment averages fifty-seven thousand, two hundred and nineteen.
 
-Requesting a loan averages about two hundred and thirty-four thousand gas. Approval averages about eighty-one thousand, and repayment about fifty-seven thousand.
+The gas reporter aggregates calls across storage states and outcomes, including approval attempts that reject a request. These averages describe the evaluated workload rather than a fixed cost for every successful call.
 
-These figures come from the historical Node twenty gas-reporter baseline. The reporter aggregates calls with different storage states and outcomes, including approval attempts that reject a request. The new thirty-seven-test suite does not replace that historical baseline.
-
-The figures help characterize where the prototype spends gas. They do not establish transaction fees, public-network confirmation time, or economic feasibility.`,
+The compliance operation is the most expensive of these methods. Isolating the cryptographic verifier's cost would require separate instrumentation.`,
     draw: ({ text, rect, image, connect }) => {
       text("verifyProofAndSetCompliance", 64, 219, 666, 30, 24, C.blue, { bold: true });
       rect(64, 258, 556, 27, C.orange);
@@ -462,7 +459,7 @@ The figures help characterize where the prototype spends gas. They do not establ
       text("Signal checks", 891, 327, 325, 41, 25, C.ink);
       text("Generated verifier", 891, 370, 325, 41, 25, C.ink);
       text("State writes + events", 891, 413, 325, 41, 25, C.ink);
-      text("Archived Node 20 workload", 891, 487, 325, 66, 21, C.gray);
+      text("Measured Node 20 workload", 891, 487, 325, 66, 21, C.gray);
       text("Mixed storage states and approval outcomes.", 891, 555, 325, 66, 21, C.gray);
       text("These are gas units, not isolated verifier cost or transaction fees.", 64, 630, 823, 28, 21, C.orange, { bold: true });
     },
@@ -478,15 +475,13 @@ The figures help characterize where the prototype spends gas. They do not establ
       "backend/oracle/service.js",
       "backend/oracle/properties.js",
     ],
-    notes: `The privacy conclusion needs to distinguish the blockchain from the rest of the application.
+    notes: `The privacy analysis distinguishes the public blockchain from the application that supplies the proof.
 
-On the public blockchain, ProofEstate records identifiers, owner addresses, commitments, proof material, and lifecycle state. It omits the valuation and principal as financial plaintext.
+The chain records property identifiers, owner addresses, commitments, proofs, and lifecycle state. Valuation and principal plaintext are omitted from those transaction interfaces and records.
 
-However, the current oracle API exposes financial values, witness inputs, and salts without caller authentication. The mock registry is also available in the artifact. In addition, the valuation salt is deterministic, so an observer with the relevant public context can test candidate valuations against the commitment.
+The oracle API, however, returns witness values and salts without caller authentication. The mock registry is also available in the repository. The valuation salt is deterministic, allowing an observer with the relevant context to test candidate valuations against the commitment.
 
-As a result, application-wide confidentiality is not established. Groth16 zero knowledge cannot protect information that another interface has already revealed.
-
-The supported result is selective omission of financial plaintext from the blockchain, under a trusted proving service. This is an important boundary for interpreting the prototype.`,
+The implemented privacy result is omission of financial plaintext from the chain. Confidential service operation would also require authenticated access, restricted responses, and secret valuation blinding across the registry and proving path.`,
     draw: ({ text, rect, image, connect }) => {
       rect(64, 219, 1152, 52, C.blue);
       text("Boundary", 78, 233, 231, 24, 20, C.white, { bold: true });
@@ -505,35 +500,35 @@ The supported result is selective omission of financial plaintext from the block
       text("Public property values; deterministic valuation salt", 337, 485, 455, 67, 23, C.ink);
       text("Candidate valuation testing remains possible", 820, 485, 382, 67, 23, C.ink);
       rect(64, 568, 1152, 1, C.rule);
-      text("Zero knowledge does not protect values already exposed by another interface.", 64, 600, 1152, 56, 26, C.blue, { bold: true });
+      text("Witness protection requires controls across the registry, API and proving service.", 64, 600, 1152, 56, 26, C.blue, { bold: true });
     },
   },
 
-  // 13 — REGRESSION FINDINGS
+  // 13 — SECURITY FINDINGS
   {
-    title: "Regression tests expose four proof-lifecycle boundaries",
-    kicker: "REGRESSION FINDINGS",
-    source: "ProofEstate thesis, §6.5, Table 23; security regression tests.",
+    title: "Tests reveal four proof-lifecycle limits",
+    kicker: "SECURITY FINDINGS",
+    source: "ProofEstate thesis, §6.5, Table 23; integrated security-boundary tests.",
     evidence: [
       "test/proofestate.test.js",
     ],
-    notes: `The regression tests reveal four lifecycle boundaries that successful proof verification does not resolve.
+    notes: `The security tests identify four limits in the proof lifecycle.
 
-First, if a property refresh retains the same valuation commitment, the identical proof can restore cleared compliance. Resetting state therefore does not guarantee proof freshness.
+First, refreshing a property while retaining its valuation commitment clears compliance, but the same proof can restore it. State reset alone does not enforce freshness.
 
-Second, if the authorized oracle changes the owner after a request, while retaining the valuation commitment, the original request can still be approved once compliance is restored. Ownership is not rechecked at approval.
+Second, an authorized owner update after a request can leave the original request approvable when the valuation commitment is retained and compliance is restored. Ownership is checked at request time.
 
-Third, a valid proof for another principal can replace the property's single compliance record. The old pending request is then rejected and its lock released.
+Third, a valid proof for another principal replaces the property's single compliance record. The previous pending request is then rejected and its lock released.
 
-Finally, a refresh after approval does not change the approved loan or its active lock. Approval is a snapshot decision.
+Fourth, clearing compliance after approval leaves the approved state and active lock in place. Approval records a decision at that moment.
 
-These are tested boundaries, not claims of production security. The approval argument also depends on the oracle, proof system, commitment construction, and maintained roles.`,
+These results identify concrete requirements for proof freshness, ownership continuity, independent loan records, and revalidation after approval.`,
     draw: ({ text, rect, image, connect }) => {
       rect(64, 214, 1152, 52, C.blue);
       text("Tested change", 78, 228, 274, 24, 20, C.white, { bold: true });
       text("Observed behavior", 380, 228, 450, 24, 20, C.white, { bold: true });
-      text("Limit of the claim", 858, 228, 344, 24, 20, C.white, { bold: true });
-      text("Refresh; same valuation", 78, 282, 274, 52, 22, C.blue, { bold: true });
+      text("Security implication", 858, 228, 344, 24, 20, C.white, { bold: true });
+      text("Refresh; unchanged Cv", 78, 282, 274, 52, 22, C.blue, { bold: true });
       text("Identical proof restores cleared compliance", 380, 282, 450, 52, 22, C.ink);
       text("Reset does not imply freshness", 858, 282, 344, 52, 22, C.ink);
       rect(64, 350, 1152, 1, C.rule);
@@ -549,27 +544,27 @@ These are tested boundaries, not claims of production security. The approval arg
       text("Approved state and active lock remain", 380, 534, 450, 52, 22, C.ink);
       text("Approval is a snapshot decision", 858, 534, 344, 52, 22, C.ink);
       rect(64, 602, 1152, 1, C.rule);
-      text("Approval integrity also assumes an honest oracle, valid setup, commitment binding and maintained roles.", 64, 612, 1152, 47, 22, C.orange, { bold: true });
+      text("Freshness, ownership continuity and loan isolation require explicit lifecycle controls.", 64, 612, 1152, 47, 22, C.orange, { bold: true });
     },
   },
 
   // 14 — RESEARCH PRIORITIES
   {
-    title: "Next steps: protect witnesses and strengthen proof context",
-    kicker: "RESEARCH PRIORITIES",
+    title: "Protect witnesses and bind proofs to loan context",
+    kicker: "FUTURE WORK",
     source: "ProofEstate thesis, §§8.1–8.3.",
     evidence: [
       "docs/limitations-and-extensions.md",
     ],
-    notes: `The next research steps should address those boundaries directly.
+    notes: `The findings lead to three priorities for future work.
 
-The first priority is protecting witness delivery. That means authenticating callers, restricting API responses, and using suitable secret randomness for valuation blinding.
+First, protect witness delivery through authenticated callers, restricted API responses, and secret randomness for valuation blinding.
 
-The second priority is an explicit proof lifecycle. A stronger design would bind proofs to their loan context and freshness, revalidate ownership where required, and define how compliance records can be replaced or revoked.
+Second, strengthen the proof lifecycle. This means binding proofs to the loan context and a nonce or version, revalidating ownership at approval, and defining replacement and revocation rules.
 
-The third priority is stronger source assurance and evaluation. That includes signed registry attestations, a documented setup model, matched performance baselines, and experiments with concurrency and public-chain conditions.
+Third, improve source assurance and evaluation through signed registry attestations, a documented setup ceremony, matched performance baselines, and measurements under concurrent and public-chain workloads.
 
-Broader features, such as identity policies, real settlement, and liquidation, are further extensions. This is a research priority sequence, not a delivery timetable or a claim that these features already exist.`,
+These changes would strengthen confidentiality and the guarantees around each approval. Identity policies, asset settlement, and liquidation can then extend the lending workflow.`,
     draw: ({ text, rect, image, connect }) => {
       text("01", 64, 223, 112, 78, 58, C.orange, { bold: true });
       text("Protect witness delivery", 203, 227, 1004, 38, 29, C.blue, { bold: true });
@@ -577,11 +572,11 @@ Broader features, such as identity policies, real settlement, and liquidation, a
       rect(203, 342, 1013, 1, C.rule);
       text("02", 64, 352, 112, 78, 58, C.blue, { bold: true });
       text("Define proof lifecycle", 203, 356, 1004, 38, 29, C.blue, { bold: true });
-      text("Bind loan context and freshness; revalidate ownership; specify revocation.", 203, 406, 1004, 67, 24, C.gray);
+      text("Bind loan and nonce/version; recheck ownership; define revocation.", 203, 406, 1004, 67, 24, C.gray);
       rect(203, 471, 1013, 1, C.rule);
       text("03", 64, 481, 112, 78, 58, C.blue, { bold: true });
-      text("Strengthen source and evaluation", 203, 485, 1004, 38, 29, C.blue, { bold: true });
-      text("Signed attestations and setup assurance; matched baselines; concurrent / chain measurements.", 203, 535, 1004, 67, 24, C.gray);
+      text("Strengthen source assurance and evaluation", 203, 485, 1004, 38, 29, C.blue, { bold: true });
+      text("Signed registry attestations; audited setup; matched baselines and concurrent workloads.", 203, 535, 1004, 67, 24, C.gray);
       text("Broader extensions: identity policies, real settlement, liquidation and operational governance.", 64, 627, 1152, 30, 21, C.gray);
     },
   },
@@ -595,17 +590,15 @@ Broader features, such as identity policies, real settlement, and liquidation, a
       "test/proofestate.test.js",
       "docs/benchmarks/final-benchmarks.md",
     ],
-    notes: `To conclude, ProofEstate connects a committed loan-to-value proof to an auditable loan approval decision. Its main contribution is an implemented binding pattern with tested security boundaries.
+    notes: `ProofEstate demonstrates an implemented path from a private loan-to-value relation to an auditable lending decision.
 
-This result depends on the oracle, trusted setup, proof system, commitments, and role assumptions discussed earlier. Real-world property authenticity and financial settlement remain outside the scope of this prototype.
+The circuit proves the committed values satisfy the eighty percent rule. The wrapper matches the proof to the property, current valuation, principal commitment, and policy, and the lending contract checks that compliance at approval.
 
-Before I close, I will play a recorded demonstration of the prototype in operation.
+The evaluation establishes the local workflow, measured costs, and specific security boundaries. The result provides a reproducible basis for extending witness protection, proof freshness, and ownership continuity under the stated oracle, setup, commitment, and role assumptions.
 
-That concludes the demonstration.
+I will now show a recorded demonstration of the local workflow.
 
-The GitHub link on this slide provides the source code, and the Vercel link opens the web demonstration.
-
-Thank you for your attention. I welcome your questions about the design, evaluation, and limitations.`,
+The source code and web demonstration are available through the links on this slide. Thank you for your attention. I welcome your questions.`,
     draw: ({ text, rect, image, connect }) => {
       text("An implemented binding pattern with tested security boundaries.", 64, 224, 1152, 44, 28, C.gray);
       text("Under explicit oracle, proof-system, commitment and role assumptions.", 64, 276, 1152, 34, 20, C.gray);
@@ -736,9 +729,9 @@ function drawingTools(slide, jsx, assets) {
 function addChrome(tools, definition, index) {
   const { text, rect, image } = tools;
   const cover = index === 0;
-  rect(64, cover ? 53 : 48, 6, 16, C.orange);
+  rect(64, cover ? 53 : 48, 6, 16, C.orange, { name: "kicker-marker" });
   text(definition.kicker, 84, cover ? 46 : 41, cover ? 850 : 960, 30,
-    14, C.orange, { bold: true, anchor: "ctr", name: "section-label" });
+    14, C.orange, { bold: true, anchor: "ctr", name: "kicker-label" });
   if (!cover) text(definition.title, 64, 88, 1152, 108, 40, C.blue,
     { bold: true, name: "slide-title" });
   if (cover) image(LOGO, 1042, 42.023, 174, 82.953);
