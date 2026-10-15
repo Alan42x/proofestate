@@ -4,6 +4,8 @@ ProofEstate is an Ethereum research prototype for real-estate lending with commi
 
 [Hosted DApp](https://proofestate.vercel.app/) · [Capstone report](thesis/docx/ProofEstate_FT5007_Capstone_Report.docx) · [Defense slides](slides/proofestate-nus-defense-presentation.pptx)
 
+The author's original thesis, report, defense materials, and research figures are copyright protected and are not offered under an open-source or Creative Commons license. See the [copyright notice](COPYRIGHT.md).
+
 The prototype demonstrates one core lending rule:
 
 ```text
@@ -503,6 +505,6 @@ See [docs/limitations-and-extensions.md](docs/limitations-and-extensions.md) for
 
 ## License
 
-This repository does not currently include an open-source license. Except for viewing and forking as permitted by GitHub's platform functionality and Terms of Service, no permission is granted to copy, modify, distribute, sublicense, or use this work commercially without explicit permission from the author.
+The author's original academic materials, including the thesis, manuscript, capstone report, defense slides and speaker notes, and research figures, are reserved under copyright. No general permission to reproduce, adapt, translate, redistribute, or republish those materials is granted. Prior written permission is required unless the use is permitted by applicable law, GitHub's Terms of Service, or a separate existing license. Attribution alone does not authorize uses that otherwise require permission. See [COPYRIGHT.md](COPYRIGHT.md) for scope and contact details.
 
-For public use, redistribution, or commercial use, contact the author first and add an explicit `LICENSE` file.
+Software files and third-party components retain their existing licenses and copyright notices, including the MIT notices in the business contracts and the GPL notice in the generated Groth16 verifier. This academic-material notice does not revoke those permissions or introduce a new repository-wide software license. Third-party marks and materials, including the NUS logo, remain subject to their respective owners' rights.
